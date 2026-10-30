@@ -1,0 +1,8 @@
+# Blueprint de Render: un solo servicio que expone la API de Fastify y sirve el frontend compilado
+services:
+  - type: web
+    name: seguimiento-de-actividades
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
