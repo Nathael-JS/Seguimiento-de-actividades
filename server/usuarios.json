@@ -1,0 +1,122 @@
+[
+  {
+    "no": "10001",
+    "name": "Laura Méndez",
+    "role": "gte",
+    "dept": "lc",
+    "email": "laura.mendez@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10112",
+    "name": "Carlos Ruiz",
+    "role": "sr",
+    "dept": "lc",
+    "email": "carlos.ruiz@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10145",
+    "name": "Ana Torres",
+    "role": "sr",
+    "dept": "lc",
+    "email": "ana.torres@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10230",
+    "name": "Diego Herrera",
+    "role": "full",
+    "dept": "lc",
+    "email": "diego.herrera@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10251",
+    "name": "Sofía Navarro",
+    "role": "full",
+    "dept": "lc",
+    "email": "sofia.navarro@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10482",
+    "name": "Jorge Salinas",
+    "role": "tec",
+    "dept": "lc",
+    "email": "jorge.salinas@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10490",
+    "name": "María López",
+    "role": "jr",
+    "dept": "lc",
+    "email": "maria.lopez@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10511",
+    "name": "Luis Ortega",
+    "role": "tec",
+    "dept": "lc",
+    "email": "luis.ortega@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10533",
+    "name": "Paola Ramírez",
+    "role": "jr",
+    "dept": "lc",
+    "email": "paola.ramirez@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10547",
+    "name": "Héctor Díaz",
+    "role": "tec",
+    "dept": "lc",
+    "email": "hector.diaz@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10700",
+    "name": "Andrés Molina",
+    "role": "gte",
+    "dept": "pf",
+    "email": "andres.molina@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10620",
+    "name": "Elena Castro",
+    "role": "full",
+    "dept": "pf",
+    "email": "elena.castro@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10604",
+    "name": "Ricardo Vega",
+    "role": "tec",
+    "dept": "pf",
+    "email": "ricardo.vega@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10810",
+    "name": "Fernanda Ríos",
+    "role": "sr",
+    "dept": "smt",
+    "email": "fernanda.rios@empresa.com",
+    "password": "demo1234"
+  },
+  {
+    "no": "10822",
+    "name": "Iván Cruz",
+    "role": "jr",
+    "dept": "smt",
+    "email": "ivan.cruz@empresa.com",
+    "password": "demo1234"
+  }
+]
