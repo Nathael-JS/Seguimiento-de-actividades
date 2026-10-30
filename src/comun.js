@@ -1,0 +1,21 @@
+export const ROLES = { tec: 'Técnico', jr: 'Ing. Jr', full: 'Ing. Full', sr: 'Senior', gte: 'Gerente' }
+export const TURNOS = { A: '06:00–14:30', B: '14:30–23:00', C: '23:00–06:00' }
+export const DEPARTAMENTOS = { lc: 'Liquid Cooling', pf: 'Pruebas Funcionales', smt: 'SMT' }
+export const ESTADOS = { done: 'Realizada', progress: 'En proceso', pending: 'Pendiente', incomplete: 'Incompleta' }
+
+// `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente) o a ejecutores (Técnico, Ing. Jr)
+export const MODULOS = [
+  { ruta: 'inicio', titulo: 'Inicio', icono: 'home' },
+  { ruta: 'registrar', titulo: 'Registrar actividad', icono: 'plus', desc: 'Asigna actividades por puntos a tu equipo.', solo: 'encargado' },
+  { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', solo: 'ejecutor' },
+  { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado' },
+  { ruta: 'reportes', titulo: 'Reportes', icono: 'file', desc: 'Genera reportes por fecha, turno y hora.', solo: 'encargado' },
+  { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },
+  { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.' },
+  { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.' },
+]
+
+export const modulosDe = (user) =>
+  MODULOS.filter((m) => !m.solo || (m.solo === 'encargado') === user.encargado)
+
+export const iniciales = (nombre) => nombre.split(' ').map((p) => p[0]).slice(0, 2).join('')

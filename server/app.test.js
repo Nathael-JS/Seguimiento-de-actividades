@@ -23,3 +23,29 @@ test('entrada inválida da 400', async () => {
     assert.equal((await login(payload)).statusCode, 400, JSON.stringify(payload))
   }
 })
+
+const inicio = (no) => build().inject({ method: 'GET', url: `/api/inicio/${no}` })
+
+test('login indica si es encargado', async () => {
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' })).json().encargado, false)
+  assert.equal((await login({ usuario: '10230', password: 'demo1234' })).json().encargado, true)
+})
+
+test('inicio del ejecutor cuenta solo sus actividades', async () => {
+  const d = (await inicio('10482')).json()
+  assert.deepEqual([d.asignadas, d.realizadas, d.abiertas, d.avance], [4, 1, 1, 50])
+  assert.equal(d.notificaciones.length, 2)
+  assert.equal(d.notificaciones[0].who, 'Diego Herrera')
+})
+
+test('inicio del encargado cuenta todo su equipo, directos e indirectos', async () => {
+  // Diego (Ing. Full) tiene a Jorge y María: actividades 1-6
+  assert.equal((await inicio('10230')).json().asignadas, 6)
+  // Laura (Gerente) tiene a todo Liquid Cooling: actividades 1-14
+  assert.equal((await inicio('10001')).json().asignadas, 14)
+})
+
+test('inicio con número inválido o inexistente', async () => {
+  assert.equal((await inicio('abc')).statusCode, 400)
+  assert.equal((await inicio('99999')).statusCode, 404)
+})

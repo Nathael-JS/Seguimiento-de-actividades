@@ -4,6 +4,9 @@
     "name": "Laura Méndez",
     "role": "gte",
     "dept": "lc",
+    "boss": null,
+    "shift": "A",
+    "area": "Gerencia",
     "email": "laura.mendez@empresa.com",
     "password": "demo1234"
   },
@@ -12,6 +15,9 @@
     "name": "Carlos Ruiz",
     "role": "sr",
     "dept": "lc",
+    "boss": "10001",
+    "shift": "A",
+    "area": "Estaciones LC245",
     "email": "carlos.ruiz@empresa.com",
     "password": "demo1234"
   },
@@ -20,6 +26,9 @@
     "name": "Ana Torres",
     "role": "sr",
     "dept": "lc",
+    "boss": "10001",
+    "shift": "B",
+    "area": "CDU y Chillers",
     "email": "ana.torres@empresa.com",
     "password": "demo1234"
   },
@@ -28,6 +37,9 @@
     "name": "Diego Herrera",
     "role": "full",
     "dept": "lc",
+    "boss": "10112",
+    "shift": "A",
+    "area": "Estaciones LC245",
     "email": "diego.herrera@empresa.com",
     "password": "demo1234"
   },
@@ -36,6 +48,9 @@
     "name": "Sofía Navarro",
     "role": "full",
     "dept": "lc",
+    "boss": "10145",
+    "shift": "B",
+    "area": "CDU y Chillers",
     "email": "sofia.navarro@empresa.com",
     "password": "demo1234"
   },
@@ -44,6 +59,9 @@
     "name": "Jorge Salinas",
     "role": "tec",
     "dept": "lc",
+    "boss": "10230",
+    "shift": "A",
+    "area": "Estaciones LC245",
     "email": "jorge.salinas@empresa.com",
     "password": "demo1234"
   },
@@ -52,6 +70,9 @@
     "name": "María López",
     "role": "jr",
     "dept": "lc",
+    "boss": "10230",
+    "shift": "A",
+    "area": "Estaciones LC245",
     "email": "maria.lopez@empresa.com",
     "password": "demo1234"
   },
@@ -60,6 +81,9 @@
     "name": "Luis Ortega",
     "role": "tec",
     "dept": "lc",
+    "boss": "10251",
+    "shift": "B",
+    "area": "CDU y Chillers",
     "email": "luis.ortega@empresa.com",
     "password": "demo1234"
   },
@@ -68,6 +92,9 @@
     "name": "Paola Ramírez",
     "role": "jr",
     "dept": "lc",
+    "boss": "10112",
+    "shift": "A",
+    "area": "Estaciones LC245",
     "email": "paola.ramirez@empresa.com",
     "password": "demo1234"
   },
@@ -76,6 +103,9 @@
     "name": "Héctor Díaz",
     "role": "tec",
     "dept": "lc",
+    "boss": "10251",
+    "shift": "C",
+    "area": "CDU y Chillers",
     "email": "hector.diaz@empresa.com",
     "password": "demo1234"
   },
@@ -84,6 +114,9 @@
     "name": "Andrés Molina",
     "role": "gte",
     "dept": "pf",
+    "boss": null,
+    "shift": "A",
+    "area": "Gerencia",
     "email": "andres.molina@empresa.com",
     "password": "demo1234"
   },
@@ -92,6 +125,9 @@
     "name": "Elena Castro",
     "role": "full",
     "dept": "pf",
+    "boss": "10700",
+    "shift": "A",
+    "area": "Burn-in",
     "email": "elena.castro@empresa.com",
     "password": "demo1234"
   },
@@ -100,6 +136,9 @@
     "name": "Ricardo Vega",
     "role": "tec",
     "dept": "pf",
+    "boss": "10620",
+    "shift": "C",
+    "area": "Burn-in",
     "email": "ricardo.vega@empresa.com",
     "password": "demo1234"
   },
@@ -108,6 +147,9 @@
     "name": "Fernanda Ríos",
     "role": "sr",
     "dept": "smt",
+    "boss": null,
+    "shift": "A",
+    "area": "Líneas 1–3",
     "email": "fernanda.rios@empresa.com",
     "password": "demo1234"
   },
@@ -116,6 +158,9 @@
     "name": "Iván Cruz",
     "role": "jr",
     "dept": "smt",
+    "boss": "10810",
+    "shift": "B",
+    "area": "Líneas 1–3",
     "email": "ivan.cruz@empresa.com",
     "password": "demo1234"
   }
