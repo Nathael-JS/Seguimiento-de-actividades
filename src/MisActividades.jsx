@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ESTADOS, api, hora, promedio } from './comun.js'
+import { ESTADOS, api, estado as nombreEstado, hora, promedio } from './comun.js'
 import { Anillo, Estado } from './ui.jsx'
+import { t } from './i18n.js'
 
 export default function MisActividades({ user, recargar, avisar }) {
   const [tareas, setTareas] = useState(null)
@@ -13,7 +14,7 @@ export default function MisActividades({ user, recargar, avisar }) {
   useEffect(() => { cargar() }, [cargar])
 
   function guardado() {
-    avisar('Avance guardado y notificado a tu encargado.')
+    avisar(t('Avance guardado y notificado a tu encargado.'))
     cargar()
     recargar()
   }
@@ -24,32 +25,32 @@ export default function MisActividades({ user, recargar, avisar }) {
     <>
       <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
-          <h1>Tareas asignadas</h1>
-          <p>Marca el estado, ajusta el avance y comenta tus actividades.</p>
+          <h1>{t('Tareas asignadas')}</h1>
+          <p>{t('Marca el estado, ajusta el avance y comenta tus actividades.')}</p>
         </div>
-        {tareas && <div className="row"><Anillo pct={avance} /><span className="muted" style={{ fontSize: 13 }}>Avance promedio</span></div>}
+        {tareas && <div className="row"><Anillo pct={avance} /><span className="muted" style={{ fontSize: 13 }}>{t('Avance promedio')}</span></div>}
       </div>
 
       {error ? <p className="error" role="alert">{error}</p>
-        : !tareas ? <p className="muted">Cargando…</p>
-        : !tareas.length ? <section className="card empty">No tienes actividades asignadas.</section>
+        : !tareas ? <p className="muted">{t('Cargando…')}</p>
+        : !tareas.length ? <section className="card empty">{t('No tienes actividades asignadas.')}</section>
         : (
           <section className="card">
             {/* key con estado y avance: al recargar, el formulario se reinicia con lo guardado */}
-            {tareas.map((t) => <Tarea key={`${t.id}-${t.status}-${t.pct}-${t.note}`} t={t} user={user} onGuardado={guardado} />)}
+            {tareas.map((x) => <Tarea key={`${x.id}-${x.status}-${x.pct}-${x.note}`} tarea={x} user={user} onGuardado={guardado} />)}
           </section>
         )}
     </>
   )
 }
 
-function Tarea({ t, user, onGuardado }) {
-  const [estado, setEstado] = useState(t.status)
-  const [avance, setAvance] = useState(t.pct)
-  const [nota, setNota] = useState(t.note)
+function Tarea({ tarea, user, onGuardado }) {
+  const [estado, setEstado] = useState(tarea.status)
+  const [avance, setAvance] = useState(tarea.pct)
+  const [nota, setNota] = useState(tarea.note)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
-  const cambio = estado !== t.status || avance !== t.pct || nota.trim() !== t.note
+  const cambio = estado !== tarea.status || avance !== tarea.pct || nota.trim() !== tarea.note
 
   function elegirEstado(e) {
     setEstado(e)
@@ -61,7 +62,7 @@ function Tarea({ t, user, onGuardado }) {
     setError('')
     setGuardando(true)
     try {
-      await api(`/api/actividades/${t.id}`, { method: 'PATCH', body: { por: user.no, estado, avance, nota } })
+      await api(`/api/actividades/${tarea.id}`, { method: 'PATCH', body: { por: user.no, estado, avance, nota } })
       onGuardado()
     } catch (e) {
       setError(e.message)
@@ -74,42 +75,42 @@ function Tarea({ t, user, onGuardado }) {
     <form className="task" onSubmit={guardar} noValidate>
       <div className="task-head">
         <div>
-          <h3>{t.text}</h3>
+          <h3>{tarea.text}</h3>
           <div className="muted" style={{ fontSize: 13 }}>
-            Asignada por {t.byName} · <span className="mono">{t.date} · Turno {t.shift} · {hora(t.at)}</span>
+            {t('Asignada por')} {tarea.byName} · <span className="mono">{tarea.date} · {t('Turno')} {tarea.shift} · {hora(tarea.at)}</span>
           </div>
         </div>
         <div className="row" style={{ gap: 6 }}>
-          {t.inh && <span className="tag">Heredada</span>}
-          <Estado estado={t.status} />
+          {tarea.inh && <span className="tag">{t('Heredada')}</span>}
+          <Estado estado={tarea.status} />
         </div>
       </div>
 
-      {t.mgr && <div className="mgr-note"><b>Comentario del encargado:</b> {t.mgr}</div>}
+      {tarea.mgr && <div className="mgr-note"><b>{t('Comentario del encargado')}:</b> {tarea.mgr}</div>}
 
-      <div className="status-seg" role="group" aria-label="Estado">
-        {Object.entries(ESTADOS).map(([k, v]) => (
-          <button key={k} type="button" data-s={k} aria-pressed={estado === k} onClick={() => elegirEstado(k)}>{v}</button>
+      <div className="status-seg" role="group" aria-label={t('Estado')}>
+        {Object.keys(ESTADOS).map((k) => (
+          <button key={k} type="button" data-s={k} aria-pressed={estado === k} onClick={() => elegirEstado(k)}>{nombreEstado(k)}</button>
         ))}
       </div>
 
       <div className="range">
-        <label className="sr" htmlFor={`avance-${t.id}`}>Avance</label>
-        <input id={`avance-${t.id}`} type="range" min="0" max="100" step="5" value={avance}
+        <label className="sr" htmlFor={`avance-${tarea.id}`}>{t('Avance')}</label>
+        <input id={`avance-${tarea.id}`} type="range" min="0" max="100" step="5" value={avance}
           disabled={estado === 'done'} onChange={(e) => setAvance(Number(e.target.value))} />
-        <output htmlFor={`avance-${t.id}`}>{avance}%</output>
+        <output htmlFor={`avance-${tarea.id}`}>{avance}%</output>
       </div>
 
       <label className="field">
-        <span>Tu comentario</span>
-        <textarea value={nota} maxLength={500} placeholder="Ej. falta refacción, se termina en el siguiente turno"
+        <span>{t('Tu comentario')}</span>
+        <textarea value={nota} maxLength={500} placeholder={t('Ej. falta refacción, se termina en el siguiente turno')}
           onChange={(e) => setNota(e.target.value)} />
       </label>
 
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row end">
         <button className="btn btn-primary" type="submit" disabled={!cambio || guardando}>
-          {guardando ? 'Guardando…' : 'Guardar avance'}
+          {t(guardando ? 'Guardando…' : 'Guardar avance')}
         </button>
       </div>
     </form>

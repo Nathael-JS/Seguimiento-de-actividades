@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api, iniciales, passwordValida } from './comun.js'
 import { Campo, PasswordNueva } from './ui.jsx'
+import { t } from './i18n.js'
 
 // Paso 1: validar número de empleado y correo. Paso 2: contraseña nueva
 export default function Recuperar({ volver }) {
@@ -25,44 +26,44 @@ export default function Recuperar({ volver }) {
 
   function validar(e) {
     e.preventDefault()
-    if (!no.trim() || !email.trim()) return setError('Escribe tu número de empleado y tu correo.')
+    if (!no.trim() || !email.trim()) return setError(t('Escribe tu número de empleado y tu correo.'))
     enviar(async () => setPermiso(await api('/api/recuperar', { method: 'POST', body: { no: no.trim(), email } })))
   }
 
   function guardar(e) {
     e.preventDefault()
-    if (!passwordValida(...p)) return setError('La contraseña no cumple los requisitos.')
+    if (!passwordValida(...p)) return setError(t('La contraseña no cumple los requisitos.'))
     enviar(async () => {
       await api('/api/recuperar/cambiar', { method: 'POST', body: { token: permiso.token, password: p[0] } })
-      volver('Contraseña actualizada. Inicia sesión con la nueva.')
+      volver(t('Contraseña actualizada. Inicia sesión con la nueva.'))
     })
   }
 
   if (!permiso) {
     return (
       <form className="auth-form" onSubmit={validar} noValidate>
-        <h1>Recuperar cuenta</h1>
-        <p className="lead">Valida tus datos para cambiar tu contraseña.</p>
-        <Campo label="Número de empleado" id="no" inputMode="numeric" placeholder="10482" value={no} onChange={(e) => setNo(e.target.value)} />
-        <Campo label="Correo registrado" id="email" type="email" placeholder="jorge.salinas@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <h1>{t('Recuperar cuenta')}</h1>
+        <p className="lead">{t('Valida tus datos para cambiar tu contraseña.')}</p>
+        <Campo label={t('Número de empleado')} id="no" inputMode="numeric" placeholder="10482" value={no} onChange={(e) => setNo(e.target.value)} />
+        <Campo label={t('Correo registrado')} id="email" type="email" placeholder="jorge.salinas@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <p className="error" role="alert">{error}</p>
-        <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>Validar datos</button>
-        <button type="button" className="btn btn-ghost" onClick={() => volver()}>← Volver</button>
+        <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{t('Validar datos')}</button>
+        <button type="button" className="btn btn-ghost" onClick={() => volver()}>← {t('Volver')}</button>
       </form>
     )
   }
 
   return (
     <form className="auth-form" onSubmit={guardar} noValidate>
-      <h1>Nueva contraseña</h1>
+      <h1>{t('Nueva contraseña')}</h1>
       <div className="emp-chip">
         <span className="avatar">{iniciales(permiso.name)}</span>
         <div><b>{permiso.name}</b><div className="muted mono" style={{ fontSize: 13 }}>{permiso.no} · {permiso.email}</div></div>
       </div>
       <PasswordNueva p1={p[0]} p2={p[1]} onChange={(a, b) => { setP([a, b]); setError('') }} />
       <p className="error" role="alert">{error}</p>
-      <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>Guardar contraseña</button>
-      <button type="button" className="btn btn-ghost" onClick={() => volver()}>← Volver</button>
+      <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{t('Guardar contraseña')}</button>
+      <button type="button" className="btn btn-ghost" onClick={() => volver()}>← {t('Volver')}</button>
     </form>
   )
 }

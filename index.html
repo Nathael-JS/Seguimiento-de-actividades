@@ -13,6 +13,7 @@
       try {
         document.documentElement.dataset.theme = localStorage.getItem('tema') ||
           (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        if (localStorage.getItem('idioma') === 'en') document.documentElement.lang = 'en'
       } catch { document.documentElement.dataset.theme = 'light' }
     </script>
   </head>

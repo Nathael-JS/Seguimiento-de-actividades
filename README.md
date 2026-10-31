@@ -11,6 +11,12 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Simulado:** el código de la verificación en 2 pasos se muestra en pantalla en lugar de enviarse por correo, y el rate de aprobación de Departamentos es un valor fijo de los datos de prueba.
 
+## Idioma, tema y horas
+
+- **Idioma ES / EN**: los textos se escriben en español dentro de `t('…')` (`src/i18n.js`) y su traducción va en `src/en.js`, con el texto en español como clave. Si falta una traducción se muestra el español. Los mensajes de error del servidor también se traducen en el cliente. `npm test` revisa que todo texto tenga su versión en inglés.
+- **Tema claro / oscuro**: botón en la barra superior y en el login; se recuerda en el navegador y por defecto sigue al sistema.
+- **Horas**: el servidor guarda instantes en UTC y cada navegador los muestra en su hora local.
+
 ## API
 
 | Método | Ruta | Uso |
@@ -44,5 +50,5 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 - `npm run build` — compila el frontend.
 - `npm start` — levanta Fastify (puerto `PORT`, 3000 por defecto).
-- `npm test` — pruebas de la API.
+- `npm test` — pruebas de la API y de las traducciones.
 - `npm run lint` — oxlint.

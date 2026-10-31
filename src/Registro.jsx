@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { DEPARTAMENTOS, ROLES, TURNOS, api, esEncargado, passwordValida } from './comun.js'
+import { DEPARTAMENTOS, ROLES, TURNOS, api, depto, esEncargado, passwordValida, rol } from './comun.js'
+import { t } from './i18n.js'
 import { Campo, PasswordNueva } from './ui.jsx'
 
 const TITULOS = ['Datos del empleado', 'Asignación', 'Crea tu contraseña']
@@ -25,16 +26,16 @@ export default function Registro({ volver }) {
     setError('')
     if (paso === 1) {
       if (d.name.trim().length < 3 || !/^\d{4,10}$/.test(d.no) || !/^\S+@\S+\.\S+$/.test(d.email)) {
-        return setError('Escribe tu nombre completo, un número de empleado de 4 a 10 dígitos y un correo válido.')
+        return setError(t('Escribe tu nombre completo, un número de empleado de 4 a 10 dígitos y un correo válido.'))
       }
       return setPaso(2)
     }
     if (paso === 2) {
-      if (encargado && !d.area.trim()) return setError('Escribe tu área dentro del departamento.')
-      if (!encargado && !d.boss) return setError('Elige a tu encargado.')
+      if (encargado && !d.area.trim()) return setError(t('Escribe tu área dentro del departamento.'))
+      if (!encargado && !d.boss) return setError(t('Elige a tu encargado.'))
       return setPaso(3)
     }
-    if (!passwordValida(...p)) return setError('La contraseña no cumple los requisitos.')
+    if (!passwordValida(...p)) return setError(t('La contraseña no cumple los requisitos.'))
     crear()
   }
 
@@ -46,7 +47,7 @@ export default function Registro({ volver }) {
         method: 'POST',
         body: { ...resto, ...(encargado ? { area } : { boss }), password: p[0] },
       })
-      volver('Cuenta creada. Ya puedes iniciar sesión.')
+      volver(t('Cuenta creada. Ya puedes iniciar sesión.'))
     } catch (err) {
       setError(err.message)
       setEnviando(false)
@@ -55,24 +56,24 @@ export default function Registro({ volver }) {
 
   return (
     <form className="auth-form" onSubmit={siguiente} noValidate>
-      <h1>Crear cuenta</h1>
-      <div className="steps" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={paso} aria-label={`Paso ${paso} de 3`}>
+      <h1>{t('Crear cuenta')}</h1>
+      <div className="steps" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={paso} aria-label={t('Paso {n} de 3', { n: paso })}>
         {[1, 2, 3].map((i) => <span key={i} className={i <= paso ? 'on' : ''} />)}
       </div>
-      <p className="muted" style={{ fontSize: 13, marginTop: -10 }}>Paso {paso} de 3 · {TITULOS[paso - 1]}</p>
+      <p className="muted" style={{ fontSize: 13, marginTop: -10 }}>{t('Paso {n} de 3', { n: paso })} · {t(TITULOS[paso - 1])}</p>
 
       {paso === 1 && (
         <>
-          <Campo label="Nombre completo" id="name" autoComplete="name" value={d.name} onChange={set('name')} />
+          <Campo label={t('Nombre completo')} id="name" autoComplete="name" value={d.name} onChange={set('name')} />
           <div className="grid2">
-            <Campo label="Número de empleado" id="no" inputMode="numeric" maxLength={10} value={d.no} onChange={set('no')} />
-            <Campo label="Correo electrónico" id="email" type="email" autoComplete="email" value={d.email} onChange={set('email')} />
+            <Campo label={t('Número de empleado')} id="no" inputMode="numeric" maxLength={10} value={d.no} onChange={set('no')} />
+            <Campo label={t('Correo electrónico')} id="email" type="email" autoComplete="email" value={d.email} onChange={set('email')} />
           </div>
           <fieldset className="field">
-            <legend>Puesto</legend>
+            <legend>{t('Puesto')}</legend>
             <div className="role-pick">
-              {Object.entries(ROLES).map(([k, v]) => (
-                <label key={k}><input type="radio" name="role" value={k} checked={d.role === k} onChange={set('role')} /><span>{v}</span></label>
+              {Object.keys(ROLES).map((k) => (
+                <label key={k}><input type="radio" name="role" value={k} checked={d.role === k} onChange={set('role')} /><span>{rol(k)}</span></label>
               ))}
             </div>
           </fieldset>
@@ -81,26 +82,26 @@ export default function Registro({ volver }) {
 
       {paso === 2 && (
         <>
-          <Campo label="Departamento">
+          <Campo label={t('Departamento')}>
             <select value={d.dept} onChange={(e) => setD({ ...d, dept: e.target.value, boss: '' })}>
-              {Object.entries(DEPARTAMENTOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.keys(DEPARTAMENTOS).map((k) => <option key={k} value={k}>{depto(k)}</option>)}
             </select>
           </Campo>
           {!encargado && (
-            <Campo label="Encargado">
+            <Campo label={t('Encargado')}>
               <select value={d.boss} onChange={set('boss')}>
-                <option value="">Selecciona a tu encargado</option>
-                {jefes.map((j) => <option key={j.no} value={j.no}>{j.name} · {ROLES[j.role]}</option>)}
+                <option value="">{t('Selecciona a tu encargado')}</option>
+                {jefes.map((j) => <option key={j.no} value={j.no}>{j.name} · {rol(j.role)}</option>)}
               </select>
-              <small>Tu Ing. Full, Senior o Gerente directo.</small>
+              <small>{t('Tu Ing. Full, Senior o Gerente directo.')}</small>
             </Campo>
           )}
-          <Campo label="Turno">
+          <Campo label={t('Turno')}>
             <select value={d.shift} onChange={set('shift')}>
               {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{k} · {v}</option>)}
             </select>
           </Campo>
-          {encargado && <Campo label="Área dentro del departamento" id="area" placeholder="Estaciones LC245" value={d.area} onChange={set('area')} />}
+          {encargado && <Campo label={t('Área dentro del departamento')} id="area" placeholder="Estaciones LC245" value={d.area} onChange={set('area')} />}
         </>
       )}
 
@@ -108,8 +109,8 @@ export default function Registro({ volver }) {
 
       <p className="error" role="alert">{error}</p>
       <div className="row between">
-        <button type="button" className="btn btn-ghost" onClick={() => (paso === 1 ? volver() : setPaso(paso - 1))}>← Volver</button>
-        <button className="btn btn-primary" type="submit" disabled={enviando}>{paso === 3 ? 'Crear cuenta' : 'Continuar'}</button>
+        <button type="button" className="btn btn-ghost" onClick={() => (paso === 1 ? volver() : setPaso(paso - 1))}>← {t('Volver')}</button>
+        <button className="btn btn-primary" type="submit" disabled={enviando}>{t(paso === 3 ? 'Crear cuenta' : 'Continuar')}</button>
       </div>
     </form>
   )
