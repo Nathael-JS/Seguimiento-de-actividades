@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, iniciales } from './comun.js'
+import { api, fechaHora, iniciales } from './comun.js'
 import { Notificacion } from './ui.jsx'
 
 // Filtro → tipos de notificación que incluye
@@ -58,7 +58,7 @@ export default function Buzon({ user, datos, error, recargar }) {
                   <span className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{iniciales(n.who)}</span>
                   <div style={{ flex: 1 }} className={n.read ? '' : 'unread'}>
                     <Notificacion n={n} />
-                    <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{n.time}</div>
+                    <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{fechaHora(n.at)}</div>
                   </div>
                   {!n.read && <span className="tag">Nueva</span>}
                 </li>

@@ -122,7 +122,8 @@ const reporteSchema = {
   },
 }
 
-const ahora = () => new Date().toTimeString().slice(0, 5)
+// Instante exacto en UTC; cada navegador lo muestra en su hora local
+const ahora = () => new Date().toISOString()
 const DIA = 86_400_000
 const VIGENCIA_PASSWORD = 90 // días
 const hoyUtc = () => new Date().toISOString().slice(0, 10)
@@ -158,7 +159,7 @@ export function build(opts = {}) {
   const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
   const vigentes = () => actividades.filter((a) => !a.handedTo)
-  const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), time: ahora(), read: false, ...n })
+  const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
 
   const conEmpleado = (handler) => async (req, reply) => {
     const u = empleado(req.params.no)
@@ -286,7 +287,7 @@ export function build(opts = {}) {
           who: empleado(n.who)?.name,
           actividad: actividades.find((a) => a.id === n.ref)?.text,
           count: n.count,
-          time: n.time,
+          at: n.at,
           read: n.read,
         })),
     }
@@ -318,10 +319,10 @@ export function build(opts = {}) {
     if (!asignables(encargado).some((e) => e.no === para)) {
       return reply.code(403).send({ error: 'Ese empleado no está a tu cargo.' })
     }
-    const hora = ahora()
+    const at = ahora()
     const nuevas = puntos.map((p) => {
       const a = {
-        id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, time: hora,
+        id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
         text: p.texto.trim(), pct: p.avance, status: p.avance === 100 ? 'done' : p.avance > 0 ? 'progress' : 'pending',
         mgr: comentario.trim(), note: '',
       }
@@ -373,7 +374,7 @@ export function build(opts = {}) {
 
     // Mismo empleado: día siguiente, mismo turno. Otro: siguiente turno (tras el C viene el A del día siguiente)
     const nueva = {
-      ...a, id: siguienteId(actividades), to: para, by: por, time: ahora(), status: 'pending', note: '', inh: true,
+      ...a, id: siguienteId(actividades), to: para, by: por, at: ahora(), status: 'pending', note: '', inh: true,
       date: mismo || a.shift === 'C' ? diaSiguiente(a.date) : a.date,
       shift: mismo ? a.shift : SIGUIENTE_TURNO[a.shift],
     }
@@ -394,13 +395,13 @@ export function build(opts = {}) {
     // Incluye las heredadas: el reporte es el historial completo
     return actividades
       .filter((a) => empleados.includes(a.to) && a.date >= desde && a.date <= hasta && (!turno || a.shift === turno))
-      .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.at.localeCompare(a.at))
       .map((a) => {
         const e = empleado(a.to)
         return {
-          id: a.id, date: a.date, shift: a.shift, time: a.time, text: a.text, pct: a.pct, status: a.status, note: a.note,
+          id: a.id, date: a.date, shift: a.shift, at: a.at, text: a.text, pct: a.pct, status: a.status, note: a.note,
+          mgr: a.mgr, inh: !!a.inh, heredadaA: a.handedTo && empleado(a.handedTo).name,
           name: e.name, role: e.role, dept: e.dept,
-          accion: a.handedTo ? `Heredada a ${empleado(a.handedTo).name}` : a.inh ? 'Recibida por herencia' : a.mgr,
         }
       })
   })

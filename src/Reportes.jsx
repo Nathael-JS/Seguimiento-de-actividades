@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { DEPARTAMENTOS, ESTADOS, ROLES, TURNOS, api, hoy, promedio } from './comun.js'
+import { DEPARTAMENTOS, ESTADOS, ROLES, TURNOS, api, hora, hoy, promedio } from './comun.js'
 import { Estado } from './ui.jsx'
 
 const haceUnaSemana = () => new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA')
 
 const COLUMNAS = ['Fecha', 'Turno', 'Hora', 'Empleado', 'Puesto', 'Departamento', 'Actividad', 'Avance %', 'Estado', 'Comentarios', 'Acción tomada']
-const celdas = (f) => [f.date, f.shift, f.time, f.name, ROLES[f.role], DEPARTAMENTOS[f.dept], f.text, f.pct, ESTADOS[f.status], f.note, f.accion]
+const accion = (f) => (f.heredadaA ? `Heredada a ${f.heredadaA}` : f.inh ? 'Recibida por herencia' : f.mgr)
+const celdas = (f) => [f.date, f.shift, hora(f.at), f.name, ROLES[f.role], DEPARTAMENTOS[f.dept], f.text, f.pct, ESTADOS[f.status], f.note, accion(f)]
 
 // Excel ejecuta como fórmula una celda que empieza con = + - @; el apóstrofo la deja como texto
 const celdaCsv = (v) => {
@@ -125,10 +126,10 @@ export default function Reportes({ user }) {
               <tbody>
                 {filas.length ? filas.map((f) => (
                   <tr key={f.id}>
-                    <td className="mono">{f.date}</td><td>{f.shift}</td><td className="mono">{f.time}</td>
+                    <td className="mono">{f.date}</td><td>{f.shift}</td><td className="mono">{hora(f.at)}</td>
                     <td>{f.name}</td><td>{ROLES[f.role]}</td><td>{DEPARTAMENTOS[f.dept]}</td><td>{f.text}</td>
                     <td className="mono">{f.pct}%</td><td><Estado estado={f.status} /></td>
-                    <td>{f.note || '—'}</td><td>{f.accion || '—'}</td>
+                    <td>{f.note || '—'}</td><td>{accion(f) || '—'}</td>
                   </tr>
                 )) : <tr><td colSpan={COLUMNAS.length} className="empty">Sin registros para estos filtros.</td></tr>}
               </tbody>

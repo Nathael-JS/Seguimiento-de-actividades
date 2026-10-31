@@ -1,4 +1,4 @@
-import { DEPARTAMENTOS, TURNOS } from './comun.js'
+import { DEPARTAMENTOS, TURNOS, fechaHora } from './comun.js'
 import Icono from './Icono.jsx'
 import { Anillo, AvisoPassword, Notificacion } from './ui.jsx'
 
@@ -45,7 +45,7 @@ export default function Inicio({ user, modulos, datos, error }) {
                       <span className={`ndot ${n.kind}`} />
                       <div className={n.read ? '' : 'unread'}>
                         <Notificacion n={n} />
-                        <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{n.time}</div>
+                        <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{fechaHora(n.at)}</div>
                       </div>
                     </li>
                   ))}

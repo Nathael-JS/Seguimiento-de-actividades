@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ESTADOS, api, promedio } from './comun.js'
+import { ESTADOS, api, hora, promedio } from './comun.js'
 import { Anillo, Estado } from './ui.jsx'
 
 export default function MisActividades({ user, recargar, avisar }) {
@@ -76,7 +76,7 @@ function Tarea({ t, user, onGuardado }) {
         <div>
           <h3>{t.text}</h3>
           <div className="muted" style={{ fontSize: 13 }}>
-            Asignada por {t.byName} · <span className="mono">{t.date} · Turno {t.shift} · {t.time}</span>
+            Asignada por {t.byName} · <span className="mono">{t.date} · Turno {t.shift} · {hora(t.at)}</span>
           </div>
         </div>
         <div className="row" style={{ gap: 6 }}>
