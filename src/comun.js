@@ -39,3 +39,8 @@ export async function api(url, { method = 'GET', body } = {}) {
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
 export const hoy = () => new Date().toLocaleDateString('en-CA')
+
+export const promedio = (actividades) =>
+  actividades.length ? Math.round(actividades.reduce((s, a) => s + a.pct, 0) / actividades.length) : 0
+
+export const esEncargado = (role) => role === 'gte' || role === 'sr' || role === 'full'

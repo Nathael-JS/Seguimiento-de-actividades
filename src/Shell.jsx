@@ -4,10 +4,15 @@ import Buzon from './Buzon.jsx'
 import Icono from './Icono.jsx'
 import Inicio from './Inicio.jsx'
 import MisActividades from './MisActividades.jsx'
+import Monitoreo from './Monitoreo.jsx'
 import RegistrarActividad from './RegistrarActividad.jsx'
+import Reportes from './Reportes.jsx'
 
 // Los módulos que no están aquí se muestran como "en desarrollo"
-const PAGINAS = { inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades, buzon: Buzon }
+const PAGINAS = {
+  inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades,
+  monitoreo: Monitoreo, reportes: Reportes, buzon: Buzon,
+}
 
 const rutaActual = () => location.hash.slice(1) || 'inicio'
 

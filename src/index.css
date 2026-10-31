@@ -27,7 +27,8 @@
   --shadow-card: 0 1px 2px rgba(22,32,42,0.06), 0 4px 12px rgba(22,32,42,0.06);
   --shadow-pop: 0 12px 32px rgba(22,32,42,0.18);
 }
-@media (prefers-color-scheme: dark) { :root {
+/* Solo en pantalla: al imprimir (Exportar PDF) siempre se usan los colores claros */
+@media screen and (prefers-color-scheme: dark) { :root {
   --surface-000: #0f1418;
   --surface-100: #171e24;
   --surface-200: #212a32;
@@ -189,7 +190,7 @@ dialog.modal::backdrop{background:rgba(10,20,28,.55)}
 .field textarea{padding:var(--space-2) var(--space-3);min-height:72px;resize:vertical}
 fieldset.field{border:0;padding:0;margin:0}
 fieldset.field legend{font:500 13px/18px var(--font-sans);padding:0;margin-bottom:6px}
-.form-card{display:flex;flex-direction:column;gap:20px;max-width:820px}
+.form-card{display:flex;flex-direction:column;gap:20px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
@@ -242,4 +243,51 @@ fieldset.field legend{font:500 13px/18px var(--font-sans);padding:0;margin-botto
   .status-seg button:nth-child(3){border-left:0}
   .status-seg button:nth-child(n+3){border-top:1px solid var(--line-strong)}
   .point{grid-template-columns:1fr 84px 40px}.point .num{display:none}
+}
+
+.emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.emp-card{display:flex;flex-direction:column;gap:14px;padding:20px}
+.emp-card header{display:flex;gap:14px;align-items:center}
+.emp-card header .who{flex:1;min-width:0}
+.emp-card h3{font:600 15px/20px var(--font-sans)}
+.mini{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:18px}
+.mini li{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.mini li span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree{font-size:12px;color:var(--ink-muted)}
+
+.inherit{display:flex;flex-direction:column;gap:12px}
+.inherit-item{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:var(--radius-md)}
+.select-sm{flex:1;min-width:180px;min-height:36px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:0 10px;background:var(--surface-100);color:var(--ink);font:inherit;font-size:13px}
+.select-sm:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:16px;align-items:end}
+.filters .wide{grid-column:1/-1}
+.checklist{max-height:168px;overflow:auto;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:6px;background:var(--surface-100)}
+.checklist label{display:flex;gap:10px;align-items:center;padding:6px 8px;border-radius:var(--radius-sm);font-size:14px;cursor:pointer}
+.checklist label:hover{background:var(--surface-200)}
+/* .field input les daría 40 px de alto y ancho completo a las casillas */
+.field .checklist input{accent-color:var(--brand);width:16px;height:16px;min-height:0;padding:0;flex:none}
+.reporte{display:flex;flex-direction:column;gap:12px}
+/* 11 columnas: mejor desplazar a lo ancho que aplastar el texto */
+.reporte table{min-width:1100px}
+.nowrap{white-space:nowrap}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-100)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font:600 12px/16px var(--font-sans);color:var(--ink-muted);padding:12px 14px;background:var(--surface-200);white-space:nowrap}
+td{padding:12px 14px;border-top:1px solid var(--line);vertical-align:top}
+td.mono{white-space:nowrap}
+tbody tr:hover td{background:var(--surface-000)}
+.solo-impresion{display:none}
+
+@media (max-width:1100px){.filters{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.filters{grid-template-columns:1fr}}
+@media print{
+  .side,.top,.backdrop,.toast,.filters,.no-imprimir,.page-head p{display:none}
+  .shell{display:block}
+  body{background:#fff}
+  .page{padding:0;max-width:none}
+  .table-wrap{overflow:visible;border:0}
+  table,.reporte table{font-size:11px;min-width:0}
+  th,td{padding:6px 8px}
+  .solo-impresion{display:inline}
 }

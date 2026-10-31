@@ -70,7 +70,35 @@ const actualizarSchema = {
   },
 }
 
+const heredarSchema = {
+  params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
+  body: {
+    type: 'object',
+    required: ['por', 'para'],
+    additionalProperties: false,
+    properties: { por: noEmpleado, para: noEmpleado },
+  },
+}
+
+const reporteSchema = {
+  body: {
+    type: 'object',
+    required: ['por', 'empleados', 'desde', 'hasta'],
+    additionalProperties: false,
+    properties: {
+      por: noEmpleado,
+      empleados: { type: 'array', minItems: 1, maxItems: 500, uniqueItems: true, items: noEmpleado },
+      desde: { type: 'string', format: 'date' },
+      hasta: { type: 'string', format: 'date' },
+      turno: { enum: ['A', 'B', 'C'] },
+    },
+  },
+}
+
 const ahora = () => new Date().toTimeString().slice(0, 5)
+const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
+// Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
+const diaSiguiente = (fecha) => new Date(Date.parse(fecha) + 86_400_000).toISOString().slice(0, 10)
 
 export function build(opts = {}) {
   const app = Fastify(opts)
@@ -90,6 +118,8 @@ export function build(opts = {}) {
   const equipo = (no) => usuarios.filter((u) => u.boss === no).flatMap((u) => [u, ...equipo(u.no)])
   // A quién puede asignar un encargado: su equipo, solo con menor rango que él
   const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
+  // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
+  const vigentes = () => actividades.filter((a) => !a.handedTo)
   const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), time: ahora(), read: false, ...n })
 
   const conEmpleado = (handler) => async (req, reply) => {
@@ -111,7 +141,7 @@ export function build(opts = {}) {
   app.get('/api/inicio/:no', { schema: porEmpleado }, conEmpleado((u) => {
     // El encargado ve las actividades de su equipo; el ejecutor, solo las suyas
     const alcance = esEncargado(u) ? equipo(u.no).map((e) => e.no) : [u.no]
-    const acts = actividades.filter((a) => alcance.includes(a.to))
+    const acts = vigentes().filter((a) => alcance.includes(a.to))
     return {
       asignadas: acts.length,
       realizadas: acts.filter((a) => a.status === 'done').length,
@@ -137,11 +167,16 @@ export function build(opts = {}) {
     return { ok: true }
   }))
 
+  // Equipo del encargado con sus actividades vigentes: alimenta Registrar, herencia, Monitoreo y Reportes
   app.get('/api/equipo/:no', { schema: porEmpleado }, conEmpleado((u, req, reply) => {
-    if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados asignan actividades.' })
+    if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
+    const acts = vigentes()
     return asignables(u)
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
-      .map(({ no, name, role, dept, shift }) => ({ no, name, role, dept, shift }))
+      .map(({ no, name, role, dept, shift, boss }) => ({
+        no, name, role, dept, shift, boss,
+        actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id),
+      }))
   }))
 
   app.post('/api/actividades', { schema: registrarSchema }, async (req, reply) => {
@@ -168,7 +203,7 @@ export function build(opts = {}) {
   })
 
   app.get('/api/actividades/:no', { schema: porEmpleado }, conEmpleado((u) =>
-    actividades
+    vigentes()
       .filter((a) => a.to === u.no)
       // Las realizadas al final, el resto de la más nueva a la más vieja
       .sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.id - a.id)
@@ -180,6 +215,7 @@ export function build(opts = {}) {
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
     const { por, estado, nota = a.note } = req.body
     if (a.to !== por) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad puede actualizarla.' })
+    if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
 
     const cambioEstado = estado !== a.status
     const cambioNota = nota.trim() !== a.note
@@ -188,6 +224,55 @@ export function build(opts = {}) {
     if (cambioEstado) notificar({ for: a.by, kind: estado, who: por, ref: a.id })
     if (cambioNota) notificar({ for: a.by, kind: 'comment', who: por, ref: a.id })
     return { ...a, byName: empleado(a.by)?.name }
+  })
+
+  app.post('/api/actividades/:id/heredar', { schema: heredarSchema }, async (req, reply) => {
+    const a = actividades.find((x) => x.id === req.params.id)
+    if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    const { por, para } = req.body
+    const encargado = empleado(por)
+    const suyos = encargado && esEncargado(encargado) ? asignables(encargado).map((e) => e.no) : []
+    if (!suyos.includes(a.to)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    if (a.handedTo || !['pending', 'incomplete'].includes(a.status)) {
+      return reply.code(409).send({ error: 'Solo se heredan actividades pendientes o incompletas, una sola vez.' })
+    }
+    const mismo = para === a.to
+    if (!mismo && !(suyos.includes(para) && RANGO[empleado(para).role] >= RANGO.jr)) {
+      return reply.code(403).send({ error: 'Solo se hereda a un técnico o Ing. Jr de tu equipo.' })
+    }
+
+    // Mismo empleado: día siguiente, mismo turno. Otro: siguiente turno (tras el C viene el A del día siguiente)
+    const nueva = {
+      ...a, id: siguienteId(actividades), to: para, by: por, time: ahora(), status: 'pending', note: '', inh: true,
+      date: mismo || a.shift === 'C' ? diaSiguiente(a.date) : a.date,
+      shift: mismo ? a.shift : SIGUIENTE_TURNO[a.shift],
+    }
+    actividades.push(nueva)
+    a.handedTo = para
+    notificar({ for: para, kind: 'inherited', who: por, ref: nueva.id })
+    return reply.code(201).send(nueva)
+  })
+
+  app.post('/api/reportes', { schema: reporteSchema }, async (req, reply) => {
+    const { por, empleados, desde, hasta, turno } = req.body
+    const encargado = empleado(por)
+    if (!encargado || !esEncargado(encargado)) return reply.code(403).send({ error: 'Solo los encargados generan reportes.' })
+    const permitidos = [por, ...equipo(por).map((e) => e.no)]
+    if (!empleados.every((no) => permitidos.includes(no))) {
+      return reply.code(403).send({ error: 'Solo puedes consultar a tu equipo.' })
+    }
+    // Incluye las heredadas: el reporte es el historial completo
+    return actividades
+      .filter((a) => empleados.includes(a.to) && a.date >= desde && a.date <= hasta && (!turno || a.shift === turno))
+      .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time))
+      .map((a) => {
+        const e = empleado(a.to)
+        return {
+          id: a.id, date: a.date, shift: a.shift, time: a.time, text: a.text, pct: a.pct, status: a.status, note: a.note,
+          name: e.name, role: e.role, dept: e.dept,
+          accion: a.handedTo ? `Heredada a ${empleado(a.handedTo).name}` : a.inh ? 'Recibida por herencia' : a.mgr,
+        }
+      })
   })
 
   if (existsSync(dist)) {

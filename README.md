@@ -3,7 +3,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
 
-- `src/` — frontend React + Vite: login, menú según el rol, Inicio, Registrar actividad, Mis actividades y Buzón; los demás módulos están "en desarrollo".
+- `src/` — frontend React + Vite: login, menú según el rol, Inicio, Registrar actividad (con herencia de pendientes), Mis actividades, Monitoreo, Reportes (exportar a Excel/PDF) y Buzón; los demás módulos están "en desarrollo".
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
 - `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, **texto plano, sin seguridad todavía**), actividades y notificaciones.
 
@@ -16,10 +16,12 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 | `POST` | `/api/login` | Login por correo, alias o número de empleado |
 | `GET` | `/api/inicio/:no` | Indicadores y notificaciones del empleado |
 | `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
-| `GET` | `/api/equipo/:no` | Empleados a los que un encargado puede asignar |
+| `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
 | `POST` | `/api/actividades` | Registrar actividades por puntos y notificar al empleado |
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
+| `POST` | `/api/actividades/:id/heredar` | Heredar una pendiente o incompleta al día siguiente o a otro técnico / Ing. Jr del siguiente turno |
+| `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno |
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ESTADOS, api } from './comun.js'
+import { ESTADOS, api, promedio } from './comun.js'
 import { Anillo, Estado } from './ui.jsx'
 
 export default function MisActividades({ user, recargar, avisar }) {
@@ -18,7 +18,7 @@ export default function MisActividades({ user, recargar, avisar }) {
     recargar()
   }
 
-  const promedio = tareas?.length ? Math.round(tareas.reduce((s, t) => s + t.pct, 0) / tareas.length) : 0
+  const avance = promedio(tareas ?? [])
 
   return (
     <>
@@ -27,7 +27,7 @@ export default function MisActividades({ user, recargar, avisar }) {
           <h1>Tareas asignadas</h1>
           <p>Marca el estado, ajusta el avance y comenta tus actividades.</p>
         </div>
-        {tareas && <div className="row"><Anillo pct={promedio} /><span className="muted" style={{ fontSize: 13 }}>Avance promedio</span></div>}
+        {tareas && <div className="row"><Anillo pct={avance} /><span className="muted" style={{ fontSize: 13 }}>Avance promedio</span></div>}
       </div>
 
       {error ? <p className="error" role="alert">{error}</p>
@@ -79,7 +79,10 @@ function Tarea({ t, user, onGuardado }) {
             Asignada por {t.byName} · <span className="mono">{t.date} · Turno {t.shift} · {t.time}</span>
           </div>
         </div>
-        <Estado estado={t.status} />
+        <div className="row" style={{ gap: 6 }}>
+          {t.inh && <span className="tag">Heredada</span>}
+          <Estado estado={t.status} />
+        </div>
       </div>
 
       {t.mgr && <div className="mgr-note"><b>Comentario del encargado:</b> {t.mgr}</div>}

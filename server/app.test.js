@@ -129,3 +129,61 @@ test('sirve el frontend compilado; /assets con caché larga e index.html sin cac
   assert.equal(res.statusCode, 200)
   assert.match(res.headers['cache-control'], /immutable/)
 })
+
+const heredar = (app, id, por, para) => pedir(app, 'POST', `/api/actividades/${id}/heredar`, { por, para })
+
+test('equipo trae jefe y actividades vigentes de cada miembro', async () => {
+  const jorge = (await pedir(build(), 'GET', '/api/equipo/10230')).body.find((e) => e.no === '10482')
+  assert.equal(jorge.boss, '10230')
+  assert.deepEqual(jorge.actividades.map((a) => a.id), [4, 3, 2, 1])
+})
+
+test('heredar al mismo empleado: día siguiente, mismo turno; la original sale de listas e indicadores', async () => {
+  const app = build()
+  const { code, body } = await heredar(app, 3, '10230', '10482')
+  assert.equal(code, 201)
+  assert.deepEqual([body.to, body.by, body.date, body.shift, body.status, body.inh], ['10482', '10230', '2026-10-30', 'A', 'pending', true])
+  const ids = (await pedir(app, 'GET', '/api/actividades/10482')).body.map((a) => a.id)
+  assert.ok(ids.includes(body.id) && !ids.includes(3))
+  const inicio = (await pedir(app, 'GET', '/api/inicio/10482')).body
+  assert.deepEqual([inicio.asignadas, inicio.abiertas], [4, 1]) // no se cuenta dos veces
+  assert.deepEqual([inicio.notificaciones[0].kind, inicio.notificaciones[0].actividad], ['inherited', 'Actualizar hoja de WIP de la estación'])
+  assert.equal((await pedir(app, 'PATCH', '/api/actividades/3', { por: '10482', estado: 'done', avance: 100 })).code, 409)
+  assert.equal((await heredar(app, 3, '10230', '10482')).code, 409) // una sola vez
+})
+
+test('heredar a otro empleado: siguiente turno; del C pasa al A del día siguiente', async () => {
+  const app = build()
+  // Luis (turno B, incompleta) → Héctor: mismo día, turno C
+  const b = (await heredar(app, 9, '10251', '10547')).body
+  assert.deepEqual([b.to, b.date, b.shift, b.pct], ['10547', '2026-10-28', 'C', 65])
+  // Una actividad del turno C heredada a otro pasa al turno A del día siguiente
+  const [c] = (await pedir(app, 'POST', '/api/actividades', asignar({ turno: 'C', fecha: '2026-10-31', puntos: [{ texto: 'Ronda nocturna', avance: 0 }] }))).body
+  const a = (await heredar(app, c.id, '10230', '10490')).body
+  assert.deepEqual([a.to, a.date, a.shift], ['10490', '2026-11-01', 'A'])
+})
+
+test('heredar valida permisos y estado', async () => {
+  const app = build()
+  assert.equal((await heredar(app, 9, '10230', '10482')).code, 403) // Luis no es del equipo de Diego
+  assert.equal((await heredar(app, 3, '10482', '10482')).code, 403) // un técnico no hereda
+  assert.equal((await heredar(app, 3, '10230', '10112')).code, 403) // no a un Senior
+  assert.equal((await heredar(app, 1, '10230', '10482')).code, 409) // ya realizada
+  assert.equal((await heredar(app, 999, '10230', '10482')).code, 404)
+})
+
+test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomada', async () => {
+  const app = build()
+  const reporte = (cambios) => pedir(app, 'POST', '/api/reportes', { por: '10230', empleados: ['10482', '10490'], desde: '2026-10-28', hasta: '2026-10-29', ...cambios })
+  const filas = (await reporte()).body
+  assert.equal(filas.length, 6)
+  assert.equal(filas[0].text, 'Pareto de fallas de la semana') // más reciente primero: 29/10 06:31
+  assert.equal(filas.find((f) => f.id === 4).accion, 'Recibida por herencia')
+  assert.equal((await reporte({ turno: 'B' })).body.length, 0)
+  assert.equal((await reporte({ desde: '2026-10-30', hasta: '2026-10-31' })).body.length, 0)
+  await heredar(app, 3, '10230', '10490')
+  assert.equal((await reporte()).body.find((f) => f.id === 3).accion, 'Heredada a María López')
+  assert.equal((await reporte({ empleados: ['10511'] })).code, 403) // no es de su equipo
+  assert.equal((await reporte({ por: '10482' })).code, 403)
+  assert.equal((await reporte({ empleados: [] })).code, 400)
+})
