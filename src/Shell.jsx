@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ROLES, api, iniciales, modulosDe } from './comun.js'
 import Buzon from './Buzon.jsx'
+import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
 import Inicio from './Inicio.jsx'
 import MisActividades from './MisActividades.jsx'
 import Monitoreo from './Monitoreo.jsx'
+import Perfil from './Perfil.jsx'
 import RegistrarActividad from './RegistrarActividad.jsx'
 import Reportes from './Reportes.jsx'
 
 // Los módulos que no están aquí se muestran como "en desarrollo"
 const PAGINAS = {
   inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades,
-  monitoreo: Monitoreo, reportes: Reportes, buzon: Buzon,
+  monitoreo: Monitoreo, reportes: Reportes, buzon: Buzon, departamentos: Departamentos, perfil: Perfil,
 }
 
 const rutaActual = () => location.hash.slice(1) || 'inicio'

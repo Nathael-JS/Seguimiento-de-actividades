@@ -1,6 +1,6 @@
 import { DEPARTAMENTOS, TURNOS } from './comun.js'
 import Icono from './Icono.jsx'
-import { Anillo, Notificacion } from './ui.jsx'
+import { Anillo, AvisoPassword, Notificacion } from './ui.jsx'
 
 export default function Inicio({ user, modulos, datos, error }) {
   return (
@@ -9,6 +9,7 @@ export default function Inicio({ user, modulos, datos, error }) {
         <h1>Hola, {user.name.split(' ')[0]}</h1>
         <p>Turno de hoy: {user.shift} · {TURNOS[user.shift]} · {DEPARTAMENTOS[user.dept]}</p>
       </div>
+      <AvisoPassword dias={datos?.diasPassword} enlace />
 
       {error ? <p className="error" role="alert">{error}</p> : !datos ? <p className="muted">Cargando…</p> : (
         <>

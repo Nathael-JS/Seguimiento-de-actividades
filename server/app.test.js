@@ -3,15 +3,43 @@ import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { build } from './app.js'
 
-const login = (payload) => build().inject({ method: 'POST', url: '/api/login', payload })
+const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/api/login', payload })
+// Login completo: usuario y contraseña, luego el código simulado
+async function entrar(usuario, password = 'demo1234', app = build()) {
+  const paso1 = (await login({ usuario, password }, app)).json()
+  return app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token: paso1.token, codigo: paso1.codigo } })
+}
 
-test('login correcto por correo, alias o número de empleado', async () => {
+test('login correcto por correo, alias o número de empleado, en dos pasos', async () => {
   for (const usuario of ['jorge.salinas@empresa.com', ' Jorge.Salinas ', '10482']) {
-    const res = await login({ usuario, password: 'demo1234' })
+    const paso1 = await login({ usuario, password: 'demo1234' })
+    assert.equal(paso1.statusCode, 200, usuario)
+    assert.equal(paso1.json().destino, 'j•••••@empresa.com')
+    assert.match(paso1.json().codigo, /^\d{6}$/)
+    assert.equal(paso1.json().name, undefined) // sin código no hay sesión
+    const res = await entrar(usuario)
     assert.equal(res.statusCode, 200, usuario)
     assert.equal(res.json().name, 'Jorge Salinas')
     assert.equal(res.json().password, undefined)
   }
+})
+
+test('verificación: código incorrecto, 5 intentos, reenviar y token desconocido', async () => {
+  const app = build()
+  const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
+  const { token, codigo } = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  const malo = codigo === '000000' ? '111111' : '000000'
+  assert.equal((await verificar(token, malo)).json().error, 'Código incorrecto.')
+  const { codigo: nuevo } = (await app.inject({ method: 'POST', url: '/api/login/reenviar', payload: { token } })).json()
+  assert.equal((await verificar(token, nuevo)).statusCode, 200)
+  assert.equal((await verificar(token, nuevo)).statusCode, 401) // el código no se reutiliza
+
+  const otro = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  for (let i = 0; i < 4; i++) await verificar(otro.token, otro.codigo === '000000' ? '111111' : '000000')
+  assert.match((await verificar(otro.token, otro.codigo === '000000' ? '111111' : '000000')).json().error, /Demasiados intentos/)
+  assert.equal((await verificar(otro.token, otro.codigo)).statusCode, 401) // bloqueado aunque ahora acierte
+  assert.equal((await verificar('no-existe', '123456')).statusCode, 401)
+  assert.equal((await verificar(token, '12ab56')).statusCode, 400)
 })
 
 test('contraseña o usuario incorrecto da 401', async () => {
@@ -28,8 +56,8 @@ test('entrada inválida da 400', async () => {
 const inicio = (no) => build().inject({ method: 'GET', url: `/api/inicio/${no}` })
 
 test('login indica si es encargado', async () => {
-  assert.equal((await login({ usuario: '10482', password: 'demo1234' })).json().encargado, false)
-  assert.equal((await login({ usuario: '10230', password: 'demo1234' })).json().encargado, true)
+  assert.equal((await entrar('10482')).json().encargado, false)
+  assert.equal((await entrar('10230')).json().encargado, true)
 })
 
 test('inicio del ejecutor cuenta solo sus actividades', async () => {
@@ -186,4 +214,69 @@ test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomad
   assert.equal((await reporte({ empleados: ['10511'] })).code, 403) // no es de su equipo
   assert.equal((await reporte({ por: '10482' })).code, 403)
   assert.equal((await reporte({ empleados: [] })).code, 400)
+})
+
+const CLAVE = 'Nueva#Clave2026'
+const registro = (cambios = {}) => ({
+  name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE, ...cambios,
+})
+
+test('registro de técnico: elige encargado del departamento, hereda su área y ya puede entrar', async () => {
+  const app = build()
+  const res = await pedir(app, 'POST', '/api/registro', registro())
+  assert.equal(res.code, 201)
+  const yo = (await entrar('20001', CLAVE, app)).json()
+  assert.deepEqual([yo.name, yo.area, yo.encargado], ['Ana Prueba', 'CDU y Chillers', false])
+  // Aparece en el equipo de Sofía y en Departamentos
+  assert.ok((await pedir(app, 'GET', '/api/equipo/10251')).body.some((e) => e.no === '20001'))
+  assert.equal((await pedir(app, 'GET', '/api/departamentos')).body.find((e) => e.no === '20001').rate, null)
+})
+
+test('registro valida duplicados, contraseña y encargado', async () => {
+  const app = build()
+  const codigo = async (cambios) => (await pedir(app, 'POST', '/api/registro', registro(cambios))).code
+  assert.equal(await codigo({ no: '10482' }), 409)
+  assert.equal(await codigo({ email: 'JORGE.salinas@empresa.com' }), 409)
+  for (const password of ['Corta#1', 'sinmayuscula#2026', 'SINMINUSCULA#2026', 'SinNumero#Clave', 'SinSimbolo2026x']) {
+    assert.equal(await codigo({ password }), 400, password)
+  }
+  assert.equal(await codigo({ boss: undefined }), 400) // técnico sin encargado
+  assert.equal(await codigo({ boss: '10482' }), 400) // un técnico no es encargado
+  assert.equal(await codigo({ boss: '10700' }), 400) // encargado de otro departamento
+  assert.equal(await codigo({ role: 'full', boss: undefined }), 400) // encargado sin área
+  assert.equal(await codigo({ role: 'full', boss: undefined, area: 'Línea 4' }), 201)
+  assert.equal(await codigo({ email: 'no-es-correo', no: '20002' }), 400)
+})
+
+test('recuperar contraseña: valida número y correo, el permiso es de un solo uso', async () => {
+  const app = build()
+  assert.equal((await pedir(app, 'POST', '/api/recuperar', { no: '10482', email: 'otro@empresa.com' })).code, 400)
+  const { body } = await pedir(app, 'POST', '/api/recuperar', { no: '10482', email: ' Jorge.Salinas@empresa.com ' })
+  assert.equal(body.name, 'Jorge Salinas')
+  assert.equal((await pedir(app, 'POST', '/api/recuperar/cambiar', { token: body.token, password: 'debil' })).code, 400)
+  assert.equal((await pedir(app, 'POST', '/api/recuperar/cambiar', { token: body.token, password: CLAVE })).code, 200)
+  assert.equal((await pedir(app, 'POST', '/api/recuperar/cambiar', { token: body.token, password: CLAVE })).code, 401)
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' }, app)).statusCode, 401)
+  assert.equal((await entrar('10482', CLAVE, app)).statusCode, 200)
+})
+
+test('perfil y cambio de contraseña propio', async () => {
+  const app = build()
+  const perfil = (await pedir(app, 'GET', '/api/perfil/10482')).body
+  assert.deepEqual([perfil.bossName, perfil.email, perfil.password], ['Diego Herrera', 'jorge.salinas@empresa.com', undefined])
+  assert.equal(typeof perfil.diasPassword, 'number')
+  const cambiar = (actual, nueva) => pedir(app, 'POST', '/api/perfil/10482/password', { actual, nueva })
+  assert.equal((await cambiar('mala', CLAVE)).code, 401)
+  assert.equal((await cambiar('demo1234', 'debil')).code, 400)
+  assert.equal((await cambiar('demo1234', CLAVE)).code, 200)
+  assert.equal((await cambiar(CLAVE, CLAVE)).code, 400) // debe ser distinta
+  assert.equal((await pedir(app, 'GET', '/api/perfil/10482')).body.diasPassword, 90)
+  assert.equal((await pedir(app, 'GET', '/api/perfil/99999')).code, 404)
+})
+
+test('departamentos: todos los empleados con rate y sin datos sensibles', async () => {
+  const lista = (await pedir(build(), 'GET', '/api/departamentos')).body
+  assert.equal(lista.length, 15)
+  assert.deepEqual(Object.keys(lista[0]).sort(), ['area', 'dept', 'name', 'no', 'rate', 'role', 'shift'])
+  assert.equal(lista.find((e) => e.no === '10604').rate, 76)
 })

@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 import { existsSync, readFileSync } from 'node:fs'
+import { randomInt, randomUUID } from 'node:crypto'
 
 const leer = (archivo) => JSON.parse(readFileSync(new URL(archivo, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
@@ -13,6 +14,32 @@ const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
+const token = { type: 'string', minLength: 1, maxLength: 64 }
+// Mínimo 10 caracteres, mayúscula, minúscula, número y símbolo (las mismas reglas que muestra el frontend)
+const passwordNueva = {
+  type: 'string', minLength: 10, maxLength: 100,
+  pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9])',
+}
+const objeto = (requeridos, properties) => ({ type: 'object', required: requeridos, additionalProperties: false, properties })
+
+const verificarSchema = { body: objeto(['token', 'codigo'], { token, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
+const reenviarSchema = { body: objeto(['token'], { token }) }
+const registroSchema = {
+  body: objeto(['name', 'no', 'email', 'role', 'dept', 'shift', 'password'], {
+    name: { type: 'string', minLength: 3, maxLength: 100, pattern: '\\S' },
+    no: { type: 'string', pattern: '^\\d{4,10}$' },
+    email: { type: 'string', format: 'email', maxLength: 100 },
+    role: { enum: ['tec', 'jr', 'full', 'sr', 'gte'] },
+    dept: { enum: ['lc', 'pf', 'smt'] },
+    shift: { enum: ['A', 'B', 'C'] },
+    boss: noEmpleado,
+    area: { type: 'string', maxLength: 100 },
+    password: passwordNueva,
+  }),
+}
+const recuperarSchema = { body: objeto(['no', 'email'], { no: noEmpleado, email: { type: 'string', maxLength: 100 } }) }
+const cambiarSchema = { body: objeto(['token', 'password'], { token, password: passwordNueva }) }
+const cambiarPropiaSchema = { ...porEmpleado, body: objeto(['actual', 'nueva'], { actual: texto(100), nueva: passwordNueva }) }
 
 const loginSchema = {
   body: {
@@ -96,6 +123,12 @@ const reporteSchema = {
 }
 
 const ahora = () => new Date().toTimeString().slice(0, 5)
+const DIA = 86_400_000
+const VIGENCIA_PASSWORD = 90 // días
+const hoyUtc = () => new Date().toISOString().slice(0, 10)
+const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.parse(hoyUtc()) - Date.parse(u.pwdChanged)) / DIA)
+// j•••••@empresa.com
+const ocultarCorreo = (email) => email.replace(/^(.).*(@.*)$/, '$1•••••$2')
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
 // Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
 const diaSiguiente = (fecha) => new Date(Date.parse(fecha) + 86_400_000).toISOString().slice(0, 10)
@@ -108,6 +141,11 @@ export function build(opts = {}) {
   const usuarios = leer('./usuarios.json')
   const actividades = leer('./actividades.json')
   const notificaciones = leer('./notificaciones.json')
+  // Códigos de verificación y permisos de recuperación pendientes, por token
+  const verificaciones = new Map()
+  const recuperaciones = new Map()
+  const limpiarVencidos = (mapa) => mapa.forEach((v, k) => v.vence < Date.now() && mapa.delete(k))
+  const nuevoCodigo = () => String(randomInt(0, 1_000_000)).padStart(6, '0')
   const siguienteId = (lista) => Math.max(0, ...lista.map((x) => x.id)) + 1
 
   const empleado = (no) => usuarios.find((u) => u.no === no)
@@ -128,14 +166,105 @@ export function build(opts = {}) {
     return handler(u, req, reply)
   }
 
+  const sesion = (u) => ({ no: u.no, name: u.name, role: u.role, dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u) })
+
+  // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
     const u = buscar(req.body.usuario.trim().toLowerCase())
     if (!u || u.password !== req.body.password) {
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
-    const { no, name, role, dept, shift, area } = u
-    return { no, name, role, dept, shift, area, encargado: esEncargado(u) }
+    limpiarVencidos(verificaciones)
+    const id = randomUUID()
+    const codigo = nuevoCodigo()
+    verificaciones.set(id, { no: u.no, codigo, intentos: 0, vence: Date.now() + 5 * 60_000 })
+    // shortcut: el código se devuelve en la respuesta (simulado); enviarlo por correo cuando haya servicio de email
+    return { token: id, destino: ocultarCorreo(u.email), codigo }
   })
+
+  // Paso 2: el código de 6 dígitos. Expira a los 5 minutos y admite 5 intentos
+  app.post('/api/login/verificar', { schema: verificarSchema }, async (req, reply) => {
+    const v = verificaciones.get(req.body.token)
+    if (!v || v.vence < Date.now()) {
+      verificaciones.delete(req.body.token)
+      return reply.code(401).send({ error: 'El código expiró. Vuelve a iniciar sesión.' })
+    }
+    if (v.codigo !== req.body.codigo) {
+      if (++v.intentos >= 5) {
+        verificaciones.delete(req.body.token)
+        return reply.code(401).send({ error: 'Demasiados intentos. Vuelve a iniciar sesión.' })
+      }
+      return reply.code(401).send({ error: 'Código incorrecto.' })
+    }
+    verificaciones.delete(req.body.token)
+    return sesion(empleado(v.no))
+  })
+
+  app.post('/api/login/reenviar', { schema: reenviarSchema }, async (req, reply) => {
+    const v = verificaciones.get(req.body.token)
+    if (!v || v.vence < Date.now()) return reply.code(401).send({ error: 'El código expiró. Vuelve a iniciar sesión.' })
+    Object.assign(v, { codigo: nuevoCodigo(), intentos: 0, vence: Date.now() + 5 * 60_000 })
+    return { codigo: v.codigo }
+  })
+
+  app.post('/api/registro', { schema: registroSchema }, async (req, reply) => {
+    const { name, no, role, dept, shift, boss, area = '', password } = req.body
+    const email = req.body.email.trim().toLowerCase()
+    if (empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
+    if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
+
+    const nuevo = { no, name: name.trim(), role, dept, shift, email, rate: null, pwdChanged: hoyUtc(), password }
+    if (RANGO[role] <= 2) {
+      // Encargado: indica su área; no elige jefe (como en el mockup)
+      if (!area.trim()) return reply.code(400).send({ error: 'Escribe tu área dentro del departamento.' })
+      Object.assign(nuevo, { boss: null, area: area.trim() })
+    } else {
+      // Técnico / Ing. Jr: elige a su encargado del mismo departamento y hereda su área
+      const jefe = boss && empleado(boss)
+      if (!jefe || !esEncargado(jefe) || jefe.dept !== dept) {
+        return reply.code(400).send({ error: 'Elige a tu encargado del departamento.' })
+      }
+      Object.assign(nuevo, { boss, area: jefe.area })
+    }
+    usuarios.push(nuevo)
+    return reply.code(201).send({ ok: true })
+  })
+
+  app.post('/api/recuperar', { schema: recuperarSchema }, async (req, reply) => {
+    const u = empleado(req.body.no)
+    if (!u || u.email !== req.body.email.trim().toLowerCase()) {
+      return reply.code(400).send({ error: 'Número de empleado y correo no coinciden con un registro.' })
+    }
+    limpiarVencidos(recuperaciones)
+    const id = randomUUID()
+    recuperaciones.set(id, { no: u.no, vence: Date.now() + 15 * 60_000 })
+    return { token: id, name: u.name, no: u.no, email: u.email }
+  })
+
+  app.post('/api/recuperar/cambiar', { schema: cambiarSchema }, async (req, reply) => {
+    const r = recuperaciones.get(req.body.token)
+    recuperaciones.delete(req.body.token) // un solo uso
+    if (!r || r.vence < Date.now()) return reply.code(401).send({ error: 'El permiso expiró. Vuelve a validar tus datos.' })
+    Object.assign(empleado(r.no), { password: req.body.password, pwdChanged: hoyUtc() })
+    return { ok: true }
+  })
+
+  app.get('/api/departamentos', async () =>
+    usuarios
+      .map(({ no, name, role, dept, shift, area, rate }) => ({ no, name, role, dept, shift, area, rate }))
+      .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name)))
+
+  app.get('/api/perfil/:no', { schema: porEmpleado }, conEmpleado((u) => {
+    const { no, name, role, dept, shift, area, email, pwdChanged, boss } = u
+    return { no, name, role, dept, shift, area, email, pwdChanged, bossName: empleado(boss)?.name, bossRole: empleado(boss)?.role, diasPassword: diasPassword(u) }
+  }))
+
+  app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
+    if (req.body.actual !== u.password) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
+    if (req.body.nueva === u.password) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
+    Object.assign(u, { password: req.body.nueva, pwdChanged: hoyUtc() })
+    return { ok: true }
+  }))
 
   // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
   app.get('/api/inicio/:no', { schema: porEmpleado }, conEmpleado((u) => {
@@ -143,6 +272,7 @@ export function build(opts = {}) {
     const alcance = esEncargado(u) ? equipo(u.no).map((e) => e.no) : [u.no]
     const acts = vigentes().filter((a) => alcance.includes(a.to))
     return {
+      diasPassword: diasPassword(u),
       asignadas: acts.length,
       realizadas: acts.filter((a) => a.status === 'done').length,
       abiertas: acts.filter((a) => a.status === 'pending' || a.status === 'incomplete').length,

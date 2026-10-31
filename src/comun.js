@@ -33,8 +33,11 @@ export async function api(url, { method = 'GET', body } = {}) {
     throw new Error('No se pudo conectar con el servidor. Intenta de nuevo.')
   }
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(res.status === 400 ? 'Revisa los datos ingresados.' : data.error ?? 'Ocurrió un error. Intenta de nuevo.')
-  return data
+  if (res.ok) return data
+  // Los errores propios de Fastify (validación del esquema, ruta inexistente) traen statusCode y un texto en inglés;
+  // los de la app traen solo `error`, ya redactado para el usuario
+  if (data.statusCode) throw new Error(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.')
+  throw new Error(data.error ?? 'Ocurrió un error. Intenta de nuevo.')
 }
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
@@ -44,3 +47,14 @@ export const promedio = (actividades) =>
   actividades.length ? Math.round(actividades.reduce((s, a) => s + a.pct, 0) / actividades.length) : 0
 
 export const esEncargado = (role) => role === 'gte' || role === 'sr' || role === 'full'
+
+// Las mismas reglas que valida el servidor para una contraseña nueva
+export const reglasPassword = (p1, p2) => [
+  ['Mínimo 10 caracteres', p1.length >= 10],
+  ['Una mayúscula y una minúscula', /[a-z]/.test(p1) && /[A-Z]/.test(p1)],
+  ['Al menos un número', /\d/.test(p1)],
+  ['Al menos un símbolo', /[^A-Za-z0-9]/.test(p1)],
+  ['Las contraseñas coinciden', p1.length > 0 && p1 === p2],
+]
+
+export const passwordValida = (p1, p2) => reglasPassword(p1, p2).every(([, ok]) => ok)
