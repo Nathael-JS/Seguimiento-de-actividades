@@ -1,4 +1,11 @@
-# Blueprint de Render: un solo servicio que expone la API de Fastify y sirve el frontend compilado
+# Blueprint de Render: la base de datos PostgreSQL y un solo servicio web que expone
+# la API de Fastify y sirve el frontend compilado
+databases:
+  - name: seguimiento-db
+    plan: free
+    databaseName: seguimiento
+    user: seguimiento
+
 services:
   - type: web
     name: seguimiento-de-actividades
@@ -6,3 +13,8 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: seguimiento-db
+          property: connectionString
