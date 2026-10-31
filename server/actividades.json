@@ -1,0 +1,156 @@
+[
+  {
+    "id": 1,
+    "to": "10482",
+    "by": "10230",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:20",
+    "text": "Cambio de coolant PG-25 en estación LC245-03",
+    "status": "done",
+    "pct": 100
+  },
+  {
+    "id": 2,
+    "to": "10482",
+    "by": "10230",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:20",
+    "text": "Prueba de fuga a 3 unidades en espera",
+    "status": "progress",
+    "pct": 60
+  },
+  {
+    "id": 3,
+    "to": "10482",
+    "by": "10230",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:21",
+    "text": "Actualizar hoja de WIP de la estación",
+    "status": "pending",
+    "pct": 0
+  },
+  {
+    "id": 4,
+    "to": "10482",
+    "by": "10230",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:21",
+    "text": "Limpieza de filtros en LC245-01",
+    "status": "progress",
+    "pct": 40
+  },
+  {
+    "id": 5,
+    "to": "10490",
+    "by": "10230",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:30",
+    "text": "Análisis de falla en unidad SN 7731",
+    "status": "progress",
+    "pct": 70
+  },
+  {
+    "id": 6,
+    "to": "10490",
+    "by": "10230",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:31",
+    "text": "Pareto de fallas de la semana",
+    "status": "done",
+    "pct": 100
+  },
+  {
+    "id": 7,
+    "to": "10533",
+    "by": "10112",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:40",
+    "text": "Validar POE de estación LC6",
+    "status": "progress",
+    "pct": 50
+  },
+  {
+    "id": 8,
+    "to": "10533",
+    "by": "10112",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:41",
+    "text": "Capacitación a técnicos nuevos",
+    "status": "pending",
+    "pct": 10
+  },
+  {
+    "id": 9,
+    "to": "10511",
+    "by": "10251",
+    "date": "2026-10-28",
+    "shift": "B",
+    "time": "14:45",
+    "text": "Calibración de CDU línea 2",
+    "status": "incomplete",
+    "pct": 65
+  },
+  {
+    "id": 10,
+    "to": "10547",
+    "by": "10251",
+    "date": "2026-10-28",
+    "shift": "C",
+    "time": "23:10",
+    "text": "Revisión de alarmas en chillers",
+    "status": "done",
+    "pct": 100
+  },
+  {
+    "id": 11,
+    "to": "10230",
+    "by": "10112",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:10",
+    "text": "Reporte de yield turno A",
+    "status": "progress",
+    "pct": 45
+  },
+  {
+    "id": 12,
+    "to": "10251",
+    "by": "10145",
+    "date": "2026-10-28",
+    "shift": "B",
+    "time": "14:35",
+    "text": "Plan de mantenimiento CDU",
+    "status": "pending",
+    "pct": 20
+  },
+  {
+    "id": 13,
+    "to": "10112",
+    "by": "10001",
+    "date": "2026-10-29",
+    "shift": "A",
+    "time": "06:05",
+    "text": "Revisión de indicadores del área",
+    "status": "progress",
+    "pct": 80
+  },
+  {
+    "id": 14,
+    "to": "10145",
+    "by": "10001",
+    "date": "2026-10-28",
+    "shift": "B",
+    "time": "14:32",
+    "text": "Auditoría 5S en CDU",
+    "status": "done",
+    "pct": 100
+  }
+]
