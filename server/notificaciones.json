@@ -4,7 +4,7 @@
     "for": "10482",
     "kind": "assigned",
     "who": "10230",
-    "count": "4",
+    "count": 4,
     "time": "06:21",
     "read": false
   },
@@ -67,7 +67,7 @@
     "for": "10001",
     "kind": "assigned",
     "who": "10112",
-    "count": "2",
+    "count": 2,
     "time": "06:41",
     "read": true
   }

@@ -1,5 +1,6 @@
-import { DEPARTAMENTOS, ESTADOS, TURNOS } from './comun.js'
+import { DEPARTAMENTOS, TURNOS } from './comun.js'
 import Icono from './Icono.jsx'
+import { Anillo, AvisoPassword, Notificacion } from './ui.jsx'
 
 export default function Inicio({ user, modulos, datos, error }) {
   return (
@@ -8,6 +9,7 @@ export default function Inicio({ user, modulos, datos, error }) {
         <h1>Hola, {user.name.split(' ')[0]}</h1>
         <p>Turno de hoy: {user.shift} · {TURNOS[user.shift]} · {DEPARTAMENTOS[user.dept]}</p>
       </div>
+      <AvisoPassword dias={datos?.diasPassword} enlace />
 
       {error ? <p className="error" role="alert">{error}</p> : !datos ? <p className="muted">Cargando…</p> : (
         <>
@@ -62,29 +64,5 @@ function Kpi({ n, label, color }) {
     <div className="card kpi">
       <div><div className="n" style={{ color }}>{n}</div><div className="l">{label}</div></div>
     </div>
-  )
-}
-
-function Notificacion({ n }) {
-  const quien = <b>{n.who}</b>
-  if (n.kind === 'assigned') return <>{quien} te asignó {n.count} actividades</>
-  if (n.kind === 'comment') return <>{quien} comentó en “{n.actividad}”</>
-  if (n.kind === 'inherited') return <>{quien} heredó “{n.actividad}”</>
-  return <>{quien} actualizó “{n.actividad}” → {ESTADOS[n.kind]}</>
-}
-
-function Anillo({ pct, size = 64, width = 7 }) {
-  const r = (size - width) / 2
-  const c = 2 * Math.PI * r
-  const nivel = pct >= 100 ? 'is-done' : pct < 35 ? 'is-low' : pct < 70 ? 'is-mid' : ''
-  return (
-    <span className={`ring ${nivel}`} role="img" aria-label={`${pct}%`}>
-      <svg width={size} height={size}>
-        <circle className="ring-track" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={width} />
-        <circle className="ring-value" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={width}
-          strokeDasharray={c.toFixed(2)} strokeDashoffset={(c * (1 - pct / 100)).toFixed(2)} />
-      </svg>
-      <b>{pct}%</b>
-    </span>
   )
 }
