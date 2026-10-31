@@ -190,7 +190,15 @@ export function build(opts = {}) {
     return { ...a, byName: empleado(a.by)?.name }
   })
 
-  if (existsSync(dist)) app.register(fastifyStatic, { root: dist })
+  if (existsSync(dist)) {
+    app.register(fastifyStatic, {
+      root: dist,
+      // Los archivos de /assets llevan un hash en el nombre: nunca cambian, el navegador puede guardarlos para siempre
+      setHeaders: (reply, ruta) => {
+        if (ruta.includes('/assets/')) reply.header('cache-control', 'public, max-age=31536000, immutable')
+      },
+    })
+  }
 
   return app
 }

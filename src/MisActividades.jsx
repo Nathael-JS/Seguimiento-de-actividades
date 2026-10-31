@@ -65,6 +65,7 @@ function Tarea({ t, user, onGuardado }) {
       onGuardado()
     } catch (e) {
       setError(e.message)
+    } finally {
       setGuardando(false)
     }
   }

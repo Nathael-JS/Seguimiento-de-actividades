@@ -134,6 +134,7 @@ button{font-family:inherit}
 .nav a:focus-visible,.nav button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .nav .count{margin-left:auto;background:var(--accent);color:var(--on-accent);font:600 11px/18px var(--font-mono);padding:0 7px;border-radius:var(--radius-pill)}
 .spacer{flex:1}
+.backdrop{display:none}
 .side .me{display:flex;gap:10px;align-items:center;padding:12px 10px;border-top:1px solid rgba(255,255,255,.12);margin-top:8px;font-size:13px;line-height:17px}
 .avatar{width:36px;height:36px;border-radius:var(--radius-pill);background:var(--brand-soft);color:var(--brand-strong);display:grid;place-items:center;font:600 13px var(--font-sans);flex:none}
 .main{min-width:0;display:flex;flex-direction:column}
@@ -176,6 +177,7 @@ dialog.modal::backdrop{background:rgba(10,20,28,.55)}
   /* visibility evita que el menú oculto reciba foco con el teclado */
   .side{position:fixed;inset:0 auto 0 0;width:260px;z-index:40;transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s}
   .shell.nav-open .side{transform:none;visibility:visible;box-shadow:var(--shadow-pop)}
+  .shell.nav-open .backdrop{display:block;position:fixed;inset:0;z-index:30;background:rgba(10,20,28,.45)}
   .top{padding:12px 16px}.top .menu{display:grid}
   .page{padding:20px 16px 40px}
 }
@@ -184,7 +186,6 @@ dialog.modal::backdrop{background:rgba(10,20,28,.55)}
 .btn-secondary{background:var(--surface-100);color:var(--ink);border-color:var(--line-strong)}
 .btn-secondary:hover{background:var(--surface-200)}
 .btn-sm{min-height:32px;padding:0 var(--space-3);font-size:13px}
-.field select,.field textarea{min-height:40px;padding:0 var(--space-3);border:1px solid var(--line-strong);border-radius:var(--radius-md);background:var(--surface-100);color:var(--ink);font:400 15px/22px var(--font-sans);width:100%}
 .field textarea{padding:var(--space-2) var(--space-3);min-height:72px;resize:vertical}
 fieldset.field{border:0;padding:0;margin:0}
 fieldset.field legend{font:500 13px/18px var(--font-sans);padding:0;margin-bottom:6px}

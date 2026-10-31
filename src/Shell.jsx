@@ -30,6 +30,13 @@ export default function Shell({ user, onLogout }) {
     return () => removeEventListener('hashchange', cambio)
   }, [])
 
+  useEffect(() => {
+    if (!menuAbierto) return
+    const escape = (e) => e.key === 'Escape' && setMenuAbierto(false)
+    addEventListener('keydown', escape)
+    return () => removeEventListener('keydown', escape)
+  }, [menuAbierto])
+
   // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros
   const recargar = useCallback(
     () => api(`/api/inicio/${user.no}`).then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
@@ -57,12 +64,13 @@ export default function Shell({ user, onLogout }) {
     <div className={`shell${menuAbierto ? ' nav-open' : ''}`}>
       <aside className="side" aria-label="Menú">
         <div className="brandname"><i />Seguimiento de Actividades</div>
-        <nav className="nav">
+        {/* Cualquier clic en el menú lo cierra en móvil, también el de la página actual (no dispara hashchange) */}
+        <nav className="nav" onClick={() => setMenuAbierto(false)}>
           {modulos.map((m) => (
             <a key={m.ruta} href={`#${m.ruta}`} aria-current={m === actual ? 'page' : undefined}>
               <Icono nombre={m.icono} />
               {m.titulo}
-              {m.ruta === 'buzon' && sinLeer > 0 && <span className="count" aria-label={`${sinLeer} sin leer`}>{sinLeer}</span>}
+              {m.ruta === 'buzon' && sinLeer > 0 && <span className="count">{sinLeer}<span className="sr"> sin leer</span></span>}
             </a>
           ))}
           <button type="button" onClick={() => salir.current.showModal()}>
@@ -75,6 +83,8 @@ export default function Shell({ user, onLogout }) {
           <div><b>{user.name}</b><div style={{ opacity: 0.75 }}>{ROLES[user.role]} · {user.no}</div></div>
         </div>
       </aside>
+
+      <div className="backdrop" aria-hidden="true" onClick={() => setMenuAbierto(false)} />
 
       <div className="main">
         <header className="top">

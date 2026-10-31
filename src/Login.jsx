@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { api } from './comun.js'
 
 export default function Login({ onLogin }) {
   const [errors, setErrors] = useState({})
@@ -19,16 +20,9 @@ export default function Login({ onLogin }) {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario, password }),
-      })
-      const data = await res.json()
-      if (res.ok) return onLogin(data)
-      setError(res.status === 401 ? data.error : 'Revisa los datos ingresados.')
-    } catch {
-      setError('No se pudo conectar con el servidor. Intenta de nuevo.')
+      onLogin(await api('/api/login', { method: 'POST', body: { usuario, password } }))
+    } catch (err) {
+      setError(err.message)
     } finally {
       setLoading(false)
     }
@@ -63,8 +57,8 @@ function Field({ name, label, error, ...props }) {
   return (
     <label className={`field${error ? ' is-error' : ''}`}>
       <span>{label}</span>
-      <input name={name} maxLength={100} aria-invalid={!!error} {...props} />
-      {error && <small>{error}</small>}
+      <input name={name} maxLength={100} aria-invalid={!!error} aria-describedby={error ? `${name}-error` : undefined} {...props} />
+      {error && <small id={`${name}-error`}>{error}</small>}
     </label>
   )
 }

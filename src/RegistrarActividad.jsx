@@ -3,6 +3,7 @@ import { DEPARTAMENTOS, ROLES, TURNOS, api, hoy, iniciales } from './comun.js'
 import Icono from './Icono.jsx'
 
 const puntoVacio = () => ({ texto: '', avance: 0 })
+const porcentaje = (v) => Math.min(100, Math.max(0, Math.round(Number(v) || 0)))
 
 export default function RegistrarActividad({ user, recargar, avisar }) {
   const [equipo, setEquipo] = useState(null)
@@ -34,6 +35,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
     ev.preventDefault()
     const llenos = puntos.filter((p) => p.texto.trim())
     if (!para || !llenos.length) return setError('Selecciona un empleado y escribe al menos una actividad.')
+    if (!fecha) return setError('Elige la fecha.')
     setError('')
     setEnviando(true)
     try {
@@ -41,7 +43,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
         method: 'POST',
         body: {
           por: user.no, para, fecha, turno, comentario,
-          puntos: llenos.map((p) => ({ texto: p.texto.trim(), avance: Math.min(100, Math.max(0, Math.round(Number(p.avance) || 0))) })),
+          puntos: llenos.map((p) => ({ texto: p.texto.trim(), avance: porcentaje(p.avance) })),
         },
       })
       avisar(`Actividades registradas. Se notificó a ${emp.name}.`)
@@ -103,7 +105,8 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
                   value={p.texto} onChange={(e) => cambiarPunto(i, 'texto', e.target.value)} />
                 <span className="pct-in">
                   <input type="number" min="0" max="100" step="5" aria-label={`Avance ${i + 1}`}
-                    value={p.avance} onChange={(e) => cambiarPunto(i, 'avance', e.target.value)} />
+                    value={p.avance} onChange={(e) => cambiarPunto(i, 'avance', e.target.value)}
+                    onBlur={(e) => cambiarPunto(i, 'avance', porcentaje(e.target.value))} />
                 </span>
                 <button type="button" className="iconbtn" aria-label={`Quitar ${i + 1}`} disabled={puntos.length < 2}
                   onClick={() => setPuntos(puntos.filter((_, j) => j !== i))}>

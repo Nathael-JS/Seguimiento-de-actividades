@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { build } from './app.js'
 
 const login = (payload) => build().inject({ method: 'POST', url: '/api/login', payload })
@@ -116,4 +117,15 @@ test('marcar notificaciones como leídas solo afecta al empleado', async () => {
   assert.equal((await pedir(app, 'POST', '/api/notificaciones/10482/leidas')).code, 200)
   assert.ok((await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.every((n) => n.read))
   assert.ok((await pedir(app, 'GET', '/api/inicio/10001')).body.notificaciones.some((n) => !n.read))
+})
+
+test('sirve el frontend compilado; /assets con caché larga e index.html sin caché', { skip: !existsSync(new URL('../dist/index.html', import.meta.url)) && 'falta npm run build' }, async () => {
+  const app = build()
+  const index = await app.inject('/')
+  assert.equal(index.statusCode, 200)
+  assert.match(index.headers['cache-control'], /max-age=0/)
+  const asset = index.body.match(/\/assets\/[^"]+\.js/)[0]
+  const res = await app.inject(asset)
+  assert.equal(res.statusCode, 200)
+  assert.match(res.headers['cache-control'], /immutable/)
 })
