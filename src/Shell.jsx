@@ -3,6 +3,7 @@ import { ROLES, api, iniciales, modulosDe } from './comun.js'
 import Buzon from './Buzon.jsx'
 import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
+import { BotonTema } from './ui.jsx'
 import Inicio from './Inicio.jsx'
 import MisActividades from './MisActividades.jsx'
 import Monitoreo from './Monitoreo.jsx'
@@ -99,6 +100,7 @@ export default function Shell({ user, onLogout }) {
             <Icono nombre="menu" />
           </button>
           <div className="spacer" />
+          <BotonTema />
           <a className="iconbtn" href="#buzon" aria-label="Notificaciones">
             <Icono nombre="bell" />
             {sinLeer > 0 && <span className="dot" />}

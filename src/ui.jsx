@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ESTADOS, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
 
@@ -69,5 +70,20 @@ export function AvisoPassword({ dias, siempre = false, enlace = false }) {
         {enlace ? <> <a href="#perfil">Cambiar ahora</a></> : ' Por seguridad, la contraseña se cambia cada 3 meses.'}
       </span>
     </div>
+  )
+}
+
+export function BotonTema() {
+  const [tema, setTema] = useState(() => document.documentElement.dataset.theme)
+  const otro = tema === 'dark' ? 'light' : 'dark'
+  function cambiar() {
+    document.documentElement.dataset.theme = otro
+    try { localStorage.setItem('tema', otro) } catch { /* sin almacenamiento: el tema dura hasta recargar */ }
+    setTema(otro)
+  }
+  return (
+    <button type="button" className="iconbtn" onClick={cambiar} aria-label={otro === 'dark' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro'}>
+      <Icono nombre={otro === 'dark' ? 'moon' : 'sun'} />
+    </button>
   )
 }

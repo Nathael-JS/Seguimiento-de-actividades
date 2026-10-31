@@ -3,7 +3,7 @@ import { api } from './comun.js'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
 import Registro from './Registro.jsx'
-import { Campo } from './ui.jsx'
+import { BotonTema, Campo } from './ui.jsx'
 
 // Pantallas de acceso: 'login' → 'codigo' (2 pasos), o 'registro' / 'recuperar' que vuelven al login
 export default function Login({ onLogin }) {
@@ -33,8 +33,9 @@ export default function Login({ onLogin }) {
         </div>
       </aside>
       <main className="auth-main">
+        <div className="auth-top"><BotonTema /></div>
         {pantalla === 'login' && (
-          <Credenciales aviso={aviso} ir={setPantalla}
+          <Credenciales aviso={aviso} ir={setPantalla} onLogin={onLogin}
             onPaso1={(v) => { setVerificacion(v); setAviso(''); setPantalla('codigo') }} />
         )}
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
@@ -45,7 +46,10 @@ export default function Login({ onLogin }) {
   )
 }
 
-function Credenciales({ aviso, ir, onPaso1 }) {
+// Cuentas de prueba para mostrar la app sin escribir credenciales ni código
+const DEMOS = [['Gerente · Laura', '10001'], ['Técnico · Jorge', '10482']]
+
+function Credenciales({ aviso, ir, onPaso1, onLogin }) {
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -71,6 +75,19 @@ function Credenciales({ aviso, ir, onPaso1 }) {
     }
   }
 
+  // shortcut: entra con la contraseña de prueba y el código simulado; quitar cuando haya usuarios reales
+  async function demo(usuario) {
+    setError('')
+    setLoading(true)
+    try {
+      const { token, codigo } = await api('/api/login', { method: 'POST', body: { usuario, password: 'demo1234' } })
+      onLogin(await api('/api/login/verificar', { method: 'POST', body: { token, codigo } }))
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+    }
+  }
+
   return (
     <form className="auth-form" onSubmit={submit} noValidate>
       <h1>Iniciar sesión</h1>
@@ -86,6 +103,12 @@ function Credenciales({ aviso, ir, onPaso1 }) {
       <p className="muted" style={{ textAlign: 'center' }}>
         ¿No tienes cuenta? <button type="button" className="link" onClick={() => ir('registro')}>Registrarse</button>
       </p>
+      <div className="demo-links">
+        <span>Entrar en modo demo como:</span>
+        {DEMOS.map(([texto, usuario]) => (
+          <button key={usuario} type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => demo(usuario)}>{texto}</button>
+        ))}
+      </div>
     </form>
   )
 }
