@@ -1,7 +1,14 @@
+import { idiomaActual, t } from './i18n.js'
+
 export const ROLES = { tec: 'Técnico', jr: 'Ing. Jr', full: 'Ing. Full', sr: 'Senior', gte: 'Gerente' }
 export const TURNOS = { A: '06:00–14:30', B: '14:30–23:00', C: '23:00–06:00' }
 export const DEPARTAMENTOS = { lc: 'Liquid Cooling', pf: 'Pruebas Funcionales', smt: 'SMT' }
 export const ESTADOS = { done: 'Realizada', progress: 'En proceso', pending: 'Pendiente', incomplete: 'Incompleta' }
+
+// Nombres ya traducidos al idioma actual
+export const rol = (k) => t(ROLES[k])
+export const depto = (k) => t(DEPARTAMENTOS[k])
+export const estado = (k) => t(ESTADOS[k])
 
 // `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente) o a ejecutores (Técnico, Ing. Jr)
 export const MODULOS = [
@@ -30,14 +37,14 @@ export async function api(url, { method = 'GET', body } = {}) {
       body: body && JSON.stringify(body),
     })
   } catch {
-    throw new Error('No se pudo conectar con el servidor. Intenta de nuevo.')
+    throw new Error(t('No se pudo conectar con el servidor. Intenta de nuevo.'))
   }
   const data = await res.json().catch(() => ({}))
   if (res.ok) return data
   // Los errores propios de Fastify (validación del esquema, ruta inexistente) traen statusCode y un texto en inglés;
-  // los de la app traen solo `error`, ya redactado para el usuario
-  if (data.statusCode) throw new Error(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.')
-  throw new Error(data.error ?? 'Ocurrió un error. Intenta de nuevo.')
+  // los de la app traen solo `error`, ya redactado para el usuario (en español: se traduce aquí)
+  if (data.statusCode) throw new Error(t(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.'))
+  throw new Error(t(data.error ?? 'Ocurrió un error. Intenta de nuevo.'))
 }
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
@@ -58,3 +65,9 @@ export const reglasPassword = (p1, p2) => [
 ]
 
 export const passwordValida = (p1, p2) => reglasPassword(p1, p2).every(([, ok]) => ok)
+
+// El servidor guarda instantes en UTC; aquí se muestran en la hora local de quien mira
+const locale = () => (idiomaActual() === 'en' ? 'en-US' : 'es-MX')
+export const hora = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', hour12: false })
+export const fechaHora = (iso) =>
+  new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })

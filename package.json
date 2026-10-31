@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test": "node --test server/*.test.js"
+    "test": "node --test server/*.test.js src/*.test.js"
   },
   "dependencies": {
     "@fastify/static": "^10.1.8",

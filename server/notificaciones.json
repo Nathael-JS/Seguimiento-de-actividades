@@ -5,8 +5,8 @@
     "kind": "assigned",
     "who": "10230",
     "count": 4,
-    "time": "06:21",
-    "read": false
+    "read": false,
+    "at": "2026-10-29T12:21:00.000Z"
   },
   {
     "id": 2,
@@ -14,8 +14,8 @@
     "kind": "comment",
     "who": "10230",
     "ref": 4,
-    "time": "06:25",
-    "read": false
+    "read": false,
+    "at": "2026-10-29T12:25:00.000Z"
   },
   {
     "id": 3,
@@ -23,8 +23,8 @@
     "kind": "done",
     "who": "10547",
     "ref": 10,
-    "time": "02:40",
-    "read": false
+    "read": false,
+    "at": "2026-10-29T08:40:00.000Z"
   },
   {
     "id": 4,
@@ -32,8 +32,8 @@
     "kind": "incomplete",
     "who": "10511",
     "ref": 9,
-    "time": "22:58",
-    "read": false
+    "read": false,
+    "at": "2026-10-29T04:58:00.000Z"
   },
   {
     "id": 5,
@@ -41,8 +41,8 @@
     "kind": "progress",
     "who": "10490",
     "ref": 5,
-    "time": "09:12",
-    "read": true
+    "read": true,
+    "at": "2026-10-29T15:12:00.000Z"
   },
   {
     "id": 6,
@@ -50,8 +50,8 @@
     "kind": "pending",
     "who": "10533",
     "ref": 8,
-    "time": "08:30",
-    "read": true
+    "read": true,
+    "at": "2026-10-29T14:30:00.000Z"
   },
   {
     "id": 7,
@@ -59,8 +59,8 @@
     "kind": "comment",
     "who": "10482",
     "ref": 2,
-    "time": "10:05",
-    "read": false
+    "read": false,
+    "at": "2026-10-29T16:05:00.000Z"
   },
   {
     "id": 8,
@@ -68,7 +68,7 @@
     "kind": "assigned",
     "who": "10112",
     "count": 2,
-    "time": "06:41",
-    "read": true
+    "read": true,
+    "at": "2026-10-29T12:41:00.000Z"
   }
 ]

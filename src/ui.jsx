@@ -1,12 +1,14 @@
-import { ESTADOS, reglasPassword } from './comun.js'
+import { useState } from 'react'
+import { estado as nombreEstado, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
+import { cambiarIdioma, idiomaActual, t } from './i18n.js'
 
 export function Notificacion({ n }) {
   const quien = <b>{n.who}</b>
-  if (n.kind === 'assigned') return <>{quien} te asignó {n.count} actividades</>
-  if (n.kind === 'comment') return <>{quien} comentó en “{n.actividad}”</>
-  if (n.kind === 'inherited') return <>{quien} heredó “{n.actividad}”</>
-  return <>{quien} actualizó “{n.actividad}” → {ESTADOS[n.kind]}</>
+  if (n.kind === 'assigned') return <>{quien} {t('te asignó {n} actividades', { n: n.count })}</>
+  if (n.kind === 'comment') return <>{quien} {t('comentó en')} “{n.actividad}”</>
+  if (n.kind === 'inherited') return <>{quien} {t('heredó')} “{n.actividad}”</>
+  return <>{quien} {t('actualizó')} “{n.actividad}” → {nombreEstado(n.kind)}</>
 }
 
 export function Anillo({ pct, size = 64, width = 7 }) {
@@ -26,7 +28,7 @@ export function Anillo({ pct, size = 64, width = 7 }) {
 }
 
 export function Estado({ estado }) {
-  return <span className={`badge badge-${estado}`}>{ESTADOS[estado]}</span>
+  return <span className={`badge badge-${estado}`}>{nombreEstado(estado)}</span>
 }
 
 export function Campo({ label, error, id, children, ...props }) {
@@ -46,13 +48,13 @@ export function PasswordNueva({ p1, p2, onChange, etiqueta = 'Nueva contraseña'
   const color = cumplidas < 3 ? 'var(--status-incomplete)' : cumplidas < 5 ? 'var(--status-pending)' : 'var(--status-done)'
   return (
     <>
-      <Campo label={etiqueta} id="p1" type="password" autoComplete="new-password" value={p1} onChange={(e) => onChange(e.target.value, p2)} />
+      <Campo label={t(etiqueta)} id="p1" type="password" autoComplete="new-password" value={p1} onChange={(e) => onChange(e.target.value, p2)} />
       <div className="meter" aria-hidden="true"><i style={{ width: `${(cumplidas / 5) * 100}%`, background: color }} /></div>
-      <Campo label="Confirmar contraseña" id="p2" type="password" autoComplete="new-password" value={p2} onChange={(e) => onChange(p1, e.target.value)} />
-      <ul className="rules" aria-label="Requisitos de la contraseña">
-        {reglas.map(([texto, ok]) => <li key={texto} className={ok ? 'ok' : ''}>{texto}<span className="sr">{ok ? ': cumplido' : ': pendiente'}</span></li>)}
+      <Campo label={t('Confirmar contraseña')} id="p2" type="password" autoComplete="new-password" value={p2} onChange={(e) => onChange(p1, e.target.value)} />
+      <ul className="rules" aria-label={t('Requisitos de la contraseña')}>
+        {reglas.map(([texto, ok]) => <li key={texto} className={ok ? 'ok' : ''}>{t(texto)}<span className="sr">{t(ok ? ': cumplido' : ': pendiente')}</span></li>)}
       </ul>
-      <div className="notice"><Icono nombre="shield" /><span>Por seguridad, la contraseña se cambia cada 3 meses.</span></div>
+      <div className="notice"><Icono nombre="shield" /><span>{t('Por seguridad, la contraseña se cambia cada 3 meses.')}</span></div>
     </>
   )
 }
@@ -65,9 +67,34 @@ export function AvisoPassword({ dias, siempre = false, enlace = false }) {
     <div className={`notice${vencida || dias <= 15 ? ' warn' : ''}`} role="status">
       <Icono nombre="alert" />
       <span>
-        {vencida ? 'Tu contraseña venció.' : <>Tu contraseña vence en <b>{dias} {dias === 1 ? 'día' : 'días'}</b>.</>}
-        {enlace ? <> <a href="#perfil">Cambiar ahora</a></> : ' Por seguridad, la contraseña se cambia cada 3 meses.'}
+        {vencida ? t('Tu contraseña venció.') : <>{t('Tu contraseña vence en')} <b>{dias} {t(dias === 1 ? 'día' : 'días')}</b>.</>}
+        {' '}{enlace ? <a href="#perfil">{t('Cambiar ahora')}</a> : t('Por seguridad, la contraseña se cambia cada 3 meses.')}
       </span>
+    </div>
+  )
+}
+
+export function BotonTema() {
+  const [tema, setTema] = useState(() => document.documentElement.dataset.theme)
+  const otro = tema === 'dark' ? 'light' : 'dark'
+  function cambiar() {
+    document.documentElement.dataset.theme = otro
+    try { localStorage.setItem('tema', otro) } catch { /* sin almacenamiento: el tema dura hasta recargar */ }
+    setTema(otro)
+  }
+  return (
+    <button type="button" className="iconbtn" onClick={cambiar} aria-label={t(otro === 'dark' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro')}>
+      <Icono nombre={otro === 'dark' ? 'moon' : 'sun'} />
+    </button>
+  )
+}
+
+export function BotonIdioma() {
+  return (
+    <div className="seg" role="group" aria-label={t('Idioma')}>
+      {['es', 'en'].map((k) => (
+        <button key={k} type="button" lang={k} aria-pressed={idiomaActual() === k} onClick={() => cambiarIdioma(k)}>{k.toUpperCase()}</button>
+      ))}
     </div>
   )
 }

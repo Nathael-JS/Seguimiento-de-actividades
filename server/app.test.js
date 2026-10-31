@@ -206,11 +206,12 @@ test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomad
   const filas = (await reporte()).body
   assert.equal(filas.length, 6)
   assert.equal(filas[0].text, 'Pareto de fallas de la semana') // más reciente primero: 29/10 06:31
-  assert.equal(filas.find((f) => f.id === 4).accion, 'Recibida por herencia')
+  assert.equal(filas[0].at, '2026-10-29T12:31:00.000Z')
+  assert.equal(filas.find((f) => f.id === 4).inh, true)
   assert.equal((await reporte({ turno: 'B' })).body.length, 0)
   assert.equal((await reporte({ desde: '2026-10-30', hasta: '2026-10-31' })).body.length, 0)
   await heredar(app, 3, '10230', '10490')
-  assert.equal((await reporte()).body.find((f) => f.id === 3).accion, 'Heredada a María López')
+  assert.equal((await reporte()).body.find((f) => f.id === 3).heredadaA, 'María López')
   assert.equal((await reporte({ empleados: ['10511'] })).code, 403) // no es de su equipo
   assert.equal((await reporte({ por: '10482' })).code, 403)
   assert.equal((await reporte({ empleados: [] })).code, 400)

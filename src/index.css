@@ -27,8 +27,9 @@
   --shadow-card: 0 1px 2px rgba(22,32,42,0.06), 0 4px 12px rgba(22,32,42,0.06);
   --shadow-pop: 0 12px 32px rgba(22,32,42,0.18);
 }
-/* Solo en pantalla: al imprimir (Exportar PDF) siempre se usan los colores claros */
-@media screen and (prefers-color-scheme: dark) { :root {
+/* data-theme lo pone index.html (preferencia guardada o la del sistema). Solo en pantalla:
+   al imprimir (Exportar PDF) siempre se usan los colores claros */
+@media screen { :root[data-theme="dark"] {
   --surface-000: #0f1418;
   --surface-100: #171e24;
   --surface-200: #212a32;
@@ -340,3 +341,12 @@ tbody tr:hover td{background:var(--surface-000)}
   .role-pick{grid-template-columns:repeat(3,1fr)}
   .dl{grid-template-columns:1fr;gap:2px}.dl dd{margin-bottom:10px}
 }
+
+.demo-links{display:flex;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--ink-muted);align-items:center;border-top:1px solid var(--line);padding-top:16px}
+.demo-links>span{width:100%}
+.auth-top{display:flex;justify-content:flex-end;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--surface-100)}
+.seg button{border:0;background:transparent;color:var(--ink);padding:0 12px;min-height:34px;font:500 13px var(--font-sans);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-strong)}
+.seg button[aria-pressed="true"]{background:var(--brand-soft);color:var(--brand-strong)}
+.seg button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
