@@ -3,9 +3,23 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
 
-- `src/` — frontend React + Vite: login, menú según el rol e Inicio; los demás módulos están "en desarrollo".
-- `server/` — API con Fastify (`POST /api/login`, `GET /api/inicio/:no`); en producción también sirve el frontend compilado (`dist/`).
+- `src/` — frontend React + Vite: login, menú según el rol, Inicio, Registrar actividad, Mis actividades y Buzón; los demás módulos están "en desarrollo".
+- `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
 - `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, **texto plano, sin seguridad todavía**), actividades y notificaciones.
+
+**Sin base de datos por ahora:** los cambios (actividades registradas, avances, notificaciones leídas) viven en la memoria del servidor y se comparten entre usuarios, pero se pierden al reiniciar o redeployar.
+
+## API
+
+| Método | Ruta | Uso |
+|---|---|---|
+| `POST` | `/api/login` | Login por correo, alias o número de empleado |
+| `GET` | `/api/inicio/:no` | Indicadores y notificaciones del empleado |
+| `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
+| `GET` | `/api/equipo/:no` | Empleados a los que un encargado puede asignar |
+| `POST` | `/api/actividades` | Registrar actividades por puntos y notificar al empleado |
+| `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado |
+| `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render

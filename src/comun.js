@@ -19,3 +19,23 @@ export const modulosDe = (user) =>
   MODULOS.filter((m) => !m.solo || (m.solo === 'encargado') === user.encargado)
 
 export const iniciales = (nombre) => nombre.split(' ').map((p) => p[0]).slice(0, 2).join('')
+
+// fetch con JSON; lanza un Error con el mensaje del servidor si la respuesta no es 2xx
+export async function api(url, { method = 'GET', body } = {}) {
+  let res
+  try {
+    res = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body && JSON.stringify(body),
+    })
+  } catch {
+    throw new Error('No se pudo conectar con el servidor. Intenta de nuevo.')
+  }
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(res.status === 400 ? 'Revisa los datos ingresados.' : data.error ?? 'Ocurrió un error. Intenta de nuevo.')
+  return data
+}
+
+// Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
+export const hoy = () => new Date().toLocaleDateString('en-CA')

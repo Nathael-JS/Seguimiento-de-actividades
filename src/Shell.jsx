@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { ROLES, iniciales, modulosDe } from './comun.js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ROLES, api, iniciales, modulosDe } from './comun.js'
+import Buzon from './Buzon.jsx'
 import Icono from './Icono.jsx'
 import Inicio from './Inicio.jsx'
+import MisActividades from './MisActividades.jsx'
+import RegistrarActividad from './RegistrarActividad.jsx'
+
+// Los módulos que no están aquí se muestran como "en desarrollo"
+const PAGINAS = { inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades, buzon: Buzon }
 
 const rutaActual = () => location.hash.slice(1) || 'inicio'
 
@@ -11,7 +17,9 @@ export default function Shell({ user, onLogout }) {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
+  const [aviso, setAviso] = useState('')
   const salir = useRef(null)
+  const temporizador = useRef(null)
 
   useEffect(() => {
     const cambio = () => {
@@ -22,12 +30,18 @@ export default function Shell({ user, onLogout }) {
     return () => removeEventListener('hashchange', cambio)
   }, [])
 
-  useEffect(() => {
-    fetch(`/api/inicio/${user.no}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then(setDatos)
-      .catch(() => setError('No se pudieron cargar tus datos. Recarga la página.'))
-  }, [user.no])
+  // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros
+  const recargar = useCallback(
+    () => api(`/api/inicio/${user.no}`).then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
+    [user.no],
+  )
+  useEffect(() => { recargar() }, [recargar, ruta])
+
+  const avisar = useCallback((mensaje) => {
+    clearTimeout(temporizador.current)
+    setAviso(mensaje)
+    temporizador.current = setTimeout(() => setAviso(''), 3000)
+  }, [])
 
   function cerrarSesion() {
     history.replaceState(null, '', location.pathname)
@@ -37,6 +51,7 @@ export default function Shell({ user, onLogout }) {
   // Una ruta que no existe o que no corresponde al rol muestra Inicio
   const actual = modulos.find((m) => m.ruta === ruta) ?? modulos[0]
   const sinLeer = datos?.notificaciones.filter((n) => !n.read).length
+  const Pagina = PAGINAS[actual.ruta]
 
   return (
     <div className={`shell${menuAbierto ? ' nav-open' : ''}`}>
@@ -73,11 +88,13 @@ export default function Shell({ user, onLogout }) {
           </a>
         </header>
         <main className="page">
-          {actual.ruta === 'inicio'
-            ? <Inicio user={user} modulos={modulos} datos={datos} error={error} />
+          {Pagina
+            ? <Pagina user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
             : <EnDesarrollo titulo={actual.titulo} />}
         </main>
       </div>
+
+      <div className="toast" role="status">{aviso && <><Icono nombre="check" />{aviso}</>}</div>
 
       <dialog ref={salir} className="card modal" aria-labelledby="salir-titulo">
         <span className="warn-ic"><Icono nombre="alert" /></span>

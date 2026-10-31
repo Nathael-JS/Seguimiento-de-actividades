@@ -8,7 +8,9 @@
     "time": "06:20",
     "text": "Cambio de coolant PG-25 en estación LC245-03",
     "status": "done",
-    "pct": 100
+    "pct": 100,
+    "mgr": "",
+    "note": "Lectura de concentración 25 % OK"
   },
   {
     "id": 2,
@@ -19,7 +21,9 @@
     "time": "06:20",
     "text": "Prueba de fuga a 3 unidades en espera",
     "status": "progress",
-    "pct": 60
+    "pct": 60,
+    "mgr": "",
+    "note": "2 de 3 liberadas"
   },
   {
     "id": 3,
@@ -30,7 +34,9 @@
     "time": "06:21",
     "text": "Actualizar hoja de WIP de la estación",
     "status": "pending",
-    "pct": 0
+    "pct": 0,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 4,
@@ -41,7 +47,9 @@
     "time": "06:21",
     "text": "Limpieza de filtros en LC245-01",
     "status": "progress",
-    "pct": 40
+    "pct": 40,
+    "mgr": "Revisar empaques antes de cerrar",
+    "note": ""
   },
   {
     "id": 5,
@@ -52,7 +60,9 @@
     "time": "06:30",
     "text": "Análisis de falla en unidad SN 7731",
     "status": "progress",
-    "pct": 70
+    "pct": 70,
+    "mgr": "",
+    "note": "Se sospecha sensor de flujo"
   },
   {
     "id": 6,
@@ -63,7 +73,9 @@
     "time": "06:31",
     "text": "Pareto de fallas de la semana",
     "status": "done",
-    "pct": 100
+    "pct": 100,
+    "mgr": "",
+    "note": "Enviado por correo"
   },
   {
     "id": 7,
@@ -74,7 +86,9 @@
     "time": "06:40",
     "text": "Validar POE de estación LC6",
     "status": "progress",
-    "pct": 50
+    "pct": 50,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 8,
@@ -85,7 +99,9 @@
     "time": "06:41",
     "text": "Capacitación a técnicos nuevos",
     "status": "pending",
-    "pct": 10
+    "pct": 10,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 9,
@@ -96,7 +112,9 @@
     "time": "14:45",
     "text": "Calibración de CDU línea 2",
     "status": "incomplete",
-    "pct": 65
+    "pct": 65,
+    "mgr": "Faltó el certificado del patrón",
+    "note": "Sin patrón disponible"
   },
   {
     "id": 10,
@@ -107,7 +125,9 @@
     "time": "23:10",
     "text": "Revisión de alarmas en chillers",
     "status": "done",
-    "pct": 100
+    "pct": 100,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 11,
@@ -118,7 +138,9 @@
     "time": "06:10",
     "text": "Reporte de yield turno A",
     "status": "progress",
-    "pct": 45
+    "pct": 45,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 12,
@@ -129,7 +151,9 @@
     "time": "14:35",
     "text": "Plan de mantenimiento CDU",
     "status": "pending",
-    "pct": 20
+    "pct": 20,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 13,
@@ -140,7 +164,9 @@
     "time": "06:05",
     "text": "Revisión de indicadores del área",
     "status": "progress",
-    "pct": 80
+    "pct": 80,
+    "mgr": "",
+    "note": ""
   },
   {
     "id": 14,
@@ -151,6 +177,8 @@
     "time": "14:32",
     "text": "Auditoría 5S en CDU",
     "status": "done",
-    "pct": 100
+    "pct": 100,
+    "mgr": "",
+    "note": ""
   }
 ]
