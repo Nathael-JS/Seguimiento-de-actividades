@@ -391,3 +391,18 @@ tbody tr:hover td{background:var(--surface-000)}
 .comparativo th[scope=row]{font:500 14px/20px var(--font-sans);color:var(--ink);text-align:left;background:none;white-space:normal;min-width:150px}
 .comparativo .rate{min-width:130px}
 .comparativo td.mono{text-align:right;width:1%;white-space:nowrap}
+
+/* Tareas propias: tipo diaria / urgente */
+.tag.urgente{background:var(--status-incomplete);color:var(--surface-100)}
+.tag.suave{background:var(--surface-200);color:var(--ink)}
+.tipo-tarea{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tipo-tarea label{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--line-strong);border-radius:var(--radius-md);cursor:pointer;background:var(--surface-100)}
+.tipo-tarea label:has(input:checked){border-color:var(--brand);background:var(--brand-soft)}
+/* .field input les daría 40 px de alto y ancho completo al radio y al control deslizante */
+.tipo-tarea input{accent-color:var(--brand);margin-top:3px;flex:none;width:auto;min-height:0;padding:0}
+.field input[type=range]{min-height:0;padding:0;border:0;background:none}
+.tipo-tarea b{display:block;font-size:14px}
+.tipo-tarea small{display:block;font-size:12px;line-height:16px;color:var(--ink-muted);margin-top:2px}
+@media (max-width:560px){.tipo-tarea{grid-template-columns:1fr}}
+.emp-chip{flex-wrap:wrap}
+.emp-chip>div{min-width:160px}

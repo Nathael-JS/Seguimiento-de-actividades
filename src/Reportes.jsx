@@ -7,7 +7,13 @@ import { Estado, Rate } from './ui.jsx'
 const haceUnaSemana = () => new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA')
 
 const COLUMNAS = ['Fecha', 'Turno', 'Hora', 'Empleado', 'Puesto', 'Departamento', 'Actividad', 'Avance %', 'Estado', 'Comentarios', 'Acción tomada']
-const accion = (f) => (f.heredadaA ? t('Heredada a {nombre}', { nombre: f.heredadaA }) : f.inh ? t('Recibida por herencia') : f.mgr)
+function accion(f) {
+  if (f.heredadaA) return t('Heredada a {nombre}', { nombre: f.heredadaA })
+  if (f.inh) return t('Recibida por herencia')
+  if (f.prioridad === 'urgente') return t(f.cerrada ? 'Urgente · cerrada con el turno' : 'Urgente')
+  if (f.prioridad) return t('Agregada por el empleado')
+  return f.mgr
+}
 const celdas = (f) => [f.date, f.shift, hora(f.at), f.name, rol(f.role), depto(f.dept), f.text, f.pct, estado(f.status), f.note, accion(f)]
 
 // Excel ejecuta como fórmula una celda que empieza con = + - @; el apóstrofo la deja como texto

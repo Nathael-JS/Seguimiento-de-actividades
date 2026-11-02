@@ -6,12 +6,12 @@ import { t } from './i18n.js'
 // Filtro → tipos de notificación que incluye
 const FILTROS = [
   ['Todas', null],
-  ['Registradas', ['assigned', 'inherited']],
+  ['Registradas', ['assigned', 'inherited', 'propia']],
   ['Realizadas', ['done']],
   ['Pendientes', ['pending']],
   ['Incompletas', ['incomplete']],
   ['Comentarios', ['comment']],
-  ['Avisos', ['overdue', 'password']],
+  ['Avisos', ['overdue', 'password', 'urgent-closed']],
 ]
 const POR_PAGINA = 20
 

@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { build } from './app.js'
@@ -417,4 +417,68 @@ test('un hoy lejano a la fecha del servidor no genera avisos', async () => {
   assert.equal(await avisos('2027-06-01'), 0)
   assert.equal(await avisos('2025-01-01'), 0)
   assert.equal(await avisos(HOY_REAL), 3)
+})
+
+const propia = (cambios = {}) => ({ por: '10482', texto: 'Purgar línea de retorno', prioridad: 'diaria', avance: 0, hoy: HOY_REAL, ...cambios })
+const enUnaHora = () => new Date(Date.now() + 3_600_000).toISOString()
+
+test('tarea propia diaria: con los datos del empleado, aviso a su encargado y sin avisarse a sí mismo', async () => {
+  const app = build()
+  const { code, body } = await pedir(app, 'POST', '/api/actividades/propia', propia({ avance: 40 }))
+  assert.equal(code, 201)
+  assert.deepEqual([body.to, body.by, body.shift, body.date, body.status, body.prioridad, body.propia], ['10482', '10482', 'A', HOY_REAL, 'progress', 'diaria', true])
+  const aviso = (await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones[0] // Diego, su encargado
+  assert.deepEqual([aviso.kind, aviso.who, aviso.actividad], ['propia', 'Jorge Salinas', 'Purgar línea de retorno'])
+  // Al actualizarla avisa a su encargado, no a él mismo
+  await pedir(app, 'PATCH', `/api/actividades/${body.id}`, { por: '10482', estado: 'done', avance: 100, nota: 'Listo' })
+  assert.deepEqual((await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones.slice(0, 2).map((n) => n.kind).sort(), ['comment', 'done'])
+  assert.ok(!(await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.some((n) => n.actividad === 'Purgar línea de retorno'))
+})
+
+test('tarea propia: solo técnico / Ing. Jr y con datos válidos', async () => {
+  const app = build()
+  const codigo = async (cambios) => (await pedir(app, 'POST', '/api/actividades/propia', propia(cambios))).code
+  assert.equal(await codigo({ por: '10230' }), 403) // Ing. Full
+  assert.equal(await codigo({ por: '10490' }), 201) // Ing. Jr
+  assert.equal(await codigo({ texto: '  ' }), 400)
+  assert.equal(await codigo({ avance: 101 }), 400)
+  assert.equal(await codigo({ prioridad: 'normal' }), 400)
+  assert.equal(await codigo({ hoy: '2030-01-01' }), 400)
+  assert.equal(await codigo({ prioridad: 'urgente' }), 400) // sin cierre de turno
+  assert.equal(await codigo({ prioridad: 'urgente', cierre: new Date(Date.now() - 60_000).toISOString() }), 400) // ya pasó
+  assert.equal(await codigo({ prioridad: 'urgente', cierre: new Date(Date.now() + 2 * 86_400_000).toISOString() }), 400)
+})
+
+test('urgente: va primero, no se hereda y al cerrar el turno queda fija', async () => {
+  const app = build()
+  const urgente = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 60, cierre: enUnaHora() }))).body
+  const lista = async () => (await pedir(app, 'GET', '/api/actividades/10482')).body
+  assert.equal((await lista())[0].id, urgente.id)
+  assert.equal((await pedir(app, 'POST', `/api/actividades/${urgente.id}/heredar`, { por: '10230', para: '10490', hoy: HOY_REAL })).code, 409)
+  // Una urgente terminada antes del cierre queda realizada
+  const hecha = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 100, cierre: enUnaHora() }))).body
+
+  mock.timers.enable({ apis: ['Date'], now: Date.now() + 2 * 3_600_000 }) // dos horas después: el turno ya cerró
+  try {
+    const cerrada = (await lista()).find((a) => a.id === urgente.id)
+    assert.deepEqual([cerrada.status, cerrada.pct, cerrada.cerrada], ['incomplete', 60, true])
+    assert.equal((await lista()).find((a) => a.id === hecha.id).status, 'done')
+    assert.equal((await pedir(app, 'PATCH', `/api/actividades/${urgente.id}`, { por: '10482', estado: 'done', avance: 100 })).code, 409)
+    // Avisos: al empleado (sin quién) y a su encargado (con quién); la realizada no avisa
+    assert.equal((await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.filter((n) => n.kind === 'urgent-closed').length, 1)
+    const jefe = (await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones.filter((n) => n.kind === 'urgent-closed')
+    assert.deepEqual(jefe.map((n) => n.who), ['Jorge Salinas'])
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('aviso de atraso de una tarea propia: al empleado y a su encargado, no dos veces al empleado', async () => {
+  const app = build()
+  const ayer = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+  const { body } = await pedir(app, 'POST', '/api/actividades/propia', propia({ hoy: ayer }))
+  await pedir(app, 'GET', `/api/inicio/10482?hoy=${HOY_REAL}`)
+  const deEsta = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}`)).body.notificaciones.filter((n) => n.kind === 'overdue' && n.actividad === body.text)
+  assert.equal((await deEsta('10482')).length, 1)
+  assert.equal((await deEsta('10230')).length, 1)
 })

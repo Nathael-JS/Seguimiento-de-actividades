@@ -20,6 +20,12 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 - **Horas**: el servidor guarda instantes en UTC y cada navegador los muestra en su hora local.
 - **Avisos automáticos**: actividad atrasada (al ejecutor y a quien la asignó) y contraseña por vencer; se generan una sola vez al consultar Inicio y el Buzón se actualiza cada 30 s.
 
+## Tareas propias (técnico e Ing. Jr)
+
+En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del empleado tal cual (él mismo, su turno, la fecha de hoy) y avisa a su encargado.
+- **Diaria:** una actividad más del seguimiento.
+- **Urgente:** va primero, no se puede heredar y al terminar el turno se valida: queda fija en su estado (incompleta si no llegó al 100 %) y se avisa al empleado y a su encargado.
+
 ## API
 
 | Método | Ruta | Uso |
@@ -38,7 +44,8 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
 | `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
 | `POST` | `/api/actividades` | Registrar actividades por puntos y notificar al empleado |
-| `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado |
+| `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una tarea suya, diaria o urgente (con su fin de turno); se avisa a su encargado |
+| `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `POST` | `/api/actividades/:id/heredar` | Heredar una pendiente o incompleta al día siguiente o a otro técnico / Ing. Jr del siguiente turno |
 | `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |

@@ -149,7 +149,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
 
 function Herencia({ user, equipo, alHeredar, avisar }) {
   const abiertas = equipo.flatMap((e) =>
-    e.actividades.filter((a) => a.status === 'pending' || a.status === 'incomplete').map((a) => ({ ...a, nombre: e.name })))
+    e.actividades.filter((a) => (a.status === 'pending' || a.status === 'incomplete') && a.prioridad !== 'urgente').map((a) => ({ ...a, nombre: e.name })))
   // Se hereda a un técnico o Ing. Jr del equipo
   const ejecutores = equipo.filter((e) => e.role === 'tec' || e.role === 'jr')
 

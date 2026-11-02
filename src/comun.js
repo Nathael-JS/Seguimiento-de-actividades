@@ -51,6 +51,15 @@ export async function api(url, { method = 'GET', body } = {}) {
 export const hoy = () => new Date().toLocaleDateString('en-CA')
 // Fecha y zona horaria del navegador: el servidor las usa para el rate de aprobación ("a tiempo" en tu hora local)
 export const consultaRate = () => `hoy=${hoy()}&zona=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`
+// Fin del turno en la hora local: la próxima vez que llega su hora de salida (A 14:30, B 23:00, C 06:00).
+// Una tarea urgente se cierra en ese momento
+export function finTurno(turno, ahora = new Date()) {
+  const [h, m] = TURNOS[turno].split('–')[1].split(':').map(Number)
+  const fin = new Date(ahora)
+  fin.setHours(h, m, 0, 0)
+  if (fin <= ahora) fin.setDate(fin.getDate() + 1)
+  return fin
+}
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
 export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 
