@@ -219,6 +219,7 @@ test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomad
 })
 
 const CLAVE = 'Nueva#Clave2026'
+const HOY_REAL = new Date().toISOString().slice(0, 10)
 const CDMX = 'hoy=2026-11-02&zona=America/Mexico_City'
 const registro = (cambios = {}) => ({
   name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE, ...cambios,
@@ -360,7 +361,8 @@ test('con desde, Inicio y Equipo muestran solo lo abierto y lo realizado ese dí
 
 test('avisos automáticos: atrasadas al ejecutor y a quien asignó, contraseña por vencer, sin duplicar', async () => {
   const app = build()
-  const inicioHoy = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}?hoy=2026-11-02`)).body.notificaciones
+  // El servidor solo acepta un hoy a un día del suyo: se usa la fecha real (los datos de prueba ya quedaron atrás)
+  const inicioHoy = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}?hoy=${HOY_REAL}`)).body.notificaciones
   const jorge = await inicioHoy('10482')
   // Sus abiertas del 29 oct: 2 y 4 en proceso, 3 pendiente
   const atrasos = jorge.filter((n) => n.kind === 'overdue')
@@ -385,4 +387,32 @@ test('marcar una notificación como leída: solo la propia', async () => {
   assert.deepEqual(ns.map((n) => [n.id, n.read]), [[2, false], [1, true]])
   assert.equal((await pedir(app, 'POST', '/api/notificaciones/10482/3/leida')).code, 404) // la 3 es de Laura
   assert.equal(ns.find((n) => n.id === 2).activityTo, '10482')
+})
+
+test('notificaciones ordenadas por fecha, no por id', async () => {
+  // En los datos de prueba la 4 (28 oct 22:58) es más vieja que la 3 (29 oct 02:40)
+  const ns = (await pedir(build(), 'GET', '/api/inicio/10001')).body.notificaciones
+  assert.ok(ns.every((n, i) => i === 0 || ns[i - 1].at >= n.at))
+  assert.deepEqual(ns.slice(-2).map((n) => n.id), [3, 4])
+})
+
+test('cambiar la contraseña deja leído el aviso de vencimiento', async () => {
+  const app = build()
+  const aviso = async () => (await pedir(app, 'GET', `/api/inicio/10482?hoy=${HOY_REAL}`)).body.notificaciones.find((n) => n.kind === 'password')
+  assert.equal((await aviso()).read, false)
+  await pedir(app, 'POST', '/api/perfil/10482/password', { actual: 'demo1234', nueva: CLAVE })
+  assert.equal((await aviso()).read, true)
+  // También al recuperarla
+  const { body } = await pedir(app, 'POST', '/api/recuperar', { no: '10490', email: 'maria.lopez@empresa.com' })
+  await pedir(app, 'GET', `/api/inicio/10490?hoy=${HOY_REAL}`)
+  await pedir(app, 'POST', '/api/recuperar/cambiar', { token: body.token, password: CLAVE })
+  assert.ok((await pedir(app, 'GET', '/api/inicio/10490')).body.notificaciones.filter((n) => n.kind === 'password').every((n) => n.read))
+})
+
+test('un hoy lejano a la fecha del servidor no genera avisos', async () => {
+  const app = build()
+  const avisos = async (hoy) => (await pedir(app, 'GET', `/api/inicio/10482?hoy=${hoy}`)).body.notificaciones.filter((n) => n.kind === 'overdue').length
+  assert.equal(await avisos('2027-06-01'), 0)
+  assert.equal(await avisos('2025-01-01'), 0)
+  assert.equal(await avisos(HOY_REAL), 3)
 })

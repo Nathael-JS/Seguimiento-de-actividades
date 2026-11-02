@@ -184,6 +184,7 @@ export function build(opts = {}) {
   // shortcut: se generan al consultar Inicio porque no hay tareas programadas; pasar a un job con la base de datos
   const generarAvisos = (hoy) => {
     for (const a of vigentes()) {
+      // Misma regla de "atrasada" que src/tablero.js (Inicio del gerente): si cambia una, cambiar la otra
       if (a.avisoAtraso || (a.status !== 'pending' && a.status !== 'progress') || a.date >= hoy) continue
       a.avisoAtraso = true
       notificar({ for: a.to, kind: 'overdue', ref: a.id })
@@ -195,6 +196,11 @@ export function build(opts = {}) {
       u.avisoPassword = u.pwdChanged
       notificar({ for: u.no, kind: 'password', count: Math.max(dias, 0) })
     }
+  }
+  // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído
+  const cambiarPassword = (u, password) => {
+    Object.assign(u, { password, pwdChanged: ahora() })
+    notificaciones.filter((n) => n.for === u.no && n.kind === 'password').forEach((n) => (n.read = true))
   }
   const delTurno = (acts, desde) =>
     desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
@@ -285,7 +291,7 @@ export function build(opts = {}) {
     const r = recuperaciones.get(req.body.token)
     recuperaciones.delete(req.body.token) // un solo uso
     if (!r || r.vence < Date.now()) return reply.code(401).send({ error: 'El permiso expiró. Vuelve a validar tus datos.' })
-    Object.assign(empleado(r.no), { password: req.body.password, pwdChanged: ahora() })
+    cambiarPassword(empleado(r.no), req.body.password)
     return { ok: true }
   })
 
@@ -325,13 +331,16 @@ export function build(opts = {}) {
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
     if (req.body.actual !== u.password) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
     if (req.body.nueva === u.password) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
-    Object.assign(u, { password: req.body.nueva, pwdChanged: ahora() })
+    cambiarPassword(u, req.body.nueva)
     return { ok: true }
   }))
 
   // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
   app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
-    if (req.query.hoy) generarAvisos(req.query.hoy)
+    // Un reloj mal puesto en el navegador marcaría como atrasado todo y avisaría a todos, sin vuelta atrás:
+    // solo se aceptan fechas a un día o menos de la del servidor (cubre cualquier zona horaria)
+    const { hoy } = req.query
+    if (hoy && Math.abs(Date.parse(hoy) - Date.parse(ahora().slice(0, 10))) <= 86_400_000) generarAvisos(hoy)
     // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
     const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
     const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
@@ -343,7 +352,8 @@ export function build(opts = {}) {
       avance: acts.length ? Math.round(acts.reduce((s, a) => s + a.pct, 0) / acts.length) : null, // null: sin actividades
       notificaciones: notificaciones
         .filter((n) => n.for === u.no)
-        .sort((a, b) => b.id - a.id)
+        // Por fecha y no por id: el Buzón agrupa por día y los datos pueden llegar fuera de orden
+        .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)
         .map((n) => {
           const a = actividades.find((x) => x.id === n.ref)
           return {
