@@ -159,3 +159,14 @@ export function NotificacionesRecientes({ user, notificaciones, recargar }) {
     </section>
   )
 }
+
+// Rate de aprobación con barra; naranja por debajo de 85 %
+export function Rate({ valor }) {
+  if (valor == null) return <span className="muted">{t('Sin datos')}</span>
+  return (
+    <span className={`rate${valor < 85 ? ' lo' : ''}`}>
+      <span className="bar"><i style={{ width: `${valor}%` }} /></span>
+      <span className="mono">{valor}%</span>
+    </span>
+  )
+}

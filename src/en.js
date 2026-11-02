@@ -249,6 +249,9 @@ export default {
   // Departamentos y perfil
   'Departamentos registrados con su plantilla completa.': 'Registered departments and their full headcount.',
   'Rate de aprobación': 'Approval rate',
+  'Rate de aprobación: % de actividades de los últimos 30 días realizadas a tiempo.': 'Approval rate: % of activities from the last 30 days done on time.',
+  'a tiempo, últimos 30 días': 'on time, last 30 days',
+  'Zona horaria no válida.': 'Invalid time zone.',
   'Sin datos': 'No data',
   'Cargo': 'Role',
   'Correo': 'Email',

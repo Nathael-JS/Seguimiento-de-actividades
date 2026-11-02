@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { api, esEncargado, iniciales, inicioDeHoy, promedio, rol } from './comun.js'
+import { api, consultaRate, esEncargado, iniciales, inicioDeHoy, promedio, rol } from './comun.js'
 import { t } from './i18n.js'
-import { Anillo, Estado } from './ui.jsx'
+import { Anillo, Estado, Rate } from './ui.jsx'
 
 const conAvance = (acts) => (acts.length ? promedio(acts) : null)
 
@@ -13,7 +13,7 @@ export default function Monitoreo({ user }) {
   const [filtro, setFiltro] = useState(() => new URLSearchParams(location.hash.split('?')[1]).get('lider') ?? 'todos')
 
   useEffect(() => {
-    api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then(setEquipo).catch((e) => setError(e.message))
+    api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}&${consultaRate()}`).then(setEquipo).catch((e) => setError(e.message))
   }, [user.no])
 
   if (error) return <p className="error" role="alert">{error}</p>
@@ -60,6 +60,7 @@ export default function Monitoreo({ user }) {
                 </div>
                 <Anillo pct={conAvance(e.actividades)} size={72} width={8} />
               </header>
+              <div className="rate-mini"><span>{t('Rate de aprobación')}</span> <Rate valor={e.rate} /></div>
               {e.actividades.length ? (
                 <ul className="mini">
                   {e.actividades.map((a) => (

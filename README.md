@@ -9,7 +9,9 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Sin base de datos por ahora:** los cambios (cuentas nuevas, contraseñas, actividades, avances, notificaciones leídas) viven en la memoria del servidor y se comparten entre usuarios, pero se pierden al reiniciar o redeployar.
 
-**Simulado:** el código de la verificación en 2 pasos se muestra en pantalla en lugar de enviarse por correo, y el rate de aprobación de Departamentos es un valor fijo de los datos de prueba.
+**Simulado:** el código de la verificación en 2 pasos se muestra en pantalla en lugar de enviarse por correo.
+
+**Rate de aprobación:** % de las actividades de los últimos 30 días realizadas a tiempo (a más tardar el día que les tocaba, en la hora local de quien consulta). Las de hoy que siguen abiertas aún no cuentan. Se muestra en Departamentos, Perfil y Monitoreo.
 
 ## Idioma, tema y horas
 
@@ -28,9 +30,9 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 | `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
 | `POST` | `/api/recuperar` | Validar número de empleado y correo; da un permiso de un solo uso |
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
-| `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña |
+| `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña; con `?hoy=&zona=`, su rate de aprobación |
 | `POST` | `/api/perfil/:no/password` | Cambiar la contraseña propia (pide la actual) |
-| `GET` | `/api/departamentos` | Plantilla de todos los departamentos con rate |
+| `GET` | `/api/departamentos` | Plantilla de todos los departamentos; con `?hoy=&zona=` (fecha y zona horaria IANA del navegador), el rate de cada uno |
 | `GET` | `/api/inicio/:no` | Indicadores y notificaciones. `?desde=` (inicio del día local) cuenta solo lo abierto y lo realizado hoy; `?hoy=` (fecha local) genera los avisos automáticos |
 | `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |

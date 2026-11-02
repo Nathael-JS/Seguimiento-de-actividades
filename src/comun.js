@@ -49,6 +49,8 @@ export async function api(url, { method = 'GET', body } = {}) {
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
 export const hoy = () => new Date().toLocaleDateString('en-CA')
+// Fecha y zona horaria del navegador: el servidor las usa para el rate de aprobación ("a tiempo" en tu hora local)
+export const consultaRate = () => `hoy=${hoy()}&zona=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
 export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 

@@ -382,3 +382,6 @@ tbody tr:hover td{background:var(--surface-000)}
 .grupo-dia+.grupo-dia{margin-top:20px}
 .grupo-dia h2{font:600 13px/18px var(--font-sans);color:var(--ink-muted);margin-bottom:10px}
 .grupo-dia h2::first-letter{text-transform:uppercase}
+
+.rate-mini{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--ink-muted)}
+.rate-mini .rate{flex:1}

@@ -219,6 +219,7 @@ test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomad
 })
 
 const CLAVE = 'Nueva#Clave2026'
+const CDMX = 'hoy=2026-11-02&zona=America/Mexico_City'
 const registro = (cambios = {}) => ({
   name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE, ...cambios,
 })
@@ -231,7 +232,7 @@ test('registro de técnico: elige encargado del departamento, hereda su área y 
   assert.deepEqual([yo.name, yo.area, yo.encargado], ['Ana Prueba', 'CDU y Chillers', false])
   // Aparece en el equipo de Sofía y en Departamentos
   assert.ok((await pedir(app, 'GET', '/api/equipo/10251')).body.some((e) => e.no === '20001'))
-  assert.equal((await pedir(app, 'GET', '/api/departamentos')).body.find((e) => e.no === '20001').rate, null)
+  assert.equal((await pedir(app, 'GET', `/api/departamentos?${CDMX}`)).body.find((e) => e.no === '20001').rate, null) // sin actividades
 })
 
 test('registro valida duplicados, contraseña y encargado', async () => {
@@ -276,11 +277,37 @@ test('perfil y cambio de contraseña propio', async () => {
   assert.equal((await pedir(app, 'GET', '/api/perfil/99999')).code, 404)
 })
 
-test('departamentos: todos los empleados con rate y sin datos sensibles', async () => {
+test('departamentos: todos los empleados, sin datos sensibles; el rate solo con hoy y zona', async () => {
   const lista = (await pedir(build(), 'GET', '/api/departamentos')).body
   assert.equal(lista.length, 15)
-  assert.deepEqual(Object.keys(lista[0]).sort(), ['area', 'dept', 'name', 'no', 'rate', 'role', 'shift'])
-  assert.equal(lista.find((e) => e.no === '10604').rate, 76)
+  assert.deepEqual(Object.keys(lista[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
+  assert.ok('rate' in (await pedir(build(), 'GET', `/api/departamentos?${CDMX}`)).body[0])
+})
+
+test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la hora local', async () => {
+  const app = build()
+  const rate = async (no, q = CDMX) => (await pedir(app, 'GET', `/api/perfil/${no}?${q}`)).body.rate
+  // Jorge, 2 nov: de sus 4 del 29 oct solo la 1 está realizada (ese mismo día) → 25 %
+  assert.equal(await rate('10482'), 25)
+  // Realizar hoy una del 29 oct no la hace "a tiempo"
+  await pedir(app, 'PATCH', '/api/actividades/3', { por: '10482', estado: 'done', avance: 100 })
+  assert.equal(await rate('10482'), 25)
+  // Una de hoy abierta todavía no cuenta; realizada hoy, sí y a tiempo → 2 de 5
+  await pedir(app, 'POST', '/api/actividades', asignar({ fecha: '2026-11-02', puntos: [{ texto: 'Hoy', avance: 0 }] }))
+  assert.equal(await rate('10482'), 25)
+  await pedir(app, 'POST', '/api/actividades', asignar({ fecha: '2026-11-02', puntos: [{ texto: 'Hoy hecha', avance: 100 }] }))
+  assert.equal(await rate('10482'), 40)
+  // Fuera de los 30 días ya no cuenta nada
+  assert.equal(await rate('10482', 'hoy=2026-12-15&zona=America/Mexico_City'), null)
+  // Héctor terminó la 10 (del 28 oct) a las 23:10 de Ciudad de México = 29 oct en UTC
+  assert.equal(await rate('10547'), 100)
+  assert.equal(await rate('10547', 'hoy=2026-11-02&zona=UTC'), 0)
+  // Sin hoy y zona no hay rate; zona inventada → 400
+  assert.equal(await rate('10482', ''), undefined)
+  assert.equal((await pedir(app, 'GET', '/api/perfil/10482?hoy=2026-11-02&zona=Marte/Base')).code, 400)
+  // Monitoreo (equipo) también lo trae
+  assert.equal((await pedir(app, 'GET', `/api/equipo/10230?${CDMX}`)).body.find((e) => e.no === '10547'), undefined) // Héctor no es de Diego
+  assert.equal((await pedir(app, 'GET', `/api/equipo/10251?${CDMX}`)).body.find((e) => e.no === '10547').rate, 100)
 })
 
 test('heredar una actividad de días anteriores cuenta desde hoy, no desde su fecha', async () => {
