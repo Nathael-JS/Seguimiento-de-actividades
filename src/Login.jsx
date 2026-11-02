@@ -7,10 +7,10 @@ import { BotonIdioma, BotonTema, Campo } from './ui.jsx'
 import { t } from './i18n.js'
 
 // Pantallas de acceso: 'login' → 'codigo' (2 pasos), o 'registro' / 'recuperar' que vuelven al login
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, aviso: avisoInicial = '' }) {
   const [pantalla, setPantalla] = useState('login')
   const [verificacion, setVerificacion] = useState(null)
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState(avisoInicial)
 
   const volver = (mensaje = '') => {
     setAviso(mensaje)

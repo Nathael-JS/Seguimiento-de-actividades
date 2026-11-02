@@ -68,7 +68,9 @@ export default function Shell({ user, onLogout }) {
     temporizador.current = setTimeout(() => setAviso(''), 3000)
   }, [])
 
-  function cerrarSesion() {
+  async function cerrarSesion() {
+    // Aunque falle la red se sale de la pantalla; la cookie se borra en la siguiente salida o al cerrar el navegador
+    await api('/api/logout', { method: 'POST' }).catch(() => {})
     history.replaceState(null, '', location.pathname)
     onLogout()
   }

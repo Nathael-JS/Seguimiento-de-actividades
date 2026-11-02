@@ -211,10 +211,12 @@ export function build(opts = {}) {
       notificar({ for: u.no, kind: 'password', count: Math.max(dias, 0) })
     }
   }
-  // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído
-  const cambiarPassword = (u, password) => {
+  // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído, y se cierran
+  // las demás sesiones abiertas de esa persona (conservar: la sesión desde la que la cambió, si la hay)
+  const cambiarPassword = (u, password, conservar) => {
     Object.assign(u, { password, pwdChanged: ahora() })
     notificaciones.filter((n) => n.for === u.no && n.kind === 'password').forEach((n) => (n.read = true))
+    sesiones.forEach((s, token) => s.no === u.no && token !== conservar && sesiones.delete(token))
   }
   const urgenteAbierta = (a) => a.prioridad === 'urgente' && !a.cerrada && a.status !== 'done'
   const delTurno = (acts, desde) =>
@@ -245,6 +247,31 @@ export function build(opts = {}) {
 
   const sesion = (u) => ({ no: u.no, name: u.name, role: u.role, dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u) })
 
+  // Sesiones: token aleatorio en una cookie HttpOnly (el JavaScript de la página no la puede leer) y SameSite=Strict
+  // (otros sitios no la mandan). Sin Max-Age: se borra al cerrar el navegador, útil en equipos compartidos de planta.
+  // shortcut: viven en memoria y se pierden al reiniciar el servidor; pasarlas a la base de datos cuando se retome
+  const sesiones = new Map()
+  const DURACION_SESION = 12 * 3_600_000 // sin actividad; se renueva con cada uso
+  const tokenDe = (req) => req.headers.cookie?.match(/(?:^|;\s*)sesion=([^;]+)/)?.[1]
+  const cookie = (req, valor, extra = '') =>
+    `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
+  const PUBLICAS = new Set([
+    '/api/login', '/api/login/verificar', '/api/login/reenviar', '/api/logout',
+    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/departamentos', // Registro lista los encargados
+  ])
+  app.addHook('preHandler', async (req, reply) => {
+    if (!req.url.startsWith('/api/') || PUBLICAS.has(req.routeOptions.url)) return
+    const s = sesiones.get(tokenDe(req))
+    if (!s || s.vence < Date.now() || !empleado(s.no)) {
+      return reply.code(401).send({ error: 'Tu sesión terminó. Vuelve a iniciar sesión.', sesion: false })
+    }
+    s.vence = Date.now() + DURACION_SESION
+    req.sesion = s
+    // El número que manda el navegador (en la dirección o en "por") tiene que ser el de la sesión
+    const quien = req.params?.no ?? req.body?.por
+    if (quien && quien !== s.no) return reply.code(403).send({ error: 'Solo puedes actuar con tu propia cuenta.' })
+  })
+
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
     const u = buscar(req.body.usuario.trim().toLowerCase())
@@ -274,7 +301,20 @@ export function build(opts = {}) {
       return reply.code(401).send({ error: 'Código incorrecto.' })
     }
     verificaciones.delete(req.body.token)
+    limpiarVencidos(sesiones)
+    const id = randomUUID()
+    sesiones.set(id, { no: v.no, vence: Date.now() + DURACION_SESION })
+    reply.header('set-cookie', cookie(req, id))
     return sesion(empleado(v.no))
+  })
+
+  // Al recargar la página: quién es la sesión de esta cookie
+  app.get('/api/sesion', async (req) => sesion(empleado(req.sesion.no)))
+
+  app.post('/api/logout', async (req, reply) => {
+    sesiones.delete(tokenDe(req))
+    reply.header('set-cookie', cookie(req, '', '; Max-Age=0'))
+    return { ok: true }
   })
 
   app.post('/api/login/reenviar', { schema: reenviarSchema }, async (req, reply) => {
@@ -362,11 +402,10 @@ export function build(opts = {}) {
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
     if (req.body.actual !== u.password) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
     if (req.body.nueva === u.password) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
-    cambiarPassword(u, req.body.nueva)
+    cambiarPassword(u, req.body.nueva, tokenDe(req))
     return { ok: true }
   }))
 
-  // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
   app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
     // Un reloj mal puesto en el navegador marcaría como atrasado todo y avisaría a todos, sin vuelta atrás:
     // solo se aceptan fechas a un día o menos de la del servidor (cubre cualquier zona horaria)

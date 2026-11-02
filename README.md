@@ -9,6 +9,8 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Sin base de datos por ahora:** los cambios (cuentas nuevas, contraseñas, actividades, avances, notificaciones leídas) viven en la memoria del servidor y se comparten entre usuarios, pero se pierden al reiniciar o redeployar.
 
+**Sesión:** al terminar los 2 pasos el servidor guarda la sesión en una cookie `HttpOnly` y `SameSite=Strict` (en Render, también `Secure`). Al recargar la página se sigue dentro; se cierra con "Cerrar sesión", al cerrar el navegador o tras 12 h sin uso. El servidor toma de la sesión quién pide: nadie puede ver ni cambiar datos como otro empleado. Cambiar la contraseña cierra las demás sesiones de esa persona (recuperarla, todas). Las sesiones también viven en memoria: al reiniciar el servidor hay que volver a entrar.
+
 **Simulado:** el código de la verificación en 2 pasos se muestra en pantalla en lugar de enviarse por correo.
 
 **Rate de aprobación:** % de las actividades de los últimos 30 días realizadas a tiempo (a más tardar el día que les tocaba, en la hora local de quien consulta). Las de hoy que siguen abiertas aún no cuentan. Se muestra en Departamentos, Perfil y Monitoreo.
@@ -31,8 +33,10 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | Método | Ruta | Uso |
 |---|---|---|
 | `POST` | `/api/login` | Paso 1: usuario (correo, alias o número) y contraseña; genera el código |
-| `POST` | `/api/login/verificar` | Paso 2: código de 6 dígitos (5 min, 5 intentos); devuelve la sesión |
+| `POST` | `/api/login/verificar` | Paso 2: código de 6 dígitos (5 min, 5 intentos); abre la sesión (cookie) y devuelve el usuario |
 | `POST` | `/api/login/reenviar` | Nuevo código para la misma verificación |
+| `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
+| `POST` | `/api/logout` | Cerrar sesión |
 | `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
 | `POST` | `/api/recuperar` | Validar número de empleado y correo; da un permiso de un solo uso |
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
@@ -49,6 +53,9 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `POST` | `/api/actividades/:id/heredar` | Heredar una pendiente o incompleta al día siguiente o a otro técnico / Ing. Jr del siguiente turno |
 | `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |
+
+Las rutas de login, registro, recuperar contraseña y `/api/departamentos` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
+
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render

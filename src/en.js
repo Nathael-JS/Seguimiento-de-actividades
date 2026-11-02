@@ -309,6 +309,8 @@ export default {
   'Revisa los datos ingresados.': 'Check the data you entered.',
   'Ocurrió un error. Intenta de nuevo.': 'Something went wrong. Try again.',
   'Empleado no encontrado.': 'Employee not found.',
+  'Tu sesión terminó. Vuelve a iniciar sesión.': 'Your session ended. Please sign in again.',
+  'Solo puedes actuar con tu propia cuenta.': 'You can only act with your own account.',
   'Usuario o contraseña incorrectos.': 'Wrong username or password.',
   'El código expiró. Vuelve a iniciar sesión.': 'The code expired. Sign in again.',
   'Demasiados intentos. Vuelve a iniciar sesión.': 'Too many attempts. Sign in again.',
