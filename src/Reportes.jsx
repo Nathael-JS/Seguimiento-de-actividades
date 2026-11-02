@@ -116,7 +116,7 @@ export default function Reportes({ user }) {
             </p>
             <div className="row no-imprimir">
               <button className="btn btn-secondary btn-sm" onClick={() => window.print()} disabled={!filas.length}>{t('Exportar PDF')}</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => descargarCsv(filas, `reporte-${desde}-a-${hasta}.csv`)} disabled={!filas.length}>
+              <button className="btn btn-secondary btn-sm" onClick={() => descargarCsv(filas, `${t('reporte')}_${desde}_${hasta}.csv`)} disabled={!filas.length}>
                 {t('Exportar Excel')}
               </button>
             </div>
