@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { estado as nombreEstado, reglasPassword } from './comun.js'
+import { fechaHora, estado as nombreEstado, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
 
@@ -96,5 +96,29 @@ export function BotonIdioma() {
         <button key={k} type="button" lang={k} aria-pressed={idiomaActual() === k} onClick={() => cambiarIdioma(k)}>{k.toUpperCase()}</button>
       ))}
     </div>
+  )
+}
+
+export function NotificacionesRecientes({ notificaciones }) {
+  return (
+    <section className="card">
+      <div className="row between" style={{ marginBottom: 12 }}>
+        <h2 className="card-title" style={{ margin: 0 }}>{t('Notificaciones recientes')}</h2>
+        <a href="#buzon" style={{ fontSize: 13 }}>{t('Ver todas')}</a>
+      </div>
+      {notificaciones.length ? (
+        <ul className="list">
+          {notificaciones.slice(0, 5).map((n) => (
+            <li key={n.id}>
+              <span className={`ndot ${n.kind}`} />
+              <div className={n.read ? '' : 'unread'}>
+                <Notificacion n={n} />
+                <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{fechaHora(n.at)}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted">{t('Sin notificaciones.')}</p>}
+    </section>
   )
 }

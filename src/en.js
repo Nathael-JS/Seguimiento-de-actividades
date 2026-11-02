@@ -177,6 +177,25 @@ export default {
   'Heredar': 'Carry over',
   'Actividad heredada.': 'Activity carried over.',
 
+  // Inicio del gerente
+  'Avance por líder': 'Progress by leader',
+  'Avance por turno': 'Progress by shift',
+  '{n} persona': '{n} person',
+  '{n} personas': '{n} people',
+  '{n} actividad': '{n} activity',
+  '{n} actividades': '{n} activities',
+  '{n} realizada hoy': '{n} done today',
+  '{n} realizadas hoy': '{n} done today',
+  '{n} incompleta': '{n} incomplete',
+  '{n} incompletas': '{n} incomplete',
+  'Sin líderes en tu área.': 'No leaders in your area.',
+  'Requieren atención': 'Need attention',
+  'Atrasadas': 'Overdue',
+  'Sin actividades hoy': 'No activities today',
+  'Todos tienen actividades.': 'Everyone has activities.',
+  'Nada por ahora.': 'Nothing for now.',
+  'Ver {n} más en Monitoreo': 'See {n} more in Monitoring',
+
   // Mis actividades
   'Tareas asignadas': 'Assigned tasks',
   'Marca el estado, ajusta el avance y comenta tus actividades.': 'Set the status, adjust progress and comment on your activities.',
