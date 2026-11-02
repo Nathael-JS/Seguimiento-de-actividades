@@ -22,7 +22,8 @@ export function resumenArea(equipo, hoy) {
       turno, personas: equipo.filter((e) => e.shift === turno).length, ...cifras(todas.filter((a) => a.shift === turno)),
     })),
     incompletas: todas.filter((a) => a.status === 'incomplete'),
-    // Siguen abiertas y su fecha ya pasó (las incompletas van en su propia lista)
+    // Siguen abiertas y su fecha ya pasó (las incompletas van en su propia lista).
+    // Misma regla que generarAvisos en server/app.js: si cambia una, cambiar la otra
     atrasadas: todas.filter((a) => (a.status === 'pending' || a.status === 'progress') && a.date < hoy),
     sinActividades: equipo.filter((e) => !esEncargado(e.role) && !e.actividades.length),
   }
