@@ -14,6 +14,8 @@ const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
+// desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
+const conDesde = { ...porEmpleado, querystring: { type: 'object', properties: { desde: { type: 'string', format: 'date-time' } } } }
 const token = { type: 'string', minLength: 1, maxLength: 64 }
 // Mínimo 10 caracteres, mayúscula, minúscula, número y símbolo (las mismas reglas que muestra el frontend)
 const passwordNueva = {
@@ -101,9 +103,10 @@ const heredarSchema = {
   params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
   body: {
     type: 'object',
-    required: ['por', 'para'],
+    required: ['por', 'para', 'hoy'],
     additionalProperties: false,
-    properties: { por: noEmpleado, para: noEmpleado },
+    // hoy: la fecha local de quien hereda; la del servidor es UTC y de noche ya es mañana en México
+    properties: { por: noEmpleado, para: noEmpleado, hoy: { type: 'string', format: 'date' } },
   },
 }
 
@@ -126,8 +129,7 @@ const reporteSchema = {
 const ahora = () => new Date().toISOString()
 const DIA = 86_400_000
 const VIGENCIA_PASSWORD = 90 // días
-const hoyUtc = () => new Date().toISOString().slice(0, 10)
-const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.parse(hoyUtc()) - Date.parse(u.pwdChanged)) / DIA)
+const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.now() - Date.parse(u.pwdChanged)) / DIA)
 // j•••••@empresa.com
 const ocultarCorreo = (email) => email.replace(/^(.).*(@.*)$/, '$1•••••$2')
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
@@ -159,6 +161,9 @@ export function build(opts = {}) {
   const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
   const vigentes = () => actividades.filter((a) => !a.handedTo)
+  // Lo del turno: lo que sigue abierto y lo realizado desde `desde`. Sin `desde`, todo
+  const delTurno = (acts, desde) =>
+    desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
   const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
 
   const conEmpleado = (handler) => async (req, reply) => {
@@ -214,7 +219,7 @@ export function build(opts = {}) {
     if (empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
     if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
 
-    const nuevo = { no, name: name.trim(), role, dept, shift, email, rate: null, pwdChanged: hoyUtc(), password }
+    const nuevo = { no, name: name.trim(), role, dept, shift, email, rate: null, pwdChanged: ahora(), password }
     if (RANGO[role] <= 2) {
       // Encargado: indica su área; no elige jefe (como en el mockup)
       if (!area.trim()) return reply.code(400).send({ error: 'Escribe tu área dentro del departamento.' })
@@ -246,7 +251,7 @@ export function build(opts = {}) {
     const r = recuperaciones.get(req.body.token)
     recuperaciones.delete(req.body.token) // un solo uso
     if (!r || r.vence < Date.now()) return reply.code(401).send({ error: 'El permiso expiró. Vuelve a validar tus datos.' })
-    Object.assign(empleado(r.no), { password: req.body.password, pwdChanged: hoyUtc() })
+    Object.assign(empleado(r.no), { password: req.body.password, pwdChanged: ahora() })
     return { ok: true }
   })
 
@@ -263,15 +268,15 @@ export function build(opts = {}) {
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
     if (req.body.actual !== u.password) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
     if (req.body.nueva === u.password) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
-    Object.assign(u, { password: req.body.nueva, pwdChanged: hoyUtc() })
+    Object.assign(u, { password: req.body.nueva, pwdChanged: ahora() })
     return { ok: true }
   }))
 
   // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
-  app.get('/api/inicio/:no', { schema: porEmpleado }, conEmpleado((u) => {
-    // El encargado ve las actividades de su equipo; el ejecutor, solo las suyas
-    const alcance = esEncargado(u) ? equipo(u.no).map((e) => e.no) : [u.no]
-    const acts = vigentes().filter((a) => alcance.includes(a.to))
+  app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
+    // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
+    const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
+    const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
     return {
       diasPassword: diasPassword(u),
       asignadas: acts.length,
@@ -299,9 +304,9 @@ export function build(opts = {}) {
   }))
 
   // Equipo del encargado con sus actividades vigentes: alimenta Registrar, herencia, Monitoreo y Reportes
-  app.get('/api/equipo/:no', { schema: porEmpleado }, conEmpleado((u, req, reply) => {
+  app.get('/api/equipo/:no', { schema: conDesde }, conEmpleado((u, req, reply) => {
     if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
-    const acts = vigentes()
+    const acts = delTurno(vigentes(), req.query.desde)
     return asignables(u)
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role, dept, shift, boss }) => ({
@@ -324,7 +329,7 @@ export function build(opts = {}) {
       const a = {
         id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
         text: p.texto.trim(), pct: p.avance, status: p.avance === 100 ? 'done' : p.avance > 0 ? 'progress' : 'pending',
-        mgr: comentario.trim(), note: '',
+        mgr: comentario.trim(), note: '', ...(p.avance === 100 && { doneAt: at }),
       }
       actividades.push(a)
       return a
@@ -344,13 +349,19 @@ export function build(opts = {}) {
   app.patch('/api/actividades/:id', { schema: actualizarSchema }, async (req, reply) => {
     const a = actividades.find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
-    const { por, estado, nota = a.note } = req.body
+    const { por, avance, nota = a.note } = req.body
+    // 100 % es Realizada (como al registrar) y Realizada es 100 %
+    const estado = avance === 100 ? 'done' : req.body.estado
     if (a.to !== por) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad puede actualizarla.' })
     if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
 
     const cambioEstado = estado !== a.status
     const cambioNota = nota.trim() !== a.note
-    Object.assign(a, { status: estado, pct: estado === 'done' ? 100 : req.body.avance, note: nota.trim() })
+    // doneAt: cuándo quedó realizada; se conserva si ya lo estaba y se borra si se reabre
+    Object.assign(a, {
+      status: estado, pct: estado === 'done' ? 100 : avance, note: nota.trim(),
+      doneAt: estado !== 'done' ? undefined : a.status === 'done' ? a.doneAt : ahora(),
+    })
     // El encargado se entera del cambio de estado y del comentario por separado, como en el mockup
     if (cambioEstado) notificar({ for: a.by, kind: estado, who: por, ref: a.id })
     if (cambioNota) notificar({ for: a.by, kind: 'comment', who: por, ref: a.id })
@@ -360,7 +371,7 @@ export function build(opts = {}) {
   app.post('/api/actividades/:id/heredar', { schema: heredarSchema }, async (req, reply) => {
     const a = actividades.find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
-    const { por, para } = req.body
+    const { por, para, hoy } = req.body
     const encargado = empleado(por)
     const suyos = encargado && esEncargado(encargado) ? asignables(encargado).map((e) => e.no) : []
     if (!suyos.includes(a.to)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
@@ -372,10 +383,12 @@ export function build(opts = {}) {
       return reply.code(403).send({ error: 'Solo se hereda a un técnico o Ing. Jr de tu equipo.' })
     }
 
-    // Mismo empleado: día siguiente, mismo turno. Otro: siguiente turno (tras el C viene el A del día siguiente)
+    // Mismo empleado: día siguiente, mismo turno. Otro: siguiente turno (tras el C viene el A del día siguiente).
+    // Se cuenta desde hoy si la actividad es de días anteriores, para no crearla en el pasado
+    const base = a.date > hoy ? a.date : hoy
     const nueva = {
       ...a, id: siguienteId(actividades), to: para, by: por, at: ahora(), status: 'pending', note: '', inh: true,
-      date: mismo || a.shift === 'C' ? diaSiguiente(a.date) : a.date,
+      date: mismo || a.shift === 'C' ? diaSiguiente(base) : base,
       shift: mismo ? a.shift : SIGUIENTE_TURNO[a.shift],
     }
     actividades.push(nueva)

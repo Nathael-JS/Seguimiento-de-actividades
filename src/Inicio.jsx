@@ -15,8 +15,8 @@ export default function Inicio({ user, modulos, datos, error }) {
       {error ? <p className="error" role="alert">{error}</p> : !datos ? <p className="muted">{t('Cargando…')}</p> : (
         <>
           <section className="kpis">
-            <Kpi n={datos.asignadas} label={t('Actividades asignadas')} />
-            <Kpi n={datos.realizadas} label={t('Realizadas')} color="var(--status-done)" />
+            <Kpi n={datos.asignadas} label={t('Abiertas y realizadas hoy')} />
+            <Kpi n={datos.realizadas} label={t('Realizadas hoy')} color="var(--status-done)" />
             <Kpi n={datos.abiertas} label={t('Pendientes o incompletas')} color="var(--status-pending)" />
             <div className="card kpi"><Anillo pct={datos.avance} /><div className="l">{t('Avance promedio')}</div></div>
           </section>

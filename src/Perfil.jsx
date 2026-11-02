@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { TURNOS, api, depto, iniciales, passwordValida, rol } from './comun.js'
+import { TURNOS, api, depto, fecha, iniciales, passwordValida, rol } from './comun.js'
 import { t } from './i18n.js'
 import Icono from './Icono.jsx'
 import { AvisoPassword, Campo, PasswordNueva } from './ui.jsx'
@@ -46,7 +46,7 @@ export default function Perfil({ user, recargar, avisar }) {
             <div className="row between" style={{ flexWrap: 'wrap', gap: 16 }}>
               <div>
                 <div className="muted" style={{ fontSize: 13 }}>{t('Último cambio de contraseña')}</div>
-                <div className="mono">{perfil.pwdChanged}</div>
+                <div className="mono">{fecha(perfil.pwdChanged)}</div>
               </div>
               {!cambiando && <button className="btn btn-secondary" onClick={() => setCambiando(true)}>{t('Cambiar contraseña')}</button>}
             </div>

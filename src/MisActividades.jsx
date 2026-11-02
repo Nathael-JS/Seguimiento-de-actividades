@@ -52,9 +52,14 @@ function Tarea({ tarea, user, onGuardado }) {
   const [guardando, setGuardando] = useState(false)
   const cambio = estado !== tarea.status || avance !== tarea.pct || nota.trim() !== tarea.note
 
+  // Realizada es 100 % y 100 % es Realizada, igual que en el servidor
   function elegirEstado(e) {
     setEstado(e)
     if (e === 'done') setAvance(100)
+  }
+  function elegirAvance(v) {
+    setAvance(v)
+    if (v === 100) setEstado('done')
   }
 
   async function guardar(ev) {
@@ -97,7 +102,7 @@ function Tarea({ tarea, user, onGuardado }) {
       <div className="range">
         <label className="sr" htmlFor={`avance-${tarea.id}`}>{t('Avance')}</label>
         <input id={`avance-${tarea.id}`} type="range" min="0" max="100" step="5" value={avance}
-          disabled={estado === 'done'} onChange={(e) => setAvance(Number(e.target.value))} />
+          disabled={estado === 'done'} onChange={(e) => elegirAvance(Number(e.target.value))} />
         <output htmlFor={`avance-${tarea.id}`}>{avance}%</output>
       </div>
 

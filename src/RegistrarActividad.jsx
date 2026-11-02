@@ -180,7 +180,7 @@ function ItemHerencia({ a, user, ejecutores, alHeredar, avisar }) {
     setError('')
     setEnviando(true)
     try {
-      await api(`/api/actividades/${a.id}/heredar`, { method: 'POST', body: { por: user.no, para } })
+      await api(`/api/actividades/${a.id}/heredar`, { method: 'POST', body: { por: user.no, para, hoy: hoy() } })
       avisar(t('Actividad heredada.'))
       alHeredar()
     } catch (e) {

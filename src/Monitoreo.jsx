@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, esEncargado, iniciales, promedio, rol } from './comun.js'
+import { api, esEncargado, iniciales, inicioDeHoy, promedio, rol } from './comun.js'
 import { t } from './i18n.js'
 import { Anillo, Estado } from './ui.jsx'
 
@@ -10,7 +10,7 @@ export default function Monitoreo({ user }) {
   const [filtro, setFiltro] = useState('todos')
 
   useEffect(() => {
-    api(`/api/equipo/${user.no}`).then(setEquipo).catch((e) => setError(e.message))
+    api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then(setEquipo).catch((e) => setError(e.message))
   }, [user.no])
 
   if (error) return <p className="error" role="alert">{error}</p>
@@ -26,7 +26,7 @@ export default function Monitoreo({ user }) {
       <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <h1>{t('Monitoreo')}</h1>
-          <p>{t('Empleados a tu cargo y su avance.')}</p>
+          <p>{t('Empleados a tu cargo: actividades abiertas y realizadas hoy.')}</p>
         </div>
         <div className="row">
           <Anillo pct={promedio(equipo.flatMap((e) => e.actividades))} />
