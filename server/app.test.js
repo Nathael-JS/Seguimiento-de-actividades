@@ -209,6 +209,8 @@ test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomad
   assert.equal(filas[0].text, 'Pareto de fallas de la semana') // más reciente primero: 29/10 06:31
   assert.equal(filas[0].at, '2026-10-29T12:31:00.000Z')
   assert.equal(filas.find((f) => f.id === 4).inh, true)
+  assert.deepEqual([filas[0].no, filas[0].doneAt], ['10490', '2026-10-29T12:31:00.000Z']) // la 6, realizada; sin doneAt usa su hora de registro
+  assert.equal(filas.find((f) => f.id === 5).doneAt, undefined) // en proceso
   assert.equal((await reporte({ turno: 'B' })).body.length, 0)
   assert.equal((await reporte({ desde: '2026-10-30', hasta: '2026-10-31' })).body.length, 0)
   await heredar(app, 3, '10230', '10490')

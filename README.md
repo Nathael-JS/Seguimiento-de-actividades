@@ -41,7 +41,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `POST` | `/api/actividades/:id/heredar` | Heredar una pendiente o incompleta al día siguiente o a otro técnico / Ing. Jr del siguiente turno |
-| `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno |
+| `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render

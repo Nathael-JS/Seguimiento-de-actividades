@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { TURNOS, api, depto, estado, hora, hoy, promedio, rol } from './comun.js'
 import { t } from './i18n.js'
-import { Estado } from './ui.jsx'
+import { comparar } from './reporte.js'
+import { Estado, Rate } from './ui.jsx'
 
 const haceUnaSemana = () => new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA')
 
@@ -15,8 +16,12 @@ const celdaCsv = (v) => {
   return `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`
 }
 
-function descargarCsv(filas, nombre) {
-  const csv = [COLUMNAS.map((c) => t(c)), ...filas.map(celdas)].map((fila) => fila.map(celdaCsv).join(',')).join('\r\n')
+// El % a tiempo va primero: es la cifra que se compara y en móvil queda a la vista sin desplazar
+const COLUMNAS_COMPARATIVO = ['Nombre', 'Puesto', '% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades', 'Avance %']
+const celdasComparativo = (x) => [x.name, rol(x.role), x.aTiempo ?? '', x.atrasadas, x.incompletas, x.realizadas, x.actividades, x.avance ?? '']
+
+function descargarCsv(columnas, filas, nombre) {
+  const csv = [columnas.map((c) => t(c)), ...filas].map((fila) => fila.map(celdaCsv).join(',')).join('\r\n')
   // El BOM hace que Excel lea los acentos como UTF-8
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
@@ -33,6 +38,7 @@ export default function Reportes({ user }) {
   const [hasta, setHasta] = useState(hoy)
   const [turno, setTurno] = useState('')
   const [filas, setFilas] = useState(null)
+  const [vista, setVista] = useState('empleados')
   const [error, setError] = useState('')
   const [generando, setGenerando] = useState(false)
 
@@ -107,6 +113,11 @@ export default function Reportes({ user }) {
         {error && <p className="error wide" role="alert">{error}</p>}
       </form>
 
+      {filas?.length > 0 && equipo && (
+        <Comparativo filas={comparar(filas, equipo, user, hoy())[vista]} vista={vista} setVista={setVista}
+          exportar={(x) => descargarCsv(COLUMNAS_COMPARATIVO, x.map(celdasComparativo), `${t('comparativo')}_${desde}_${hasta}.csv`)} />
+      )}
+
       {filas && (
         <section className="reporte">
           <div className="row between" style={{ flexWrap: 'wrap' }}>
@@ -116,7 +127,7 @@ export default function Reportes({ user }) {
             </p>
             <div className="row no-imprimir">
               <button className="btn btn-secondary btn-sm" onClick={() => window.print()} disabled={!filas.length}>{t('Exportar PDF')}</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => descargarCsv(filas, `${t('reporte')}_${desde}_${hasta}.csv`)} disabled={!filas.length}>
+              <button className="btn btn-secondary btn-sm" onClick={() => descargarCsv(COLUMNAS, filas.map(celdas), `${t('reporte')}_${desde}_${hasta}.csv`)} disabled={!filas.length}>
                 {t('Exportar Excel')}
               </button>
             </div>
@@ -139,5 +150,50 @@ export default function Reportes({ user }) {
         </section>
       )}
     </>
+  )
+}
+
+function Comparativo({ filas, vista, setVista, exportar }) {
+  return (
+    <section className="card comparativo">
+      <div className="row between" style={{ flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 className="card-title" style={{ margin: 0 }}>{t('Comparativo')}</h2>
+          <p className="muted" style={{ fontSize: 13 }}>{t('% a tiempo: realizadas a más tardar el día que les tocaba (las de hoy abiertas aún no cuentan).')}</p>
+        </div>
+        <div className="row no-imprimir" style={{ flexWrap: 'wrap' }}>
+          <div className="chips" role="group" aria-label={t('Comparar por')}>
+            <button aria-pressed={vista === 'empleados'} onClick={() => setVista('empleados')}>{t('Por empleado')}</button>
+            <button aria-pressed={vista === 'lideres'} onClick={() => setVista('lideres')}>{t('Por líder')}</button>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => exportar(filas)}>{t('Exportar comparativo')}</button>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{t(vista === 'lideres' ? 'Líder' : 'Empleado')}</th>
+              {['% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades', 'Avance'].map((c) => <th key={c} scope="col">{t(c)}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((x) => (
+              <tr key={x.no}>
+                <th scope="row">
+                  {x.name} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {rol(x.role)}{x.personas ? ` · ${t(x.personas === 1 ? '{n} persona' : '{n} personas', { n: x.personas })}` : ''}</span>
+                </th>
+                <td><Rate valor={x.aTiempo} /></td>
+                <td className="mono">{x.atrasadas}</td>
+                <td className={`mono${x.incompletas ? ' txt-incompleta' : ''}`}>{x.incompletas}</td>
+                <td className="mono">{x.realizadas}</td>
+                <td className="mono">{x.actividades}</td>
+                <td className="mono">{x.avance == null ? '—' : `${x.avance}%`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }

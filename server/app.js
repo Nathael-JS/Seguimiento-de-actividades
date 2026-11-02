@@ -494,6 +494,7 @@ export function build(opts = {}) {
         return {
           id: a.id, date: a.date, shift: a.shift, at: a.at, text: a.text, pct: a.pct, status: a.status, note: a.note,
           mgr: a.mgr, inh: !!a.inh, heredadaA: a.handedTo && empleado(a.handedTo).name,
+          no: a.to, doneAt: a.doneAt ?? (a.status === 'done' ? a.at : undefined), // para el comparativo
           name: e.name, role: e.role, dept: e.dept,
         }
       })
