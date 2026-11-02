@@ -238,6 +238,7 @@ export default {
   'registros': 'records',
   'Exportar PDF': 'Export PDF',
   'Exportar Excel': 'Export Excel',
+  'reporte': 'report',
   'Sin registros para estos filtros.': 'No records for these filters.',
   'Acción tomada': 'Action taken',
   'Heredada a {nombre}': 'Carried over to {nombre}',

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { TURNOS, api, consultaRate, depto, fecha, iniciales, passwordValida, rol } from './comun.js'
 import { t } from './i18n.js'
 import Icono from './Icono.jsx'
-import { AvisoPassword, Campo, PasswordNueva, Rate } from './ui.jsx'
+import { AvisoPassword, BotonIdioma, Campo, PasswordNueva, Rate } from './ui.jsx'
 
 export default function Perfil({ user, recargar, avisar }) {
   const [perfil, setPerfil] = useState(null)
@@ -38,6 +38,7 @@ export default function Perfil({ user, recargar, avisar }) {
               <dt>{t('Correo')}</dt><dd>{perfil.email}</dd>
               <dt>{t('Departamento')}</dt><dd>{depto(perfil.dept)} · {perfil.area}</dd>
               <dt>{t('Turno')}</dt><dd>{perfil.shift} · <span className="mono">{TURNOS[perfil.shift]}</span></dd>
+              <dt>{t('Idioma')}</dt><dd><BotonIdioma /></dd>
               <dt>{t('Rate de aprobación')}</dt><dd><Rate valor={perfil.rate} /> <small className="muted" style={{ fontWeight: 400 }}>{t('a tiempo, últimos 30 días')}</small></dd>
             </dl>
           </section>
