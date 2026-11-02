@@ -10,11 +10,11 @@ export const rol = (k) => t(ROLES[k])
 export const depto = (k) => t(DEPARTAMENTOS[k])
 export const estado = (k) => t(ESTADOS[k])
 
-// `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente) o a ejecutores (Técnico, Ing. Jr)
+// `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente); `excepto` lo oculta a un puesto
 export const MODULOS = [
   { ruta: 'inicio', titulo: 'Inicio', icono: 'home' },
   { ruta: 'registrar', titulo: 'Registrar actividad', icono: 'plus', desc: 'Asigna actividades por puntos a tu equipo.', solo: 'encargado' },
-  { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', solo: 'ejecutor' },
+  { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte' },
   { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado' },
   { ruta: 'reportes', titulo: 'Reportes', icono: 'file', desc: 'Genera reportes por fecha, turno y hora.', solo: 'encargado' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },
@@ -23,7 +23,7 @@ export const MODULOS = [
 ]
 
 export const modulosDe = (user) =>
-  MODULOS.filter((m) => !m.solo || (m.solo === 'encargado') === user.encargado)
+  MODULOS.filter((m) => (!m.solo || user.encargado) && m.excepto !== user.role)
 
 export const iniciales = (nombre) => nombre.split(' ').map((p) => p[0]).slice(0, 2).join('')
 
@@ -49,6 +49,8 @@ export async function api(url, { method = 'GET', body } = {}) {
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
 export const hoy = () => new Date().toLocaleDateString('en-CA')
+// Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
+export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 
 export const promedio = (actividades) =>
   actividades.length ? Math.round(actividades.reduce((s, a) => s + a.pct, 0) / actividades.length) : 0

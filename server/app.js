@@ -14,6 +14,8 @@ const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
+// desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
+const conDesde = { ...porEmpleado, querystring: { type: 'object', properties: { desde: { type: 'string', format: 'date-time' } } } }
 const token = { type: 'string', minLength: 1, maxLength: 64 }
 // Mínimo 10 caracteres, mayúscula, minúscula, número y símbolo (las mismas reglas que muestra el frontend)
 const passwordNueva = {
@@ -159,6 +161,9 @@ export function build(opts = {}) {
   const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
   const vigentes = () => actividades.filter((a) => !a.handedTo)
+  // Lo del turno: lo que sigue abierto y lo realizado desde `desde`. Sin `desde`, todo
+  const delTurno = (acts, desde) =>
+    desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
   const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
 
   const conEmpleado = (handler) => async (req, reply) => {
@@ -268,10 +273,10 @@ export function build(opts = {}) {
   }))
 
   // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
-  app.get('/api/inicio/:no', { schema: porEmpleado }, conEmpleado((u) => {
-    // El encargado ve las actividades de su equipo; el ejecutor, solo las suyas
-    const alcance = esEncargado(u) ? equipo(u.no).map((e) => e.no) : [u.no]
-    const acts = vigentes().filter((a) => alcance.includes(a.to))
+  app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
+    // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
+    const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
+    const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
     return {
       diasPassword: diasPassword(u),
       asignadas: acts.length,
@@ -299,9 +304,9 @@ export function build(opts = {}) {
   }))
 
   // Equipo del encargado con sus actividades vigentes: alimenta Registrar, herencia, Monitoreo y Reportes
-  app.get('/api/equipo/:no', { schema: porEmpleado }, conEmpleado((u, req, reply) => {
+  app.get('/api/equipo/:no', { schema: conDesde }, conEmpleado((u, req, reply) => {
     if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
-    const acts = vigentes()
+    const acts = delTurno(vigentes(), req.query.desde)
     return asignables(u)
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role, dept, shift, boss }) => ({
@@ -324,7 +329,7 @@ export function build(opts = {}) {
       const a = {
         id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
         text: p.texto.trim(), pct: p.avance, status: p.avance === 100 ? 'done' : p.avance > 0 ? 'progress' : 'pending',
-        mgr: comentario.trim(), note: '',
+        mgr: comentario.trim(), note: '', ...(p.avance === 100 && { doneAt: at }),
       }
       actividades.push(a)
       return a
@@ -352,7 +357,11 @@ export function build(opts = {}) {
 
     const cambioEstado = estado !== a.status
     const cambioNota = nota.trim() !== a.note
-    Object.assign(a, { status: estado, pct: estado === 'done' ? 100 : avance, note: nota.trim() })
+    // doneAt: cuándo quedó realizada; se conserva si ya lo estaba y se borra si se reabre
+    Object.assign(a, {
+      status: estado, pct: estado === 'done' ? 100 : avance, note: nota.trim(),
+      doneAt: estado !== 'done' ? undefined : a.status === 'done' ? a.doneAt : ahora(),
+    })
     // El encargado se entera del cambio de estado y del comentario por separado, como en el mockup
     if (cambioEstado) notificar({ for: a.by, kind: estado, who: por, ref: a.id })
     if (cambioNota) notificar({ for: a.by, kind: 'comment', who: por, ref: a.id })

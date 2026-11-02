@@ -126,7 +126,8 @@ export default {
   // Inicio y notificaciones
   'Hola, {nombre}': 'Hi, {nombre}',
   'Turno de hoy': 'Today’s shift',
-  'Actividades asignadas': 'Assigned activities',
+  'Abiertas y realizadas hoy': 'Open and done today',
+  'Realizadas hoy': 'Done today',
   'Realizadas': 'Done',
   'Pendientes o incompletas': 'Pending or incomplete',
   'Accesos rápidos': 'Shortcuts',
@@ -188,7 +189,7 @@ export default {
   'Avance guardado y notificado a tu encargado.': 'Progress saved and your supervisor was notified.',
 
   // Monitoreo
-  'Empleados a tu cargo y su avance.': 'People reporting to you and their progress.',
+  'Empleados a tu cargo: actividades abiertas y realizadas hoy.': 'People reporting to you: open activities and those done today.',
   'Filtrar equipo': 'Filter team',
   'Directos': 'Direct reports',
   'Sin actividades.': 'No activities.',

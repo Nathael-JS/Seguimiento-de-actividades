@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, iniciales, modulosDe, rol } from './comun.js'
+import { api, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Buzon from './Buzon.jsx'
 import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
@@ -48,7 +48,7 @@ export default function Shell({ user, onLogout }) {
 
   // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros
   const recargar = useCallback(
-    () => api(`/api/inicio/${user.no}`).then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
+    () => api(`/api/inicio/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
     [user.no],
   )
   useEffect(() => { recargar() }, [recargar, ruta])

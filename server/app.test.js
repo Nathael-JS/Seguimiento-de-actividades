@@ -67,9 +67,9 @@ test('inicio del ejecutor cuenta solo sus actividades', async () => {
   assert.equal(d.notificaciones[0].who, 'Diego Herrera')
 })
 
-test('inicio del encargado cuenta todo su equipo, directos e indirectos', async () => {
-  // Diego (Ing. Full) tiene a Jorge y María: actividades 1-6
-  assert.equal((await inicio('10230')).json().asignadas, 6)
+test('inicio del encargado cuenta las suyas y las de todo su equipo, directos e indirectos', async () => {
+  // Diego (Ing. Full): las de Jorge y María (1-6) y la suya (11)
+  assert.equal((await inicio('10230')).json().asignadas, 7)
   // Laura (Gerente) tiene a todo Liquid Cooling: actividades 1-14
   assert.equal((await inicio('10001')).json().asignadas, 14)
 })
@@ -306,4 +306,27 @@ test('la fecha del último cambio de contraseña es un instante y los días se c
   const perfil = (await pedir(app, 'GET', '/api/perfil/10482')).body
   assert.ok(Math.abs(Date.parse(perfil.pwdChanged) - Date.now()) < 60_000)
   assert.equal(perfil.diasPassword, 90)
+})
+
+test('con desde, Inicio y Equipo muestran solo lo abierto y lo realizado ese día', async () => {
+  const app = build()
+  const hoy = new Date(Date.now() - 60_000).toISOString() // "hoy" empezó hace un minuto
+  const inicioDe = async (no, desde) => (await pedir(app, 'GET', `/api/inicio/${no}${desde ? `?desde=${desde}` : ''}`)).body
+  // Jorge: 1 realizada (29 oct) y 3 abiertas. Hoy solo cuentan las abiertas
+  assert.deepEqual([(await inicioDe('10482')).asignadas, (await inicioDe('10482', hoy)).asignadas], [4, 3])
+  assert.equal((await inicioDe('10482', hoy)).realizadas, 0)
+  // Al realizar una hoy, entra en "realizadas hoy" y queda con su instante
+  const hecha = (await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'done', avance: 100 })).body
+  assert.ok(Date.parse(hecha.doneAt) >= Date.parse(hoy))
+  assert.deepEqual([(await inicioDe('10482', hoy)).asignadas, (await inicioDe('10482', hoy)).realizadas], [3, 1])
+  // Reabrirla borra el instante; volver a guardarla realizada no lo cambia
+  assert.equal((await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'progress', avance: 90 })).body.doneAt, undefined)
+  // Registrar al 100 % también cuenta como realizada hoy
+  await pedir(app, 'POST', '/api/actividades', asignar({ puntos: [{ texto: 'Lista', avance: 100 }] }))
+  assert.equal((await inicioDe('10482', hoy)).realizadas, 1)
+  // Equipo (Monitoreo) aplica la misma regla; sin desde trae todo (Registrar, Reportes)
+  const jorge = async (desde) => (await pedir(app, 'GET', `/api/equipo/10230${desde ? `?desde=${desde}` : ''}`)).body.find((e) => e.no === '10482')
+  assert.ok(!(await jorge(hoy)).actividades.some((a) => a.id === 1))
+  assert.ok((await jorge()).actividades.some((a) => a.id === 1))
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10482?desde=ayer')).code, 400)
 })
