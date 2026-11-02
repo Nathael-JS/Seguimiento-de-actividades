@@ -18,11 +18,13 @@ const PAGINAS = {
   monitoreo: Monitoreo, reportes: Reportes, buzon: Buzon, departamentos: Departamentos, perfil: Perfil,
 }
 
-const rutaActual = () => location.hash.slice(1) || 'inicio'
+// #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)
+const rutaDe = (hash) => hash.slice(1).split('?')[0] || 'inicio'
 
 export default function Shell({ user, onLogout }) {
   const modulos = modulosDe(user)
-  const [ruta, setRuta] = useState(rutaActual)
+  const [hash, setHash] = useState(location.hash)
+  const ruta = rutaDe(hash)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
@@ -32,7 +34,7 @@ export default function Shell({ user, onLogout }) {
 
   useEffect(() => {
     const cambio = () => {
-      setRuta(rutaActual())
+      setHash(location.hash)
       setMenuAbierto(false)
     }
     addEventListener('hashchange', cambio)
@@ -109,7 +111,8 @@ export default function Shell({ user, onLogout }) {
           </a>
         </header>
         <main className="page">
-          <Pagina user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
+          {/* key: cambiar de dirección (también solo el ?lider=) vuelve a montar la página con su estado inicial */}
+          <Pagina key={hash} user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
         </main>
       </div>
 

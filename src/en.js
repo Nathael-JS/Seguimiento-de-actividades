@@ -195,6 +195,8 @@ export default {
   'Todos tienen actividades.': 'Everyone has activities.',
   'Nada por ahora.': 'Nothing for now.',
   'Ver {n} más en Monitoreo': 'See {n} more in Monitoring',
+  'Ver el equipo de {nombre} en Monitoreo': 'See {nombre}’s team in Monitoring',
+  'Sin actividades': 'No activities',
 
   // Mis actividades
   'Tareas asignadas': 'Assigned tasks',

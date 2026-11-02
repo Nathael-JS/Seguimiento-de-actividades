@@ -25,5 +25,5 @@ test('resumen del área: por líder con toda su rama, por turno y alertas', () =
 test('equipo vacío no rompe ni divide entre cero', () => {
   const r = resumenArea([], '2026-11-02')
   assert.deepEqual([r.lideres, r.incompletas, r.atrasadas, r.sinActividades], [[], [], [], []])
-  assert.ok(r.turnos.every((x) => x.avance === 0 && x.actividades === 0))
+  assert.ok(r.turnos.every((x) => x.avance === null && x.actividades === 0))
 })

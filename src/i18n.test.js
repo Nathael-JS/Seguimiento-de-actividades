@@ -14,6 +14,8 @@ test('todo texto traducible tiene su versión en inglés', () => {
     // t('texto') y t(condición ? 'a' : 'b')
     for (const [, s] of codigo.matchAll(new RegExp(`\\bt\\(\\s*${literal}`, 'g'))) claves.add(s)
     for (const [, a, b] of codigo.matchAll(new RegExp(`\\bt\\([^)']*\\?\\s*${literal}\\s*:\\s*${literal}`, 'g'))) claves.add(a).add(b)
+    // Singular y plural: cuenta(n, 'uno', 'varios')
+    for (const [, a, b] of codigo.matchAll(new RegExp(`\\bcuenta\\([^,]+,\\s*${literal},\\s*${literal}`, 'g'))) claves.add(a).add(b)
   }
   // Listas que se traducen al mostrarse
   for (const archivo of ['./Buzon.jsx', './Reportes.jsx', './Departamentos.jsx', './Registro.jsx']) {

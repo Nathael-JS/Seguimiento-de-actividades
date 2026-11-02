@@ -11,7 +11,16 @@ export function Notificacion({ n }) {
   return <>{quien} {t('actualizó')} “{n.actividad}” → {nombreEstado(n.kind)}</>
 }
 
+// pct null = sin actividades: anillo vacío con "—" (un 0 % se leería como atraso)
 export function Anillo({ pct, size = 64, width = 7 }) {
+  if (pct == null) {
+    return (
+      <span className="ring" role="img" aria-label={t('Sin actividades')}>
+        <svg width={size} height={size}><circle className="ring-track" cx={size / 2} cy={size / 2} r={(size - width) / 2} fill="none" strokeWidth={width} /></svg>
+        <b className="muted">—</b>
+      </span>
+    )
+  }
   const r = (size - width) / 2
   const c = 2 * Math.PI * r
   const nivel = pct >= 100 ? 'is-done' : pct < 35 ? 'is-low' : pct < 70 ? 'is-mid' : ''

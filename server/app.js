@@ -282,7 +282,7 @@ export function build(opts = {}) {
       asignadas: acts.length,
       realizadas: acts.filter((a) => a.status === 'done').length,
       abiertas: acts.filter((a) => a.status === 'pending' || a.status === 'incomplete').length,
-      avance: acts.length ? Math.round(acts.reduce((s, a) => s + a.pct, 0) / acts.length) : 0,
+      avance: acts.length ? Math.round(acts.reduce((s, a) => s + a.pct, 0) / acts.length) : null, // null: sin actividades
       notificaciones: notificaciones
         .filter((n) => n.for === u.no)
         .sort((a, b) => b.id - a.id)

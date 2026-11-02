@@ -3,11 +3,14 @@ import { api, esEncargado, iniciales, inicioDeHoy, promedio, rol } from './comun
 import { t } from './i18n.js'
 import { Anillo, Estado } from './ui.jsx'
 
+const conAvance = (acts) => (acts.length ? promedio(acts) : null)
+
 export default function Monitoreo({ user }) {
   const [equipo, setEquipo] = useState(null)
   const [error, setError] = useState('')
-  // 'todos', 'directos' o el número de un líder: él y quienes le reportan directo
-  const [filtro, setFiltro] = useState('todos')
+  // 'todos', 'directos' o el número de un líder: él y quienes le reportan directo.
+  // #monitoreo?lider=N (desde el Inicio del gerente) abre con ese líder elegido
+  const [filtro, setFiltro] = useState(() => new URLSearchParams(location.hash.split('?')[1]).get('lider') ?? 'todos')
 
   useEffect(() => {
     api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then(setEquipo).catch((e) => setError(e.message))
@@ -29,7 +32,7 @@ export default function Monitoreo({ user }) {
           <p>{t('Empleados a tu cargo: actividades abiertas y realizadas hoy.')}</p>
         </div>
         <div className="row">
-          <Anillo pct={promedio(equipo.flatMap((e) => e.actividades))} />
+          <Anillo pct={conAvance(equipo.flatMap((e) => e.actividades))} />
           <span className="muted" style={{ fontSize: 13 }}>{t('Avance promedio')}</span>
         </div>
       </div>
@@ -55,7 +58,7 @@ export default function Monitoreo({ user }) {
                   <div className="muted" style={{ fontSize: 12 }}>{rol(e.role)} · <span className="mono">{e.no}</span> · <span className="nowrap">{t('Turno')} {e.shift}</span></div>
                   <div className="tree">↳ {nombres[e.boss] ?? '—'}</div>
                 </div>
-                <Anillo pct={promedio(e.actividades)} size={72} width={8} />
+                <Anillo pct={conAvance(e.actividades)} size={72} width={8} />
               </header>
               {e.actividades.length ? (
                 <ul className="mini">
