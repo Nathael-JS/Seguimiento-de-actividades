@@ -67,6 +67,7 @@ export default function Monitoreo({ user }) {
                     <li key={a.id}>
                       <span title={a.text}>{a.text}</span>
                       <span className="row" style={{ gap: 8, flex: 'none' }}>
+                        {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
                         <span className="mono muted">{a.pct}%</span>
                         <Estado estado={a.status} />
                       </span>

@@ -111,6 +111,18 @@ const actualizarSchema = {
   },
 }
 
+// Tarea que registra el propio técnico / Ing. Jr. cierre: fin de su turno (instante UTC calculado en su navegador)
+const propiaSchema = {
+  body: objeto(['por', 'texto', 'prioridad', 'avance', 'hoy'], {
+    por: noEmpleado,
+    texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+    prioridad: { enum: ['diaria', 'urgente'] },
+    avance: { type: 'integer', minimum: 0, maximum: 100 },
+    hoy: { type: 'string', format: 'date' },
+    cierre: { type: 'string', format: 'date-time' },
+  }),
+}
+
 const heredarSchema = {
   params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
   body: {
@@ -141,6 +153,8 @@ const reporteSchema = {
 const ahora = () => new Date().toISOString()
 const DIA = 86_400_000
 const VIGENCIA_PASSWORD = 90 // días
+// Fecha del navegador aceptable: a un día o menos de la del servidor (cubre cualquier zona horaria)
+const hoyValido = (hoy) => Math.abs(Date.parse(hoy) - Date.parse(new Date().toISOString().slice(0, 10))) <= DIA
 const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.now() - Date.parse(u.pwdChanged)) / DIA)
 // j•••••@empresa.com
 const ocultarCorreo = (email) => email.replace(/^(.).*(@.*)$/, '$1•••••$2')
@@ -188,7 +202,7 @@ export function build(opts = {}) {
       if (a.avisoAtraso || (a.status !== 'pending' && a.status !== 'progress') || a.date >= hoy) continue
       a.avisoAtraso = true
       notificar({ for: a.to, kind: 'overdue', ref: a.id })
-      notificar({ for: a.by, kind: 'overdue', who: a.to, ref: a.id })
+      notificar({ for: responsable(a), kind: 'overdue', who: a.to, ref: a.id })
     }
     for (const u of usuarios) {
       const dias = diasPassword(u)
@@ -202,9 +216,26 @@ export function build(opts = {}) {
     Object.assign(u, { password, pwdChanged: ahora() })
     notificaciones.filter((n) => n.for === u.no && n.kind === 'password').forEach((n) => (n.read = true))
   }
+  const urgenteAbierta = (a) => a.prioridad === 'urgente' && !a.cerrada && a.status !== 'done'
   const delTurno = (acts, desde) =>
     desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
   const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
+  // A quién se avisa de una actividad: quien la asignó, o el encargado del empleado si la registró él mismo
+  const responsable = (a) => (a.propia ? empleado(a.to).boss : a.by)
+  // Validación de fin de turno: una urgente que llegó a su cierre queda fija en su estado (sin cambios ni herencia);
+  // si no llegó al 100 % queda incompleta y se avisa al empleado y a su encargado.
+  // shortcut: se revisa en cada petición porque no hay tareas programadas; pasar a un job con la base de datos
+  const cerrarUrgentes = () => {
+    for (const a of actividades) {
+      if (a.prioridad !== 'urgente' || a.cerrada || Date.now() < Date.parse(a.cierreTurno)) continue
+      a.cerrada = true
+      if (a.status === 'done') continue
+      a.status = 'incomplete'
+      notificar({ for: a.to, kind: 'urgent-closed', ref: a.id })
+      notificar({ for: responsable(a), kind: 'urgent-closed', who: a.to, ref: a.id })
+    }
+  }
+  app.addHook('onRequest', async () => cerrarUrgentes())
 
   const conEmpleado = (handler) => async (req, reply) => {
     const u = empleado(req.params.no)
@@ -339,8 +370,7 @@ export function build(opts = {}) {
   app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
     // Un reloj mal puesto en el navegador marcaría como atrasado todo y avisaría a todos, sin vuelta atrás:
     // solo se aceptan fechas a un día o menos de la del servidor (cubre cualquier zona horaria)
-    const { hoy } = req.query
-    if (hoy && Math.abs(Date.parse(hoy) - Date.parse(ahora().slice(0, 10))) <= 86_400_000) generarAvisos(hoy)
+    if (req.query.hoy && hoyValido(req.query.hoy)) generarAvisos(req.query.hoy)
     // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
     const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
     const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
@@ -362,6 +392,7 @@ export function build(opts = {}) {
             who: empleado(n.who)?.name,
             actividad: a?.text,
             activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
+            urgente: a?.prioridad === 'urgente',
             count: n.count,
             at: n.at,
             read: n.read,
@@ -418,11 +449,33 @@ export function build(opts = {}) {
     return reply.code(201).send(nuevas)
   })
 
+  // El técnico / Ing. Jr agrega una tarea suya: se toman sus datos tal cual (él mismo, su turno, la fecha de hoy)
+  app.post('/api/actividades/propia', { schema: propiaSchema }, async (req, reply) => {
+    const { por, texto, prioridad, avance, hoy, cierre } = req.body
+    const u = empleado(por)
+    if (!u || esEncargado(u)) return reply.code(403).send({ error: 'Solo técnicos e Ing. Jr agregan tareas propias.' })
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    // La urgente se cierra al terminar el turno: debe llegar el cierre y estar dentro de las próximas 24 h
+    const espera = Date.parse(cierre) - Date.now()
+    if (prioridad === 'urgente' && !(espera > 0 && espera <= DIA)) {
+      return reply.code(400).send({ error: 'No se pudo calcular el fin de tu turno.' })
+    }
+    const at = ahora()
+    const a = {
+      id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
+      pct: avance, status: avance === 100 ? 'done' : avance > 0 ? 'progress' : 'pending', mgr: '', note: '',
+      propia: true, prioridad, ...(prioridad === 'urgente' && { cierreTurno: cierre }), ...(avance === 100 && { doneAt: at }),
+    }
+    actividades.push(a)
+    if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: a.id })
+    return reply.code(201).send(a)
+  })
+
   app.get('/api/actividades/:no', { schema: porEmpleado }, conEmpleado((u) =>
     vigentes()
       .filter((a) => a.to === u.no)
-      // Las realizadas al final, el resto de la más nueva a la más vieja
-      .sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.id - a.id)
+      // Primero las urgentes abiertas, las realizadas al final; dentro de cada grupo, la más nueva primero
+      .sort((a, b) => urgenteAbierta(b) - urgenteAbierta(a) || (a.status === 'done') - (b.status === 'done') || b.id - a.id)
       .map((a) => ({ ...a, byName: empleado(a.by)?.name })),
   ))
 
@@ -434,6 +487,7 @@ export function build(opts = {}) {
     const estado = avance === 100 ? 'done' : req.body.estado
     if (a.to !== por) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad puede actualizarla.' })
     if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
+    if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
 
     const cambioEstado = estado !== a.status
     const cambioNota = nota.trim() !== a.note
@@ -443,8 +497,8 @@ export function build(opts = {}) {
       doneAt: estado !== 'done' ? undefined : a.status === 'done' ? a.doneAt : ahora(),
     })
     // El encargado se entera del cambio de estado y del comentario por separado, como en el mockup
-    if (cambioEstado) notificar({ for: a.by, kind: estado, who: por, ref: a.id })
-    if (cambioNota) notificar({ for: a.by, kind: 'comment', who: por, ref: a.id })
+    if (cambioEstado) notificar({ for: responsable(a), kind: estado, who: por, ref: a.id })
+    if (cambioNota) notificar({ for: responsable(a), kind: 'comment', who: por, ref: a.id })
     return { ...a, byName: empleado(a.by)?.name }
   })
 
@@ -455,6 +509,7 @@ export function build(opts = {}) {
     const encargado = empleado(por)
     const suyos = encargado && esEncargado(encargado) ? asignables(encargado).map((e) => e.no) : []
     if (!suyos.includes(a.to)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    if (a.prioridad === 'urgente') return reply.code(409).send({ error: 'Las tareas urgentes no se heredan.' })
     if (a.handedTo || !['pending', 'incomplete'].includes(a.status)) {
       return reply.code(409).send({ error: 'Solo se heredan actividades pendientes o incompletas, una sola vez.' })
     }
@@ -493,7 +548,8 @@ export function build(opts = {}) {
         const e = empleado(a.to)
         return {
           id: a.id, date: a.date, shift: a.shift, at: a.at, text: a.text, pct: a.pct, status: a.status, note: a.note,
-          mgr: a.mgr, inh: !!a.inh, heredadaA: a.handedTo && empleado(a.handedTo).name,
+          mgr: a.mgr, inh: !!a.inh, heredadaA: a.handedTo && empleado(a.handedTo).name, prioridad: a.prioridad, cerrada: !!a.cerrada,
+          no: a.to, doneAt: a.doneAt ?? (a.status === 'done' ? a.at : undefined), // para el comparativo
           name: e.name, role: e.role, dept: e.dept,
         }
       })
