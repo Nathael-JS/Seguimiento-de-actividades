@@ -158,7 +158,8 @@ test('sirve el frontend compilado; /assets con caché larga e index.html sin cac
   assert.match(res.headers['cache-control'], /immutable/)
 })
 
-const heredar = (app, id, por, para) => pedir(app, 'POST', `/api/actividades/${id}/heredar`, { por, para })
+// hoy por defecto = el día de los datos de prueba, para que las fechas esperadas no dependan del reloj
+const heredar = (app, id, por, para, hoy = '2026-10-29') => pedir(app, 'POST', `/api/actividades/${id}/heredar`, { por, para, hoy })
 
 test('equipo trae jefe y actividades vigentes de cada miembro', async () => {
   const jorge = (await pedir(build(), 'GET', '/api/equipo/10230')).body.find((e) => e.no === '10482')
@@ -183,7 +184,7 @@ test('heredar al mismo empleado: día siguiente, mismo turno; la original sale d
 test('heredar a otro empleado: siguiente turno; del C pasa al A del día siguiente', async () => {
   const app = build()
   // Luis (turno B, incompleta) → Héctor: mismo día, turno C
-  const b = (await heredar(app, 9, '10251', '10547')).body
+  const b = (await heredar(app, 9, '10251', '10547', '2026-10-28')).body
   assert.deepEqual([b.to, b.date, b.shift, b.pct], ['10547', '2026-10-28', 'C', 65])
   // Una actividad del turno C heredada a otro pasa al turno A del día siguiente
   const [c] = (await pedir(app, 'POST', '/api/actividades', asignar({ turno: 'C', fecha: '2026-10-31', puntos: [{ texto: 'Ronda nocturna', avance: 0 }] }))).body
@@ -280,4 +281,29 @@ test('departamentos: todos los empleados con rate y sin datos sensibles', async 
   assert.equal(lista.length, 15)
   assert.deepEqual(Object.keys(lista[0]).sort(), ['area', 'dept', 'name', 'no', 'rate', 'role', 'shift'])
   assert.equal(lista.find((e) => e.no === '10604').rate, 76)
+})
+
+test('heredar una actividad de días anteriores cuenta desde hoy, no desde su fecha', async () => {
+  const app = build()
+  // Actividad 3: 29 oct, turno A. Se hereda el 2 nov
+  assert.equal((await heredar(app, 3, '10230', '10482', '2026-11-02')).body.date, '2026-11-03')
+  // Actividad 9: 28 oct, turno B, a otro empleado: siguiente turno (C) del día de hoy
+  const otro = (await heredar(app, 9, '10251', '10547', '2026-11-02')).body
+  assert.deepEqual([otro.date, otro.shift], ['2026-11-02', 'C'])
+  assert.equal((await pedir(app, 'POST', '/api/actividades/8/heredar', { por: '10112', para: '10533' })).code, 400) // falta hoy
+})
+
+test('actualizar con 100 % la marca como realizada', async () => {
+  const app = build()
+  const { body } = await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'pending', avance: 100 })
+  assert.deepEqual([body.status, body.pct], ['done', 100])
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones[0].kind, 'done')
+})
+
+test('la fecha del último cambio de contraseña es un instante y los días se cuentan desde él', async () => {
+  const app = build()
+  await pedir(app, 'POST', '/api/perfil/10482/password', { actual: 'demo1234', nueva: CLAVE })
+  const perfil = (await pedir(app, 'GET', '/api/perfil/10482')).body
+  assert.ok(Math.abs(Date.parse(perfil.pwdChanged) - Date.now()) < 60_000)
+  assert.equal(perfil.diasPassword, 90)
 })

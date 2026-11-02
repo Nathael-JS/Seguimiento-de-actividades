@@ -111,7 +111,7 @@ export default function Reportes({ user }) {
         <section className="reporte">
           <div className="row between" style={{ flexWrap: 'wrap' }}>
             <p className="muted">
-              <b className="mono" style={{ color: 'var(--ink)' }}>{filas.length}</b> {t('registros')} · {t('Avance promedio')}: <b className="mono" style={{ color: 'var(--ink)' }}>{promedio(filas)}%</b>
+              <b className="mono" style={{ color: 'var(--ink)' }}>{filas.length}</b> {t('registros')} · {t('Avance promedio')}: <b className="mono" style={{ color: 'var(--ink)' }}>{promedio(filas.filter((f) => !f.heredadaA))}%</b>
               <span className="solo-impresion"> · {desde} – {hasta}{turno && ` · ${t('Turno')} ${turno}`}</span>
             </p>
             <div className="row no-imprimir">

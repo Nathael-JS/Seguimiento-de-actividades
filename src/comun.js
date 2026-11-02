@@ -69,5 +69,6 @@ export const passwordValida = (p1, p2) => reglasPassword(p1, p2).every(([, ok]) 
 // El servidor guarda instantes en UTC; aquí se muestran en la hora local de quien mira
 const locale = () => (idiomaActual() === 'en' ? 'en-US' : 'es-MX')
 export const hora = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', hour12: false })
+export const fecha = (iso) => new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
 export const fechaHora = (iso) =>
   new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
