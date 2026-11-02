@@ -74,5 +74,15 @@ export const hora = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: 
 // Fecha de trabajo AAAA-MM-DD (sin hora) como "28 oct"; se lee como medianoche local para no correr de día
 export const dia = (fecha) => new Date(`${fecha}T00:00`).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })
 export const fecha = (iso) => new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
+// Encabezado de grupo del Buzón según el día local: "Hoy", "Ayer" o la fecha
+export function grupoDia(iso, ahora = new Date()) {
+  const clave = (d) => d.toLocaleDateString('en-CA')
+  const ayer = new Date(ahora)
+  ayer.setDate(ayer.getDate() - 1)
+  const d = new Date(iso)
+  if (clave(d) === clave(ahora)) return t('Hoy')
+  if (clave(d) === clave(ayer)) return t('Ayer')
+  return d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })
+}
 export const fechaHora = (iso) =>
   new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })

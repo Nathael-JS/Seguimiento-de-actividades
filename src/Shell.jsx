@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
+import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Buzon from './Buzon.jsx'
 import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
@@ -48,12 +48,19 @@ export default function Shell({ user, onLogout }) {
     return () => removeEventListener('keydown', escape)
   }, [menuAbierto])
 
-  // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros
+  // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros.
+  // hoy hace que el servidor genere los avisos de atraso con la fecha local
   const recargar = useCallback(
-    () => api(`/api/inicio/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
+    () => api(`/api/inicio/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}&hoy=${hoy()}`)
+      .then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
     [user.no],
   )
   useEffect(() => { recargar() }, [recargar, ruta])
+  // Avisos al momento: contador y Buzón se actualizan solos cada 30 s mientras la pestaña está a la vista
+  useEffect(() => {
+    const id = setInterval(() => document.visibilityState === 'visible' && recargar(), 30_000)
+    return () => clearInterval(id)
+  }, [recargar])
 
   const avisar = useCallback((mensaje) => {
     clearTimeout(temporizador.current)

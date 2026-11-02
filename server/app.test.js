@@ -330,3 +330,32 @@ test('con desde, Inicio y Equipo muestran solo lo abierto y lo realizado ese dí
   assert.ok((await jorge()).actividades.some((a) => a.id === 1))
   assert.equal((await pedir(app, 'GET', '/api/inicio/10482?desde=ayer')).code, 400)
 })
+
+test('avisos automáticos: atrasadas al ejecutor y a quien asignó, contraseña por vencer, sin duplicar', async () => {
+  const app = build()
+  const inicioHoy = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}?hoy=2026-11-02`)).body.notificaciones
+  const jorge = await inicioHoy('10482')
+  // Sus abiertas del 29 oct: 2 y 4 en proceso, 3 pendiente
+  const atrasos = jorge.filter((n) => n.kind === 'overdue')
+  assert.deepEqual(atrasos.map((n) => n.activityTo).sort(), ['10482', '10482', '10482'])
+  assert.ok(atrasos.every((n) => n.who === undefined)) // para el ejecutor: "Tu actividad … está atrasada"
+  assert.equal(jorge.filter((n) => n.kind === 'password').length, 1)
+  // Diego (quien las asignó) recibe las de su equipo, con el nombre de quién la tiene
+  const diego = (await inicioHoy('10230')).filter((n) => n.kind === 'overdue')
+  assert.ok(diego.some((n) => n.who === 'Jorge Salinas' && n.actividad === 'Prueba de fuga a 3 unidades en espera'))
+  // Volver a consultar no repite avisos
+  assert.equal((await inicioHoy('10482')).length, jorge.length)
+  // Sin hoy no se generan (Monitoreo, pruebas)
+  assert.equal((await pedir(build(), 'GET', '/api/inicio/10482')).body.notificaciones.length, 2)
+  // La incompleta (9) no cuenta como atrasada: ya avisó al cambiar de estado
+  assert.ok(!(await inicioHoy('10511')).some((n) => n.kind === 'overdue'))
+})
+
+test('marcar una notificación como leída: solo la propia', async () => {
+  const app = build()
+  assert.equal((await pedir(app, 'POST', '/api/notificaciones/10482/1/leida')).code, 200)
+  const ns = (await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones
+  assert.deepEqual(ns.map((n) => [n.id, n.read]), [[2, false], [1, true]])
+  assert.equal((await pedir(app, 'POST', '/api/notificaciones/10482/3/leida')).code, 404) // la 3 es de Laura
+  assert.equal(ns.find((n) => n.id === 2).activityTo, '10482')
+})

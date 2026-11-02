@@ -15,7 +15,12 @@ const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
 // desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
-const conDesde = { ...porEmpleado, querystring: { type: 'object', properties: { desde: { type: 'string', format: 'date-time' } } } }
+// hoy: fecha local de quien consulta (AAAA-MM-DD); con ella se generan los avisos de atraso
+const conDesde = {
+  ...porEmpleado,
+  querystring: { type: 'object', properties: { desde: { type: 'string', format: 'date-time' }, hoy: { type: 'string', format: 'date' } } },
+}
+const notificacionSchema = { params: { type: 'object', properties: { no: noEmpleado, id: { type: 'integer', minimum: 1 } } } }
 const token = { type: 'string', minLength: 1, maxLength: 64 }
 // Mínimo 10 caracteres, mayúscula, minúscula, número y símbolo (las mismas reglas que muestra el frontend)
 const passwordNueva = {
@@ -162,6 +167,24 @@ export function build(opts = {}) {
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
   const vigentes = () => actividades.filter((a) => !a.handedTo)
   // Lo del turno: lo que sigue abierto y lo realizado desde `desde`. Sin `desde`, todo
+  // Avisos automáticos, una sola vez cada uno:
+  // - actividad pendiente o en proceso con fecha anterior a hoy → al ejecutor y a quien la asignó
+  // - contraseña que vence en 15 días o menos → a su dueño (otra vez solo si la cambia y vuelve a acercarse)
+  // shortcut: se generan al consultar Inicio porque no hay tareas programadas; pasar a un job con la base de datos
+  const generarAvisos = (hoy) => {
+    for (const a of vigentes()) {
+      if (a.avisoAtraso || (a.status !== 'pending' && a.status !== 'progress') || a.date >= hoy) continue
+      a.avisoAtraso = true
+      notificar({ for: a.to, kind: 'overdue', ref: a.id })
+      notificar({ for: a.by, kind: 'overdue', who: a.to, ref: a.id })
+    }
+    for (const u of usuarios) {
+      const dias = diasPassword(u)
+      if (dias > 15 || u.avisoPassword === u.pwdChanged) continue
+      u.avisoPassword = u.pwdChanged
+      notificar({ for: u.no, kind: 'password', count: Math.max(dias, 0) })
+    }
+  }
   const delTurno = (acts, desde) =>
     desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
   const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
@@ -274,6 +297,7 @@ export function build(opts = {}) {
 
   // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
   app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
+    if (req.query.hoy) generarAvisos(req.query.hoy)
     // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
     const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
     const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
@@ -286,15 +310,19 @@ export function build(opts = {}) {
       notificaciones: notificaciones
         .filter((n) => n.for === u.no)
         .sort((a, b) => b.id - a.id)
-        .map((n) => ({
-          id: n.id,
-          kind: n.kind,
-          who: empleado(n.who)?.name,
-          actividad: actividades.find((a) => a.id === n.ref)?.text,
-          count: n.count,
-          at: n.at,
-          read: n.read,
-        })),
+        .map((n) => {
+          const a = actividades.find((x) => x.id === n.ref)
+          return {
+            id: n.id,
+            kind: n.kind,
+            who: empleado(n.who)?.name,
+            actividad: a?.text,
+            activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
+            count: n.count,
+            at: n.at,
+            read: n.read,
+          }
+        }),
     }
   }))
 
@@ -302,6 +330,13 @@ export function build(opts = {}) {
     notificaciones.filter((n) => n.for === u.no).forEach((n) => (n.read = true))
     return { ok: true }
   }))
+
+  app.post('/api/notificaciones/:no/:id/leida', { schema: notificacionSchema }, async (req, reply) => {
+    const n = notificaciones.find((x) => x.id === req.params.id && x.for === req.params.no)
+    if (!n) return reply.code(404).send({ error: 'Notificación no encontrada.' })
+    n.read = true
+    return { ok: true }
+  })
 
   // Equipo del encargado con sus actividades vigentes: alimenta Registrar, herencia, Monitoreo y Reportes
   app.get('/api/equipo/:no', { schema: conDesde }, conEmpleado((u, req, reply) => {

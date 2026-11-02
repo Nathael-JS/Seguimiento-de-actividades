@@ -10,3 +10,11 @@ test('Mis actividades para todos menos el Gerente; Registrar, Monitoreo y Report
   assert.ok(rutas('sr', true).includes('mis-actividades'))
   assert.ok(!rutas('gte', true).includes('mis-actividades'))
 })
+
+test('grupoDia: Hoy, Ayer o la fecha, según el día local', async () => {
+  const { grupoDia } = await import('./comun.js')
+  const ahora = new Date(2026, 10, 2, 9, 0) // 2 nov, 09:00 local
+  assert.equal(grupoDia(new Date(2026, 10, 2, 0, 5).toISOString(), ahora), 'Hoy')
+  assert.equal(grupoDia(new Date(2026, 10, 1, 23, 59).toISOString(), ahora), 'Ayer')
+  assert.match(grupoDia(new Date(2026, 9, 29, 12, 0).toISOString(), ahora), /29/)
+})
