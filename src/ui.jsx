@@ -1,17 +1,33 @@
 import { useState } from 'react'
-import { fechaHora, estado as nombreEstado, reglasPassword } from './comun.js'
+import { api, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
 
 export function Notificacion({ n }) {
   const quien = <b>{n.who}</b>
-  if (n.kind === 'assigned') return <>{quien} {t('te asignó {n} actividades', { n: n.count })}</>
+  if (n.kind === 'assigned') return <>{quien} {t(n.count === 1 ? 'te asignó {n} actividad' : 'te asignó {n} actividades', { n: n.count })}</>
   if (n.kind === 'comment') return <>{quien} {t('comentó en')} “{n.actividad}”</>
   if (n.kind === 'inherited') return <>{quien} {t('heredó')} “{n.actividad}”</>
+  if (n.kind === 'overdue') {
+    // Sin who: el aviso es para quien tiene la actividad; con who: para quien la asignó
+    return n.who ? <>{quien} {t('tiene atrasada')} “{n.actividad}”</> : <>{t('Tu actividad')} “{n.actividad}” {t('está atrasada')}</>
+  }
+  if (n.kind === 'password') {
+    return n.count > 0 ? t(n.count === 1 ? 'Tu contraseña vence en {n} día' : 'Tu contraseña vence en {n} días', { n: n.count }) : t('Tu contraseña venció.')
+  }
   return <>{quien} {t('actualizó')} “{n.actividad}” → {nombreEstado(n.kind)}</>
 }
 
+// pct null = sin actividades: anillo vacío con "—" (un 0 % se leería como atraso)
 export function Anillo({ pct, size = 64, width = 7 }) {
+  if (pct == null) {
+    return (
+      <span className="ring" role="img" aria-label={t('Sin actividades')}>
+        <svg width={size} height={size}><circle className="ring-track" cx={size / 2} cy={size / 2} r={(size - width) / 2} fill="none" strokeWidth={width} /></svg>
+        <b className="muted">—</b>
+      </span>
+    )
+  }
   const r = (size - width) / 2
   const c = 2 * Math.PI * r
   const nivel = pct >= 100 ? 'is-done' : pct < 35 ? 'is-low' : pct < 70 ? 'is-mid' : ''
@@ -99,7 +115,36 @@ export function BotonIdioma() {
   )
 }
 
-export function NotificacionesRecientes({ notificaciones }) {
+// A dónde lleva una notificación: a atender la actividad (la propia o la del equipo) o al Perfil
+function destinoDe(n, user) {
+  if (n.kind === 'password') return 'perfil'
+  return (n.activityTo ?? user.no) === user.no ? 'mis-actividades' : 'monitoreo'
+}
+
+// Notificación que se puede tocar: la marca como leída y lleva a donde se atiende
+export function ItemNotificacion({ n, user, recargar, avatar = false }) {
+  function abrir() {
+    // No se espera ni se avisa si falla: el enlace igual lleva a la actividad y la próxima recarga corrige el contador
+    if (!n.read) api(`/api/notificaciones/${user.no}/${n.id}/leida`, { method: 'POST' }).then(recargar, () => {})
+  }
+  return (
+    <li>
+      <a className={`notif${n.read ? '' : ' unread'}`} href={`#${destinoDe(n, user)}`} onClick={abrir}>
+        <span className={`ndot ${n.kind}`} />
+        {avatar && (
+          <span className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{n.who ? iniciales(n.who) : <Icono nombre="alert" />}</span>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Notificacion n={n} />
+          <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{fechaHora(n.at)}</div>
+        </div>
+        {avatar && !n.read && <span className="tag">{t('Nueva')}</span>}
+      </a>
+    </li>
+  )
+}
+
+export function NotificacionesRecientes({ user, notificaciones, recargar }) {
   return (
     <section className="card">
       <div className="row between" style={{ marginBottom: 12 }}>
@@ -108,17 +153,20 @@ export function NotificacionesRecientes({ notificaciones }) {
       </div>
       {notificaciones.length ? (
         <ul className="list">
-          {notificaciones.slice(0, 5).map((n) => (
-            <li key={n.id}>
-              <span className={`ndot ${n.kind}`} />
-              <div className={n.read ? '' : 'unread'}>
-                <Notificacion n={n} />
-                <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{fechaHora(n.at)}</div>
-              </div>
-            </li>
-          ))}
+          {notificaciones.slice(0, 5).map((n) => <ItemNotificacion key={n.id} n={n} user={user} recargar={recargar} />)}
         </ul>
       ) : <p className="muted">{t('Sin notificaciones.')}</p>}
     </section>
+  )
+}
+
+// Rate de aprobación con barra; naranja por debajo de 85 %
+export function Rate({ valor }) {
+  if (valor == null) return <span className="muted">{t('Sin datos')}</span>
+  return (
+    <span className={`rate${valor < 85 ? ' lo' : ''}`}>
+      <span className="bar"><i style={{ width: `${valor}%` }} /></span>
+      <span className="mono">{valor}%</span>
+    </span>
   )
 }

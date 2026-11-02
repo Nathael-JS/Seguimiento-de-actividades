@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { DEPARTAMENTOS, TURNOS, api, depto, iniciales, rol } from './comun.js'
+import { DEPARTAMENTOS, TURNOS, api, consultaRate, depto, iniciales, rol } from './comun.js'
 import { t } from './i18n.js'
+import { Rate } from './ui.jsx'
 
 export default function Departamentos() {
   const [empleados, setEmpleados] = useState(null)
@@ -8,7 +9,7 @@ export default function Departamentos() {
   const [dept, setDept] = useState('lc')
 
   useEffect(() => {
-    api('/api/departamentos').then(setEmpleados).catch((e) => setError(e.message))
+    api(`/api/departamentos?${consultaRate()}`).then(setEmpleados).catch((e) => setError(e.message))
   }, [])
 
   if (error) return <p className="error" role="alert">{error}</p>
@@ -20,7 +21,7 @@ export default function Departamentos() {
     <>
       <div className="page-head">
         <h1>{t('Departamentos')}</h1>
-        <p>{t('Departamentos registrados con su plantilla completa.')}</p>
+        <p>{t('Departamentos registrados con su plantilla completa.')} {t('Rate de aprobación: % de actividades de los últimos 30 días realizadas a tiempo.')}</p>
       </div>
 
       <div className="tabs" role="tablist" aria-label={t('Departamentos')}>
@@ -44,15 +45,7 @@ export default function Departamentos() {
                 <td className="mono">{e.no}</td>
                 <td className="nowrap">{e.shift} <span className="muted mono" style={{ fontSize: 12 }}>{TURNOS[e.shift]}</span></td>
                 <td>{e.area}</td>
-                <td>
-                  {/* shortcut: rate fijo de los datos de prueba; definir cómo se calcula (p. ej. % de actividades realizadas) */}
-                  {e.rate == null ? <span className="muted">{t('Sin datos')}</span> : (
-                    <div className={`rate${e.rate < 85 ? ' lo' : ''}`}>
-                      <span className="bar"><i style={{ width: `${e.rate}%` }} /></span>
-                      <span className="mono">{e.rate}%</span>
-                    </div>
-                  )}
-                </td>
+                <td><Rate valor={e.rate} /></td>
               </tr>
             ))}
           </tbody>

@@ -49,6 +49,8 @@ export async function api(url, { method = 'GET', body } = {}) {
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
 export const hoy = () => new Date().toLocaleDateString('en-CA')
+// Fecha y zona horaria del navegador: el servidor las usa para el rate de aprobación ("a tiempo" en tu hora local)
+export const consultaRate = () => `hoy=${hoy()}&zona=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
 export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 
@@ -71,6 +73,18 @@ export const passwordValida = (p1, p2) => reglasPassword(p1, p2).every(([, ok]) 
 // El servidor guarda instantes en UTC; aquí se muestran en la hora local de quien mira
 const locale = () => (idiomaActual() === 'en' ? 'en-US' : 'es-MX')
 export const hora = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', hour12: false })
+// Fecha de trabajo AAAA-MM-DD (sin hora) como "28 oct"; se lee como medianoche local para no correr de día
+export const dia = (fecha) => new Date(`${fecha}T00:00`).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })
 export const fecha = (iso) => new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
+// Encabezado de grupo del Buzón según el día local: "Hoy", "Ayer" o la fecha
+export function grupoDia(iso, ahora = new Date()) {
+  const clave = (d) => d.toLocaleDateString('en-CA')
+  const ayer = new Date(ahora)
+  ayer.setDate(ayer.getDate() - 1)
+  const d = new Date(iso)
+  if (clave(d) === clave(ahora)) return t('Hoy')
+  if (clave(d) === clave(ayer)) return t('Ayer')
+  return d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })
+}
 export const fechaHora = (iso) =>
   new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })

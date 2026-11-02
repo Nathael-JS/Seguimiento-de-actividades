@@ -8,7 +8,6 @@
     "shift": "A",
     "area": "Gerencia",
     "email": "laura.mendez@empresa.com",
-    "rate": 96,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -21,7 +20,6 @@
     "shift": "A",
     "area": "Estaciones LC245",
     "email": "carlos.ruiz@empresa.com",
-    "rate": 93,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -34,7 +32,6 @@
     "shift": "B",
     "area": "CDU y Chillers",
     "email": "ana.torres@empresa.com",
-    "rate": 91,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -47,7 +44,6 @@
     "shift": "A",
     "area": "Estaciones LC245",
     "email": "diego.herrera@empresa.com",
-    "rate": 89,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -60,7 +56,6 @@
     "shift": "B",
     "area": "CDU y Chillers",
     "email": "sofia.navarro@empresa.com",
-    "rate": 92,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -73,7 +68,6 @@
     "shift": "A",
     "area": "Estaciones LC245",
     "email": "jorge.salinas@empresa.com",
-    "rate": 88,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -86,7 +80,6 @@
     "shift": "A",
     "area": "Estaciones LC245",
     "email": "maria.lopez@empresa.com",
-    "rate": 90,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -99,7 +92,6 @@
     "shift": "B",
     "area": "CDU y Chillers",
     "email": "luis.ortega@empresa.com",
-    "rate": 79,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -112,7 +104,6 @@
     "shift": "A",
     "area": "Estaciones LC245",
     "email": "paola.ramirez@empresa.com",
-    "rate": 94,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -125,7 +116,6 @@
     "shift": "C",
     "area": "CDU y Chillers",
     "email": "hector.diaz@empresa.com",
-    "rate": 85,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -138,7 +128,6 @@
     "shift": "A",
     "area": "Gerencia",
     "email": "andres.molina@empresa.com",
-    "rate": 95,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -151,7 +140,6 @@
     "shift": "A",
     "area": "Burn-in",
     "email": "elena.castro@empresa.com",
-    "rate": 90,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -164,7 +152,6 @@
     "shift": "C",
     "area": "Burn-in",
     "email": "ricardo.vega@empresa.com",
-    "rate": 76,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -177,7 +164,6 @@
     "shift": "A",
     "area": "Líneas 1–3",
     "email": "fernanda.rios@empresa.com",
-    "rate": 92,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   },
@@ -190,7 +176,6 @@
     "shift": "B",
     "area": "Líneas 1–3",
     "email": "ivan.cruz@empresa.com",
-    "rate": 87,
     "pwdChanged": "2026-08-10T06:00:00.000Z",
     "password": "demo1234"
   }

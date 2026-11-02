@@ -15,7 +15,19 @@ const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
 // desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
-const conDesde = { ...porEmpleado, querystring: { type: 'object', properties: { desde: { type: 'string', format: 'date-time' } } } }
+// hoy: fecha local de quien consulta (AAAA-MM-DD); con ella se generan los avisos de atraso
+// zona: zona horaria IANA del navegador (America/Mexico_City); con hoy, calcula el rate de aprobación
+const consulta = {
+  type: 'object',
+  properties: {
+    desde: { type: 'string', format: 'date-time' },
+    hoy: { type: 'string', format: 'date' },
+    zona: { type: 'string', maxLength: 64, pattern: '^[A-Za-z_+\\-/0-9]+$' },
+  },
+}
+const conDesde = { ...porEmpleado, querystring: consulta }
+const conRate = { querystring: consulta }
+const notificacionSchema = { params: { type: 'object', properties: { no: noEmpleado, id: { type: 'integer', minimum: 1 } } } }
 const token = { type: 'string', minLength: 1, maxLength: 64 }
 // Mínimo 10 caracteres, mayúscula, minúscula, número y símbolo (las mismas reglas que muestra el frontend)
 const passwordNueva = {
@@ -134,7 +146,11 @@ const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.now() - Date.pa
 const ocultarCorreo = (email) => email.replace(/^(.).*(@.*)$/, '$1•••••$2')
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
 // Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
-const diaSiguiente = (fecha) => new Date(Date.parse(fecha) + 86_400_000).toISOString().slice(0, 10)
+const sumarDias = (fecha, n) => new Date(Date.parse(fecha) + n * 86_400_000).toISOString().slice(0, 10)
+const diaSiguiente = (fecha) => sumarDias(fecha, 1)
+const zonaValida = (zona) => {
+  try { return !!new Intl.DateTimeFormat('en', { timeZone: zona }) } catch { return false }
+}
 
 export function build(opts = {}) {
   const app = Fastify(opts)
@@ -162,6 +178,24 @@ export function build(opts = {}) {
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
   const vigentes = () => actividades.filter((a) => !a.handedTo)
   // Lo del turno: lo que sigue abierto y lo realizado desde `desde`. Sin `desde`, todo
+  // Avisos automáticos, una sola vez cada uno:
+  // - actividad pendiente o en proceso con fecha anterior a hoy → al ejecutor y a quien la asignó
+  // - contraseña que vence en 15 días o menos → a su dueño (otra vez solo si la cambia y vuelve a acercarse)
+  // shortcut: se generan al consultar Inicio porque no hay tareas programadas; pasar a un job con la base de datos
+  const generarAvisos = (hoy) => {
+    for (const a of vigentes()) {
+      if (a.avisoAtraso || (a.status !== 'pending' && a.status !== 'progress') || a.date >= hoy) continue
+      a.avisoAtraso = true
+      notificar({ for: a.to, kind: 'overdue', ref: a.id })
+      notificar({ for: a.by, kind: 'overdue', who: a.to, ref: a.id })
+    }
+    for (const u of usuarios) {
+      const dias = diasPassword(u)
+      if (dias > 15 || u.avisoPassword === u.pwdChanged) continue
+      u.avisoPassword = u.pwdChanged
+      notificar({ for: u.no, kind: 'password', count: Math.max(dias, 0) })
+    }
+  }
   const delTurno = (acts, desde) =>
     desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
   const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
@@ -219,7 +253,7 @@ export function build(opts = {}) {
     if (empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
     if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
 
-    const nuevo = { no, name: name.trim(), role, dept, shift, email, rate: null, pwdChanged: ahora(), password }
+    const nuevo = { no, name: name.trim(), role, dept, shift, email, pwdChanged: ahora(), password }
     if (RANGO[role] <= 2) {
       // Encargado: indica su área; no elige jefe (como en el mockup)
       if (!area.trim()) return reply.code(400).send({ error: 'Escribe tu área dentro del departamento.' })
@@ -255,14 +289,37 @@ export function build(opts = {}) {
     return { ok: true }
   })
 
-  app.get('/api/departamentos', async () =>
-    usuarios
-      .map(({ no, name, role, dept, shift, area, rate }) => ({ no, name, role, dept, shift, area, rate }))
-      .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name)))
+  // Rate de aprobación: % de las actividades de los últimos 30 días realizadas a tiempo, es decir a más tardar el
+  // día que les tocaba (en la hora local de quien consulta). Las de hoy que siguen abiertas aún no cuentan;
+  // una heredada a otro cuenta como no realizada por quien la tenía. null: sin actividades en el periodo
+  const rateDe = (no, { hoy, zona }) => {
+    const desde = sumarDias(hoy, -30)
+    const cuentan = actividades.filter((a) =>
+      a.to === no && a.date >= desde && a.date <= hoy && (a.status === 'done' || a.date < hoy))
+    if (!cuentan.length) return null
+    const diaLocal = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: zona })
+    const aTiempo = cuentan.filter((a) => a.status === 'done' && diaLocal(a.doneAt ?? a.at) <= a.date)
+    return Math.round((aTiempo.length / cuentan.length) * 100)
+  }
+  // Con hoy y zona válidos se agrega el rate; sin ellos no (Registro, Registrar actividad, Reportes no lo usan)
+  const conRateDe = (query) => (query.hoy && query.zona ? (no) => ({ rate: rateDe(no, query) }) : () => ({}))
+  app.addHook('preHandler', async (req, reply) => {
+    if (req.query?.zona && !zonaValida(req.query.zona)) return reply.code(400).send({ error: 'Zona horaria no válida.' })
+  })
 
-  app.get('/api/perfil/:no', { schema: porEmpleado }, conEmpleado((u) => {
+  app.get('/api/departamentos', { schema: conRate }, async (req) => {
+    const rate = conRateDe(req.query)
+    return usuarios
+      .map(({ no, name, role, dept, shift, area }) => ({ no, name, role, dept, shift, area, ...rate(no) }))
+      .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
+  })
+
+  app.get('/api/perfil/:no', { schema: { ...porEmpleado, querystring: consulta } }, conEmpleado((u, req) => {
     const { no, name, role, dept, shift, area, email, pwdChanged, boss } = u
-    return { no, name, role, dept, shift, area, email, pwdChanged, bossName: empleado(boss)?.name, bossRole: empleado(boss)?.role, diasPassword: diasPassword(u) }
+    return {
+      no, name, role, dept, shift, area, email, pwdChanged, ...conRateDe(req.query)(no),
+      bossName: empleado(boss)?.name, bossRole: empleado(boss)?.role, diasPassword: diasPassword(u),
+    }
   }))
 
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
@@ -274,6 +331,7 @@ export function build(opts = {}) {
 
   // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
   app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
+    if (req.query.hoy) generarAvisos(req.query.hoy)
     // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
     const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
     const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
@@ -282,19 +340,23 @@ export function build(opts = {}) {
       asignadas: acts.length,
       realizadas: acts.filter((a) => a.status === 'done').length,
       abiertas: acts.filter((a) => a.status === 'pending' || a.status === 'incomplete').length,
-      avance: acts.length ? Math.round(acts.reduce((s, a) => s + a.pct, 0) / acts.length) : 0,
+      avance: acts.length ? Math.round(acts.reduce((s, a) => s + a.pct, 0) / acts.length) : null, // null: sin actividades
       notificaciones: notificaciones
         .filter((n) => n.for === u.no)
         .sort((a, b) => b.id - a.id)
-        .map((n) => ({
-          id: n.id,
-          kind: n.kind,
-          who: empleado(n.who)?.name,
-          actividad: actividades.find((a) => a.id === n.ref)?.text,
-          count: n.count,
-          at: n.at,
-          read: n.read,
-        })),
+        .map((n) => {
+          const a = actividades.find((x) => x.id === n.ref)
+          return {
+            id: n.id,
+            kind: n.kind,
+            who: empleado(n.who)?.name,
+            actividad: a?.text,
+            activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
+            count: n.count,
+            at: n.at,
+            read: n.read,
+          }
+        }),
     }
   }))
 
@@ -303,14 +365,22 @@ export function build(opts = {}) {
     return { ok: true }
   }))
 
+  app.post('/api/notificaciones/:no/:id/leida', { schema: notificacionSchema }, async (req, reply) => {
+    const n = notificaciones.find((x) => x.id === req.params.id && x.for === req.params.no)
+    if (!n) return reply.code(404).send({ error: 'Notificación no encontrada.' })
+    n.read = true
+    return { ok: true }
+  })
+
   // Equipo del encargado con sus actividades vigentes: alimenta Registrar, herencia, Monitoreo y Reportes
   app.get('/api/equipo/:no', { schema: conDesde }, conEmpleado((u, req, reply) => {
     if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
     const acts = delTurno(vigentes(), req.query.desde)
+    const rate = conRateDe(req.query)
     return asignables(u)
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role, dept, shift, boss }) => ({
-        no, name, role, dept, shift, boss,
+        no, name, role, dept, shift, boss, ...rate(no),
         actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id),
       }))
   }))

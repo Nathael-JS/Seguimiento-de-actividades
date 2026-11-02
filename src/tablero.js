@@ -4,7 +4,7 @@ const cifras = (acts) => ({
   actividades: acts.length,
   realizadas: acts.filter((a) => a.status === 'done').length,
   incompletas: acts.filter((a) => a.status === 'incomplete').length,
-  avance: promedio(acts),
+  avance: acts.length ? promedio(acts) : null, // null: sin actividades, el anillo muestra "—"
 })
 
 // Resumen del área de un gerente. `equipo` es /api/equipo con ?desde (cada miembro con sus actividades

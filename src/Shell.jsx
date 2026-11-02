@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
+import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Buzon from './Buzon.jsx'
 import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
@@ -18,11 +18,13 @@ const PAGINAS = {
   monitoreo: Monitoreo, reportes: Reportes, buzon: Buzon, departamentos: Departamentos, perfil: Perfil,
 }
 
-const rutaActual = () => location.hash.slice(1) || 'inicio'
+// #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)
+const rutaDe = (hash) => hash.slice(1).split('?')[0] || 'inicio'
 
 export default function Shell({ user, onLogout }) {
   const modulos = modulosDe(user)
-  const [ruta, setRuta] = useState(rutaActual)
+  const [hash, setHash] = useState(location.hash)
+  const ruta = rutaDe(hash)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
@@ -32,7 +34,7 @@ export default function Shell({ user, onLogout }) {
 
   useEffect(() => {
     const cambio = () => {
-      setRuta(rutaActual())
+      setHash(location.hash)
       setMenuAbierto(false)
     }
     addEventListener('hashchange', cambio)
@@ -46,12 +48,19 @@ export default function Shell({ user, onLogout }) {
     return () => removeEventListener('keydown', escape)
   }, [menuAbierto])
 
-  // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros
+  // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros.
+  // hoy hace que el servidor genere los avisos de atraso con la fecha local
   const recargar = useCallback(
-    () => api(`/api/inicio/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
+    () => api(`/api/inicio/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}&hoy=${hoy()}`)
+      .then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
     [user.no],
   )
   useEffect(() => { recargar() }, [recargar, ruta])
+  // Avisos al momento: contador y Buzón se actualizan solos cada 30 s mientras la pestaña está a la vista
+  useEffect(() => {
+    const id = setInterval(() => document.visibilityState === 'visible' && recargar(), 30_000)
+    return () => clearInterval(id)
+  }, [recargar])
 
   const avisar = useCallback((mensaje) => {
     clearTimeout(temporizador.current)
@@ -109,7 +118,8 @@ export default function Shell({ user, onLogout }) {
           </a>
         </header>
         <main className="page">
-          <Pagina user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
+          {/* key: cambiar de dirección (también solo el ?lider=) vuelve a montar la página con su estado inicial */}
+          <Pagina key={hash} user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
         </main>
       </div>
 
