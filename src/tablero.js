@@ -1,10 +1,10 @@
-import { esEncargado, promedio } from './comun.js'
+import { esEncargado, pctRealizadas } from './comun.js'
 
 const cifras = (acts) => ({
   actividades: acts.length,
   realizadas: acts.filter((a) => a.status === 'done').length,
   incompletas: acts.filter((a) => a.status === 'incomplete').length,
-  avance: acts.length ? promedio(acts) : null, // null: sin actividades, el anillo muestra "—"
+  avance: acts.length ? pctRealizadas(acts) : null, // % realizadas; null: sin actividades, el anillo muestra "—"
 })
 
 // Resumen del área de un gerente. `equipo` es /api/equipo con ?desde (cada miembro con sus actividades

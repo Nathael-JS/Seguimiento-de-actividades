@@ -57,7 +57,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
 // Se ve una vez por navegador; después la portada abre directo en la elección
 const SLIDES = [
   ['A', 'Asigna el turno por puntos.', 'El encargado reparte las actividades del turno y cada técnico las recibe al instante en su buzón.'],
-  ['B', 'Cada avance llega a quien debe.', 'Estado, porcentaje y comentario: el encargado ve el turno moverse sin preguntar por radio.'],
+  ['B', 'Cada avance llega a quien debe.', 'Estado y comentario: el encargado ve el turno moverse sin preguntar por radio.'],
   ['C', 'Lo pendiente cambia de turno, validado.', 'Las herencias pasan con su motivo y las valida el encargado de quien las recibe.'],
 ]
 const VISTA = 'portada-vista'

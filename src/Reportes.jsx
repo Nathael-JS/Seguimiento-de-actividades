@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, depto, descargarCsv, estado, hora, hoy, promedio, rol } from './comun.js'
+import { TURNOS, api, depto, descargarCsv, estado, hora, hoy, pctRealizadas, rol } from './comun.js'
 import { t } from './i18n.js'
 import { comparar } from './reporte.js'
 import { Estado, Rate } from './ui.jsx'
 
 const haceUnaSemana = () => new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA')
 
-const COLUMNAS = ['Fecha', 'Turno', 'Hora', 'Empleado', 'Puesto', 'Departamento', 'Actividad', 'Avance %', 'Estado', 'Comentarios', 'Acción tomada']
+const COLUMNAS = ['Fecha', 'Turno', 'Hora', 'Empleado', 'Puesto', 'Departamento', 'Actividad', 'Estado', 'Comentarios', 'Acción tomada']
 function accion(f) {
   if (f.heredadaA) return t('Heredada a {nombre}', { nombre: f.heredadaA })
   if (f.inh) return t('Recibida por herencia')
@@ -14,11 +14,11 @@ function accion(f) {
   if (f.prioridad) return t('Agregada por el empleado')
   return f.mgr
 }
-const celdas = (f) => [f.date, f.shift, hora(f.at), f.name, rol(f.role), depto(f.dept), f.text, f.pct, estado(f.status), f.note, accion(f)]
+const celdas = (f) => [f.date, f.shift, hora(f.at), f.name, rol(f.role), depto(f.dept), f.text, estado(f.status), f.note, accion(f)]
 
 // El % a tiempo va primero: es la cifra que se compara y en móvil queda a la vista sin desplazar
-const COLUMNAS_COMPARATIVO = ['Nombre', 'Puesto', '% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades', 'Avance %']
-const celdasComparativo = (x) => [x.name, rol(x.role), x.aTiempo ?? '', x.atrasadas, x.incompletas, x.realizadas, x.actividades, x.avance ?? '']
+const COLUMNAS_COMPARATIVO = ['Nombre', 'Puesto', '% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades']
+const celdasComparativo = (x) => [x.name, rol(x.role), x.aTiempo ?? '', x.atrasadas, x.incompletas, x.realizadas, x.actividades]
 
 export default function Reportes({ user }) {
   const [equipo, setEquipo] = useState(null)
@@ -111,7 +111,7 @@ export default function Reportes({ user }) {
         <section className="reporte">
           <div className="row between" style={{ flexWrap: 'wrap' }}>
             <p className="muted">
-              <b className="mono" style={{ color: 'var(--ink)' }}>{filas.length}</b> {t('registros')} · {t('Avance promedio')}: <b className="mono" style={{ color: 'var(--ink)' }}>{promedio(filas.filter((f) => !f.heredadaA))}%</b>
+              <b className="mono" style={{ color: 'var(--ink)' }}>{filas.length}</b> {t('registros')} · {t('Realizadas')}: <b className="mono" style={{ color: 'var(--ink)' }}>{pctRealizadas(filas.filter((f) => !f.heredadaA))}%</b>
               <span className="solo-impresion"> · {desde} – {hasta}{turno && ` · ${t('Turno')} ${turno}`}</span>
             </p>
             <div className="row no-imprimir">
@@ -129,7 +129,7 @@ export default function Reportes({ user }) {
                   <tr key={f.id}>
                     <td className="mono">{f.date}</td><td>{f.shift}</td><td className="mono">{hora(f.at)}</td>
                     <td>{f.name}</td><td>{rol(f.role)}</td><td>{depto(f.dept)}</td><td>{f.text}</td>
-                    <td className="mono">{f.pct}%</td><td><Estado estado={f.status} /></td>
+                    <td><Estado estado={f.status} /></td>
                     <td>{f.note || '—'}</td><td>{accion(f) || '—'}</td>
                   </tr>
                 )) : <tr><td colSpan={COLUMNAS.length} className="empty">{t('Sin registros para estos filtros.')}</td></tr>}
@@ -163,7 +163,7 @@ function Comparativo({ filas, vista, setVista, exportar }) {
           <thead>
             <tr>
               <th scope="col">{t(vista === 'lideres' ? 'Líder' : 'Empleado')}</th>
-              {['% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades', 'Avance'].map((c) => <th key={c} scope="col">{t(c)}</th>)}
+              {['% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades'].map((c) => <th key={c} scope="col">{t(c)}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -177,7 +177,6 @@ function Comparativo({ filas, vista, setVista, exportar }) {
                 <td className={`mono${x.incompletas ? ' txt-incompleta' : ''}`}>{x.incompletas}</td>
                 <td className="mono">{x.realizadas}</td>
                 <td className="mono">{x.actividades}</td>
-                <td className="mono">{x.avance == null ? '—' : `${x.avance}%`}</td>
               </tr>
             ))}
           </tbody>

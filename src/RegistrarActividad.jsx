@@ -4,8 +4,7 @@ import Icono from './Icono.jsx'
 import { SelectorCriticidad } from './ui.jsx'
 import { t } from './i18n.js'
 
-const puntoVacio = () => ({ texto: '', avance: 0 })
-const porcentaje = (v) => Math.min(100, Math.max(0, Math.round(Number(v) || 0)))
+const puntoVacio = () => ({ texto: '' })
 
 export default function RegistrarActividad({ user, recargar, avisar }) {
   const [equipo, setEquipo] = useState(null)
@@ -52,7 +51,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
           por: user.no, para, fecha, turno, comentario, prioridad,
           ...(prioridad === 'diaria' && { criticidad }),
           ...(prioridad === 'urgente' && { cierre: cierre.toISOString() }),
-          puntos: llenos.map((p) => ({ texto: p.texto.trim(), avance: porcentaje(p.avance) })),
+          puntos: llenos.map((p) => ({ texto: p.texto.trim() })),
         },
       })
       avisar(t('Actividades registradas. Se notificó a {nombre}.', { nombre: emp.name }))
@@ -133,11 +132,6 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
                   <span className="num">{i + 1}.</span>
                   <input aria-label={`${t('Actividad')} ${i + 1}`} placeholder={t('Describe la actividad')} maxLength={200}
                     value={p.texto} onChange={(e) => cambiarPunto(i, 'texto', e.target.value)} />
-                  <span className="pct-in">
-                    <input type="number" min="0" max="100" step="5" aria-label={`${t('Avance')} ${i + 1}`}
-                      value={p.avance} onChange={(e) => cambiarPunto(i, 'avance', e.target.value)}
-                      onBlur={(e) => cambiarPunto(i, 'avance', porcentaje(e.target.value))} />
-                  </span>
                   <button type="button" className="iconbtn" aria-label={`${t('Quitar')} ${i + 1}`} disabled={puntos.length < 2}
                     onClick={() => setPuntos(puntos.filter((_, j) => j !== i))}>
                     <Icono nombre="trash" />

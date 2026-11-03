@@ -1,4 +1,4 @@
-import { esEncargado, promedio } from './comun.js'
+import { esEncargado } from './comun.js'
 
 // Fecha local (del navegador) de un instante: "a tiempo" = realizada a más tardar el día que le tocaba
 const diaLocal = (iso) => new Date(iso).toLocaleDateString('en-CA')
@@ -15,7 +15,6 @@ function cifras(filas, hoy) {
     aTiempo: cuentan.length ? Math.round((aTiempo / cuentan.length) * 100) : null,
     incompletas: filas.filter((f) => f.status === 'incomplete').length,
     atrasadas: vivas.filter((f) => (f.status === 'pending' || f.status === 'progress') && f.date < hoy).length,
-    avance: vivas.length ? promedio(vivas) : null,
   }
 }
 

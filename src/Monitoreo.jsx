@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, consultaRate, dia, esEncargado, hora, hoy, iniciales, inicioDeHoy, promedio, rol } from './comun.js'
+import Icono from './Icono.jsx'
+import { api, consultaRate, dia, esEncargado, hora, hoy, iniciales, inicioDeHoy, pctRealizadas, rol } from './comun.js'
 import { t } from './i18n.js'
 import { Anillo, Criticidad, Estado, Rate } from './ui.jsx'
+import { ListaActividades, PorcentajeRealizadas } from './Lista.jsx'
 
-const conAvance = (acts) => (acts.length ? promedio(acts) : null)
+// % realizadas; null sin actividades (el anillo muestra "—")
+const conAvance = (acts) => (acts.length ? pctRealizadas(acts) : null)
 
 export default function Monitoreo({ user }) {
   const [equipo, setEquipo] = useState(null)
@@ -14,6 +17,9 @@ export default function Monitoreo({ user }) {
   const [filtro, setFiltro] = useState(() => consulta.get('lider') ?? 'todos')
   // #monitoreo?empleado=N (desde Jerarquía) abre directo sus actividades
   const [elegido, setElegido] = useState(() => consulta.get('empleado'))
+  // Lista (por defecto) o tarjetas por persona; se recuerda en el navegador
+  const [vista, setVista] = useState(() => { try { return localStorage.getItem('monitoreo-vista') ?? 'lista' } catch { return 'lista' } })
+  const elegirVista = (v) => { setVista(v); try { localStorage.setItem('monitoreo-vista', v) } catch { /* solo esta vez */ } }
 
   useEffect(() => {
     api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}&${consultaRate()}`).then(setEquipo).catch((e) => setError(e.message))
@@ -34,12 +40,10 @@ export default function Monitoreo({ user }) {
           <h1>{t('Monitoreo')}</h1>
           <p>{t('Empleados a tu cargo: actividades abiertas y realizadas hoy.')}</p>
         </div>
-        <div className="row">
-          <Anillo pct={conAvance(equipo.flatMap((e) => e.actividades))} />
-          <span className="meta">{t('Avance promedio')}</span>
-        </div>
+        <PorcentajeRealizadas grupos={visibles.map((e) => ({ no: e.no, name: e.name, acts: e.actividades }))} />
       </div>
 
+      <div className="row between barra-vista">
       <div className="chips" role="group" aria-label={t('Filtrar equipo')}>
         <button aria-pressed={filtro === 'todos'} onClick={() => setFiltro('todos')}>{t('Todos')} ({equipo.length})</button>
         <button aria-pressed={filtro === 'directos'} onClick={() => setFiltro('directos')}>{t('Directos')}</button>
@@ -49,8 +53,16 @@ export default function Monitoreo({ user }) {
           </button>
         ))}
       </div>
+      <div className="segmento" role="group" aria-label={t('Vista')}>
+        <button aria-pressed={vista === 'lista'} onClick={() => elegirVista('lista')}><Icono nombre="list" />{t('Lista')}</button>
+        <button aria-pressed={vista === 'tarjetas'} onClick={() => elegirVista('tarjetas')}><Icono nombre="grid" />{t('Tarjetas')}</button>
+      </div>
+      </div>
 
-      {visibles.length ? (
+      {vista === 'lista' ? (
+        <ListaActividades conPersona nombres={nombres}
+          filas={visibles.flatMap((e) => e.actividades.map((a) => ({ ...a, persona: e.name })))} />
+      ) : visibles.length ? (
         <div className="emp-grid">
           {visibles.map((e) => (
             <article key={e.no} className="card emp-card">
@@ -72,7 +84,6 @@ export default function Monitoreo({ user }) {
                       <span className="row" style={{ gap: 8, flex: 'none' }}>
                         {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
                         <Criticidad valor={a.criticidad} />
-                        <span className="mono muted">{a.pct}%</span>
                         <Estado estado={a.status} />
                       </span>
                     </li>
@@ -146,7 +157,6 @@ function Detalle({ user, emp, cerrar }) {
                     <span className="row" style={{ gap: 8, flex: 'none' }}>
                       {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
                       <Criticidad valor={a.criticidad} />
-                      <span className="mono muted">{a.pct}%</span>
                       <Estado estado={a.status} />
                     </span>
                   </li>

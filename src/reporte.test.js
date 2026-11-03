@@ -19,11 +19,11 @@ const filas = [
   f(6, 'T2', '2026-10-30', 'pending', 0, { heredadaA: 'Tomás' }), // heredada: cuenta como no realizada, no como atrasada
 ]
 
-test('comparativo por empleado: % a tiempo, incompletas, atrasadas y avance', () => {
+test('comparativo por empleado: % a tiempo, incompletas y atrasadas', () => {
   const { empleados } = comparar(filas, equipo, user, '2026-11-02')
   const [tomas, tere] = empleados
-  assert.deepEqual([tomas.no, tomas.actividades, tomas.realizadas, tomas.aTiempo, tomas.atrasadas, tomas.avance], ['T1', 4, 2, 33, 1, 63])
-  assert.deepEqual([tere.no, tere.aTiempo, tere.incompletas, tere.atrasadas, tere.avance], ['T2', 0, 1, 0, 40])
+  assert.deepEqual([tomas.no, tomas.actividades, tomas.realizadas, tomas.aTiempo, tomas.atrasadas], ['T1', 4, 2, 33, 1])
+  assert.deepEqual([tere.no, tere.aTiempo, tere.incompletas, tere.atrasadas], ['T2', 0, 1, 0])
 })
 
 test('comparativo por líder: cada uno con toda su rama, sin líderes vacíos', () => {

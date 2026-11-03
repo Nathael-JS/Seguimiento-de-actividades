@@ -153,7 +153,7 @@ function ParaHeredar({ a, user, bandeja, alHeredar, avisar }) {
   return (
     <article className="card herencia">
       <Actividad a={a}>
-        {a.nombre} · <span className="mono">{a.date} · {t('Turno')} {a.shift}</span> · {a.pct}%
+        {a.nombre} · <span className="mono">{a.date} · {t('Turno')} {a.shift}</span>
       </Actividad>
       {a.mgr && <div className="mgr-note">{a.mgr}</div>}
 
