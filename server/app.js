@@ -17,9 +17,10 @@ const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
-// Criticidad de una actividad diaria; la crítica va debajo de la urgente pero sí se hereda (ver /heredar)
-const criticidad = { enum: ['simple', 'normal', 'alta', 'critica'] }
-const PESO_CRITICIDAD = { simple: 0, normal: 1, alta: 2, critica: 3 }
+// Criticidad de una actividad diaria; la crítica va debajo de la urgente pero sí se hereda (ver /heredar).
+// 'nueva': recién creada en el Tablero, por clasificar (cuenta como normal al ordenar)
+const criticidad = { enum: ['nueva', 'simple', 'normal', 'alta', 'critica'] }
+const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critica: 3 }
 // desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
 // hoy: fecha local de quien consulta (AAAA-MM-DD); con ella se generan los avisos de atraso
 // zona: zona horaria IANA del navegador (America/Mexico_City); con hoy, calcula el rate de aprobación
@@ -808,7 +809,7 @@ export function build({ superadmins = [], ...opts } = {}) {
   const delEquipo = (por, a) => { const yo = empleado(por); return yo && esEncargado(yo) && asignables(yo).some((e) => e.no === a.to) }
   const tableroSchema = {
     params: heredarSchema.params,
-    body: objeto(['por'], { por: noEmpleado, columna: { enum: ['simple', 'normal', 'alta', 'critica', 'urgente'] }, fijada: { type: 'boolean' }, cierre: { type: 'string', format: 'date-time' } }),
+    body: objeto(['por'], { por: noEmpleado, columna: { enum: ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente'] }, fijada: { type: 'boolean' }, cierre: { type: 'string', format: 'date-time' } }),
   }
   app.patch('/api/actividades/:id/tablero', { schema: tableroSchema }, async (req, reply) => {
     const a = vigentes().find((x) => x.id === req.params.id)

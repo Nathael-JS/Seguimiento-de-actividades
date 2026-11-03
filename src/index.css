@@ -214,11 +214,6 @@ fieldset.field legend{font:500 13px/18px var(--font-sans);padding:0;margin-botto
 .tag{font:500 11px/16px var(--font-sans);padding:1px 8px;border-radius:var(--radius-sm);background:var(--accent);color:var(--on-accent)}
 .emp-chip{display:flex;gap:12px;align-items:center;padding:12px;border-radius:var(--radius-md);background:var(--surface-200)}
 
-.points{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
-.point{display:grid;grid-template-columns:28px 1fr 40px;gap:10px;align-items:center}
-.point .num{font:600 13px var(--font-mono);color:var(--ink-muted);text-align:center}
-.point input{min-height:40px;padding:0 12px;border:1px solid var(--line-strong);border-radius:var(--radius-md);background:var(--surface-100);color:var(--ink);font:inherit;width:100%}
-.point input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .iconbtn[disabled]{opacity:.4;cursor:not-allowed}
 
 .task{display:flex;flex-direction:column;gap:14px}
@@ -238,13 +233,11 @@ fieldset.field legend{font:500 13px/18px var(--font-sans);padding:0;margin-botto
 /* La región queda siempre en el DOM para que los lectores de pantalla anuncien el aviso */
 .toast:empty{padding:0;box-shadow:none;background:none}
 
-@media (max-width:860px){.point{grid-template-columns:24px 1fr 40px}}
 @media (max-width:560px){
   .grid2{grid-template-columns:1fr}
   .status-seg{grid-template-columns:1fr 1fr}
   .status-seg button:nth-child(3){border-left:0}
   .status-seg button:nth-child(n+3){border-top:1px solid var(--line-strong)}
-  .point{grid-template-columns:1fr 40px}.point .num{display:none}
 }
 
 .emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
@@ -477,7 +470,6 @@ dialog.modal.detalle{max-width:640px;max-height:calc(100dvh - 48px)}
 .alta-mfa .clave .muted{font-size:12px}
 .alta-mfa code{font:600 15px/22px var(--font-mono);letter-spacing:.04em;word-break:break-word;color:var(--ink)}
 @media (max-width:420px){.alta-mfa{flex-direction:column;align-items:stretch}.alta-mfa .qr{align-self:center}}
-.registrar{max-width:760px}
 
 /* Criticidad: la normal no lleva marca; simple apagada, alta ámbar, crítica roja (debajo de la urgente, que es sólida) */
 .tag.crit-simple{background:var(--surface-200);color:var(--ink-muted)}
@@ -704,7 +696,7 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .semana button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .agregar-semana{display:inline-flex;gap:6px;align-items:center;margin-left:auto}
 .agregar-semana input{min-height:32px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:0 8px;font:inherit;font-size:13px;background:var(--surface-100);color:var(--ink)}
-.tablero{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+.tablero{display:grid;grid-template-columns:minmax(240px,1.25fr) repeat(5,minmax(190px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
 .columna{background:var(--surface-200);border-radius:var(--radius-lg);padding:12px;min-height:420px;display:flex;flex-direction:column;gap:10px;transition:background .15s,box-shadow .15s}
 .columna.encima{background:var(--brand-soft);box-shadow:inset 0 0 0 2px var(--brand)}
 .columna header{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -744,7 +736,7 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .nueva-col input,.nueva-col select{min-height:34px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:0 8px;font:inherit;font-size:13px;background:var(--surface-100);color:var(--ink);width:100%}
 /* Al moverse de columna, la tarjeta viaja con la misma curva que el resto de la app */
 ::view-transition-group(*){animation-duration:.32s;animation-timing-function:var(--ease-salida)}
-@media (max-width:860px){.agregar-semana{margin-left:0}.tablero{grid-template-columns:repeat(5,minmax(240px,82vw));scroll-snap-type:x mandatory}.columna{scroll-snap-align:start}}
+@media (max-width:860px){.agregar-semana{margin-left:0}.tablero{grid-template-columns:repeat(6,minmax(240px,82vw));scroll-snap-type:x mandatory}.columna{scroll-snap-align:start}}
 
 /* Vista de lista (Monitoreo y Mis actividades) y su selector */
 .barra-vista{flex-wrap:wrap;gap:12px;align-items:center}
@@ -789,3 +781,18 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .pct-detalle .mono{text-align:right}
 @keyframes crece{from{transform:scaleX(0)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.pct-detalle,.pct-boton .flecha{transition:none}.pct-detalle .barra i{animation:none}}
+
+/* Panel Por clasificar: donde nacen las actividades; borde punteado = aún sin lugar */
+.columna.col-nueva{background:var(--surface-000);outline:1.5px dashed var(--line-strong);outline-offset:-1.5px}
+.columna.col-nueva.encima{outline-color:var(--brand);background:var(--brand-soft)}
+.col-nueva h2::before{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-muted)}
+.nueva-col textarea{min-height:84px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:6px 8px;font:inherit;font-size:13px;line-height:18px;background:var(--surface-100);color:var(--ink);resize:vertical;width:100%}
+.nueva-col .dos{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.nueva-col :is(input,select,textarea):focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* La tarjeta que se arrastra queda como sombra en su lugar */
+.tarjeta.arrastrando{opacity:.45;box-shadow:none;border-style:dashed}
+.tarjeta:hover{border-color:var(--line-strong)}
+.tarjeta:focus-within{border-color:var(--brand)}
+/* El tablero necesita todo el ancho: seis columnas no caben en el ancho máximo de las demás páginas */
+.page:has(.tablero){max-width:none}
+.tarjeta-pie .meta{white-space:nowrap}

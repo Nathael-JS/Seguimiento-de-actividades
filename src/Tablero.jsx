@@ -5,11 +5,11 @@ import Icono from './Icono.jsx'
 import { Estado } from './ui.jsx'
 import { t } from './i18n.js'
 
-// Tablero del encargado: las actividades de su equipo en columnas de criticidad (más Urgente), semana a semana.
-// Mover una tarjeta de columna cambia su criticidad; se arrastra o se usa su menú (teclado y pantallas táctiles)
-const COLUMNAS = ['simple', 'normal', 'alta', 'critica', 'urgente']
+// Tablero del encargado: aquí se crean las actividades de su equipo (panel Por clasificar) y se mueven a su
+// criticidad (o a Urgente), semana a semana. Se arrastran o se usa el menú de cada tarjeta (teclado y táctil)
+const COLUMNAS = ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente']
 const columnaDe = (a) => (a.prioridad === 'urgente' ? 'urgente' : a.criticidad ?? 'normal')
-const nombreColumna = (c) => (c === 'urgente' ? t('Urgente') : criticidad(c))
+const nombreColumna = (c) => (c === 'urgente' ? t('Urgente') : c === 'nueva' ? t('Por clasificar') : criticidad(c))
 
 // Semanas de lunes a domingo, como AAAA-MM-DD locales
 const local = (d) => d.toLocaleDateString('en-CA')
@@ -47,11 +47,14 @@ export default function Tablero({ user, recargar, avisar }) {
   const [nuevaSemana, setNuevaSemana] = useState('')
   const [encima, setEncima] = useState(null) // columna sobre la que se arrastra
 
-  const cargar = useCallback(() => api(`/api/equipo/${user.no}`).then((e) => {
+  // animar: las tarjetas recién creadas entran con la misma transición que al moverse
+  const cargar = useCallback((animar) => api(`/api/equipo/${user.no}`).then((e) => {
     setEquipo(e)
-    setActs(e.flatMap((p) => p.actividades.map((a) => ({ ...a, persona: p }))))
+    const lista = e.flatMap((p) => p.actividades.map((a) => ({ ...a, persona: p })))
+    if (animar) conTransicion(() => setActs(lista))
+    else setActs(lista)
   }).catch((e) => setError(e.message)), [user.no])
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { cargar(false) }, [cargar])
 
   function cambiarSemanas(lista, elegir) {
     const orden = [...new Set(lista)].sort()
@@ -114,7 +117,7 @@ export default function Tablero({ user, recargar, avisar }) {
     <>
       <div className="page-head">
         <h1>{t('Tablero')}</h1>
-        <p>{t('Las actividades de tu equipo por criticidad. Arrastra una tarjeta a otra columna para cambiarla; Urgente se cierra al terminar su turno.')}</p>
+        <p>{t('Crea las actividades de tu equipo en Por clasificar y arrástralas a su criticidad. Urgente se cierra al terminar su turno.')}</p>
       </div>
 
       <div className="semanas" role="tablist" aria-label={t('Semanas')}>
@@ -150,13 +153,15 @@ export default function Tablero({ user, recargar, avisar }) {
               }}>
               <header>
                 <h2 id={`col-${c}`}>{nombreColumna(c)} <span className="mono">{tarjetas.length}</span></h2>
-                <NuevaEnColumna columna={c} equipo={equipo} semana={semana} user={user}
-                  alCrear={() => { cargar(); recargar(); avisar(t('Actividad registrada. Se notificó a quien la recibe.')) }} />
+                {c === 'nueva' && (
+                  <NuevasActividades equipo={equipo} semana={semana} user={user}
+                    alCrear={(n) => { cargar(true); recargar(); avisar(t(n === 1 ? 'Actividad creada. Se notificó a quien la recibe.' : '{n} actividades creadas. Se notificó a quien las recibe.', { n })) }} />
+                )}
               </header>
               <ul>
                 {tarjetas.map((a) => <Tarjeta key={a.id} a={a} columna={c} mover={mover} fijar={fijar} eliminar={eliminar} />)}
               </ul>
-              {!tarjetas.length && <p className="vacia">{t('Arrastra una tarjeta aquí o agrega una con +.')}</p>}
+              {!tarjetas.length && <p className="vacia">{t(c === 'nueva' ? 'Crea actividades con +; luego arrástralas a su criticidad.' : 'Arrastra una tarjeta aquí.')}</p>}
             </section>
           )
         })}
@@ -167,10 +172,12 @@ export default function Tablero({ user, recargar, avisar }) {
 
 function Tarjeta({ a, columna, mover, fijar, eliminar }) {
   const [confirmar, setConfirmar] = useState(false)
+  const [arrastrando, setArrastrando] = useState(false)
   const cerrada = a.cerrada
   return (
-    <li className={`tarjeta${a.status === 'done' ? ' hecha' : ''}`} style={{ viewTransitionName: `tarjeta-${a.id}` }}
-      draggable={!cerrada} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(a.id)); e.dataTransfer.effectAllowed = 'move' }}>
+    <li className={`tarjeta${a.status === 'done' ? ' hecha' : ''}${arrastrando ? ' arrastrando' : ''}`} style={{ viewTransitionName: `tarjeta-${a.id}` }}
+      draggable={!cerrada} onDragEnd={() => setArrastrando(false)}
+      onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(a.id)); e.dataTransfer.effectAllowed = 'move'; setArrastrando(true) }}>
       <div className="tarjeta-cabeza">
         <b>{a.fijada && <span className="fija" title={t('Fijada')}><Icono nombre="pin" /><span className="sr">{t('Fijada')}: </span></span>}{a.text}</b>
         <details className="menu-tarjeta" onToggle={(e) => !e.currentTarget.open && setConfirmar(false)}>
@@ -206,15 +213,18 @@ function Tarjeta({ a, columna, mover, fijar, eliminar }) {
   )
 }
 
-// "+" de cada columna: registra una actividad con esa criticidad (o urgente) para alguien del equipo
-function NuevaEnColumna({ columna, equipo, semana, user, alCrear }) {
+// Panel Por clasificar: crea una o varias actividades (una por renglón) para alguien del equipo; nacen sin
+// criticidad y después se arrastran a la que les toca. Reemplaza al antiguo "Registrar actividad"
+function NuevasActividades({ equipo, semana, user, alCrear }) {
   const [abierta, setAbierta] = useState(false)
   const [para, setPara] = useState('')
   const [texto, setTexto] = useState('')
   const [fecha, setFecha] = useState('')
+  const [turno, setTurno] = useState('')
+  const [comentario, setComentario] = useState('')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
-  const emp = equipo.find((e) => e.no === para)
+  const puntos = texto.split('\n').map((l) => l.trim()).filter(Boolean)
 
   function abrir() {
     const h = hoy()
@@ -222,22 +232,25 @@ function NuevaEnColumna({ columna, equipo, semana, user, alCrear }) {
     setError('')
     setAbierta(true)
   }
+  function elegir(no) {
+    setPara(no)
+    const e = equipo.find((x) => x.no === no)
+    if (e) setTurno(e.shift) // el turno sugerido es el de la persona
+  }
   async function crear(e) {
     e.preventDefault()
-    if (!para || !texto.trim()) return setError(t('Elige a quién y escribe la actividad.'))
+    if (!para || !puntos.length) return setError(t('Elige a quién y escribe al menos una actividad.'))
+    if (puntos.length > 20) return setError(t('Máximo 20 actividades a la vez.'))
     setEnviando(true)
     try {
-      const urgente = columna === 'urgente'
       await api('/api/actividades', {
         method: 'POST',
-        body: {
-          por: user.no, para, fecha, turno: emp.shift, puntos: [{ texto: texto.trim() }],
-          ...(urgente ? { prioridad: 'urgente', cierre: cierreTurno(fecha, emp.shift).toISOString() } : { prioridad: 'diaria', criticidad: columna }),
-        },
+        body: { por: user.no, para, fecha, turno, comentario: comentario.trim(), prioridad: 'diaria', criticidad: 'nueva', puntos: puntos.map((p) => ({ texto: p })) },
       })
       setAbierta(false)
       setTexto('')
-      alCrear()
+      setComentario('')
+      alCrear(puntos.length)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -245,20 +258,28 @@ function NuevaEnColumna({ columna, equipo, semana, user, alCrear }) {
     }
   }
 
-  if (!abierta) return <button type="button" className="iconbtn mas-col" aria-label={t('Agregar en {columna}', { columna: nombreColumna(columna) })} onClick={abrir}>+</button>
+  if (!abierta) return <button type="button" className="iconbtn mas-col" aria-label={t('Crear actividades')} title={t('Crear actividades')} onClick={abrir}>+</button>
   return (
     <form className="nueva-col" onSubmit={crear} noValidate>
-      <input aria-label={t('Actividad')} placeholder={t('Describe la actividad')} maxLength={200} value={texto} onChange={(e) => setTexto(e.target.value)} autoFocus />
-      <select aria-label={t('Empleado')} value={para} onChange={(e) => setPara(e.target.value)}>
+      <select aria-label={t('Empleado')} value={para} onChange={(e) => elegir(e.target.value)} autoFocus>
         <option value="">{t('Selecciona un empleado')}</option>
-        {equipo.map((p) => <option key={p.no} value={p.no}>{p.name} — {rol(p.role)} · {p.shift}</option>)}
+        {equipo.map((p) => <option key={p.no} value={p.no}>{p.name} — {rol(p.role)}</option>)}
       </select>
-      <input type="date" aria-label={t('Fecha')} value={fecha} onChange={(e) => setFecha(e.target.value)} />
-      {emp && <small className="meta">{t('Turno')} {emp.shift} · {TURNOS[emp.shift]}</small>}
+      <textarea aria-label={t('Actividades, una por renglón')} placeholder={t('Una actividad por renglón')} rows={4} maxLength={4000}
+        value={texto} onChange={(e) => setTexto(e.target.value)} />
+      <div className="dos">
+        <input type="date" aria-label={t('Fecha')} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        <select aria-label={t('Turno')} value={turno} onChange={(e) => setTurno(e.target.value)} disabled={!para} title={TURNOS[turno]}>
+          {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{t('Turno')} {k}</option>)}
+        </select>
+      </div>
+      <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} />
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row end" style={{ gap: 6 }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierta(false)}>{t('Cancelar')}</button>
-        <button className="btn btn-primary btn-sm" type="submit" disabled={enviando}>{t('Agregar')}</button>
+        <button className="btn btn-primary btn-sm" type="submit" disabled={enviando}>
+          {t(puntos.length > 1 ? 'Crear {n}' : 'Crear', { n: puntos.length })}
+        </button>
       </div>
     </form>
   )

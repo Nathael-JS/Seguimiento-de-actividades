@@ -14,13 +14,12 @@ import Matriz from './Matriz.jsx'
 import MisActividades from './MisActividades.jsx'
 import Monitoreo from './Monitoreo.jsx'
 import Perfil from './Perfil.jsx'
-import RegistrarActividad from './RegistrarActividad.jsx'
 import Reportes from './Reportes.jsx'
 import Tablero from './Tablero.jsx'
 
 // Una página por cada módulo de MODULOS
 const PAGINAS = {
-  inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades,
+  inicio: Inicio, 'mis-actividades': MisActividades,
   monitoreo: Monitoreo, reportes: Reportes, tablero: Tablero, herencias: Herencias, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, ajustes: Ajustes, usuarios: Usuarios, registros: Registros, perfil: Perfil,
 }
 

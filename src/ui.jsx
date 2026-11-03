@@ -186,7 +186,7 @@ export function Rate({ valor }) {
 
 // Etiqueta de criticidad: la normal no se marca, para que resalte lo que se sale de lo común
 export function Criticidad({ valor }) {
-  if (!valor || valor === 'normal') return null
+  if (!valor || valor === 'normal' || valor === 'nueva') return null
   return <span className={`tag crit-${valor}`}>{criticidad(valor)}</span>
 }
 

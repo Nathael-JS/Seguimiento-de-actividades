@@ -3,7 +3,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
 
-- `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Registrar actividad (con herencia de pendientes), Mis actividades, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
+- `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Tablero (crear y clasificar actividades), Herencias, Mis actividades, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
 - `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, guardada con hash), actividades, notificaciones y el checador simulado.
 
@@ -31,7 +31,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Herencias** (Ing. Full o superior): se propone heredar una actividad pendiente o incompleta del equipo, con motivo, a cualquier departamento. El servidor verifica dos condiciones sí/no: mismo nivel de puesto (técnico ↔ Ing. Jr, Ing. Full ↔ Senior) y turno siguiente (o el mismo empleado al día siguiente). La valida el encargado directo de quien la recibe: acepta, rechaza o redirige a alguien de su equipo, con comentario. Si quien propone ya es ese encargado, entra directo. Límites por día: 2 por turno y 2 a otro departamento para quien propone; 2 redirecciones para quien valida.
 
-**Tablero** (encargados): las actividades de su equipo en columnas Simple, Normal, Alta, Crítica y Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). Arrastrar una tarjeta a otra columna cambia su criticidad, con animación (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla. El "+" de cada columna registra una actividad con esa criticidad.
+**Tablero** (encargados; reemplaza a "Registrar actividad"): las actividades se crean en el panel **Por clasificar** (una por renglón, para alguien del equipo, con fecha, turno y comentario) y se arrastran a Simple, Normal, Alta, Crítica o Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). El cambio de columna se anima (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla.
 
 **Sin porcentaje de avance:** el avance lo da el estado (Realizada = hecha); los anillos muestran el % de realizadas. **Monitoreo** abre en lista (actividad, prioridad, estado, asignada a, fecha, creada, creada por) con el % de realizadas desplegable por persona; las tarjetas quedan como segunda vista. **Mis actividades** también abre en lista, con el estado editable en la fila.
 
@@ -74,7 +74,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
 | `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
-| `POST` | `/api/actividades` | Registrar actividades por puntos (diarias, o urgentes con el cierre del turno elegido) y notificar al empleado |
+| `POST` | `/api/actividades` | Crear actividades por puntos (criticidad, `nueva` = por clasificar, o urgentes con el cierre del turno) y notificar al empleado |
 | `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una tarea suya, diaria o urgente (con su fin de turno); se avisa a su encargado |
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
