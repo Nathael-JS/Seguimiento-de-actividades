@@ -1,7 +1,7 @@
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 import { existsSync, readFileSync } from 'node:fs'
-import { randomInt, randomUUID } from 'node:crypto'
+import { createHmac, randomBytes, randomUUID } from 'node:crypto'
 
 const leer = (archivo) => JSON.parse(readFileSync(new URL(archivo, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
@@ -14,6 +14,9 @@ const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
 const texto = (max) => ({ type: 'string', maxLength: max })
 const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } } }
+// Criticidad de una actividad diaria; la crítica va debajo de la urgente pero sí se hereda (ver /heredar)
+const criticidad = { enum: ['simple', 'normal', 'alta', 'critica'] }
+const PESO_CRITICIDAD = { simple: 0, normal: 1, alta: 2, critica: 3 }
 // desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
 // hoy: fecha local de quien consulta (AAAA-MM-DD); con ella se generan los avisos de atraso
 // zona: zona horaria IANA del navegador (America/Mexico_City); con hoy, calcula el rate de aprobación
@@ -37,7 +40,6 @@ const passwordNueva = {
 const objeto = (requeridos, properties) => ({ type: 'object', required: requeridos, additionalProperties: false, properties })
 
 const verificarSchema = { body: objeto(['token', 'codigo'], { token, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
-const reenviarSchema = { body: objeto(['token'], { token }) }
 const registroSchema = {
   body: objeto(['name', 'no', 'email', 'role', 'dept', 'shift', 'password'], {
     name: { type: 'string', minLength: 3, maxLength: 100, pattern: '\\S' },
@@ -94,6 +96,7 @@ const registrarSchema = {
       comentario: texto(500),
       // Diaria (estándar) o urgente; la urgente trae el fin del turno elegido, en la hora del navegador
       prioridad: { enum: ['diaria', 'urgente'] },
+      criticidad,
       cierre: { type: 'string', format: 'date-time' },
     },
   },
@@ -120,20 +123,29 @@ const propiaSchema = {
     por: noEmpleado,
     texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
     prioridad: { enum: ['diaria', 'urgente'] },
+    criticidad,
     avance: { type: 'integer', minimum: 0, maximum: 100 },
     hoy: { type: 'string', format: 'date' },
     cierre: { type: 'string', format: 'date-time' },
   }),
 }
 
+const comentario = { type: 'string', minLength: 1, maxLength: 300, pattern: '\\S' }
+const responderSchema = {
+  params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
+  body: objeto(['por', 'accion', 'hoy'], {
+    por: noEmpleado, accion: { enum: ['aceptar', 'rechazar', 'redirigir'] }, comentario, para: noEmpleado,
+    hoy: { type: 'string', format: 'date' },
+  }),
+}
 const heredarSchema = {
   params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
   body: {
     type: 'object',
-    required: ['por', 'para', 'hoy'],
+    required: ['por', 'para', 'hoy', 'motivo'],
     additionalProperties: false,
     // hoy: la fecha local de quien hereda; la del servidor es UTC y de noche ya es mañana en México
-    properties: { por: noEmpleado, para: noEmpleado, hoy: { type: 'string', format: 'date' } },
+    properties: { por: noEmpleado, para: noEmpleado, hoy: { type: 'string', format: 'date' }, motivo: comentario },
   },
 }
 
@@ -164,8 +176,26 @@ const VIGENCIA_PASSWORD = 90 // días
 // Fecha del navegador aceptable: a un día o menos de la del servidor (cubre cualquier zona horaria)
 const hoyValido = (hoy) => Math.abs(Date.parse(hoy) - Date.parse(new Date().toISOString().slice(0, 10))) <= DIA
 const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.now() - Date.parse(u.pwdChanged)) / DIA)
-// j•••••@empresa.com
-const ocultarCorreo = (email) => email.replace(/^(.).*(@.*)$/, '$1•••••$2')
+
+// MFA con app autenticadora (TOTP, RFC 6238): HMAC-SHA1 del paso de 30 s, 6 dígitos. La clave va en base32,
+// que es como la leen Google / Microsoft Authenticator
+const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+const aBase32 = (buf) => [...buf].map((b) => b.toString(2).padStart(8, '0')).join('').match(/.{5}/g)
+  .map((bits) => BASE32[parseInt(bits, 2)]).join('') // 20 bytes = 160 bits = 32 caracteres exactos
+const deBase32 = (s) => Buffer.from([...s].map((c) => BASE32.indexOf(c).toString(2).padStart(5, '0')).join('')
+  .match(/.{8}/g).map((bits) => parseInt(bits, 2)))
+const pasoActual = () => Math.floor(Date.now() / 30_000)
+export function totp(secreto, paso = pasoActual()) {
+  const contador = Buffer.alloc(8)
+  contador.writeBigUInt64BE(BigInt(paso))
+  const h = createHmac('sha1', deBase32(secreto)).update(contador).digest()
+  return String((h.readUInt32BE(h[19] & 0xf) & 0x7fffffff) % 1_000_000).padStart(6, '0')
+}
+// Paso del código si es válido: se tolera ±30 s de desfase del reloj del teléfono y un código ya usado no se
+// acepta otra vez (alguien que lo vea en pantalla no puede reutilizarlo)
+const pasoDelCodigo = (secreto, codigo, ultimo = -1) =>
+  [pasoActual() - 1, pasoActual(), pasoActual() + 1].find((p) => p > ultimo && totp(secreto, p) === codigo)
+const APP_MFA = 'Seguimiento de Actividades'
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
 // Fin de cada turno en minutos desde la medianoche del día en que empieza (el C termina al día siguiente)
 const FIN_TURNO = { A: 14 * 60 + 30, B: 23 * 60, C: 30 * 60 }
@@ -189,13 +219,13 @@ export function build(opts = {}) {
   const usuarios = leer('./usuarios.json')
   const actividades = leer('./actividades.json')
   const notificaciones = leer('./notificaciones.json')
+  const herencias = [] // propuestas de herencia: pendientes de validar y su historial
   // shortcut: checador simulado (entrada/salida en hora de planta, lunes a viernes, oct–dic 2026); cambiar por el real
   const checador = leer('./checador.json')
   // Códigos de verificación y permisos de recuperación pendientes, por token
   const verificaciones = new Map()
   const recuperaciones = new Map()
   const limpiarVencidos = (mapa) => mapa.forEach((v, k) => v.vence < Date.now() && mapa.delete(k))
-  const nuevoCodigo = () => String(randomInt(0, 1_000_000)).padStart(6, '0')
   const siguienteId = (lista) => Math.max(0, ...lista.map((x) => x.id)) + 1
 
   const empleado = (no) => usuarios.find((u) => u.no === no)
@@ -274,7 +304,7 @@ export function build(opts = {}) {
   const cookie = (req, valor, extra = '') =>
     `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
   const PUBLICAS = new Set([
-    '/api/login', '/api/login/verificar', '/api/login/reenviar', '/api/logout',
+    '/api/login', '/api/login/verificar', '/api/logout',
     '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados',
   ])
   app.addHook('preHandler', async (req, reply) => {
@@ -298,10 +328,14 @@ export function build(opts = {}) {
     }
     limpiarVencidos(verificaciones)
     const id = randomUUID()
-    const codigo = nuevoCodigo()
-    verificaciones.set(id, { no: u.no, codigo, intentos: 0, vence: Date.now() + 5 * 60_000 })
-    // shortcut: el código se devuelve en la respuesta (simulado); enviarlo por correo cuando haya servicio de email
-    return { token: id, destino: ocultarCorreo(u.email), codigo }
+    // Primera vez: se genera la clave de su app autenticadora y queda guardada al verificar el primer código.
+    // shortcut: el alta va con la contraseña como único respaldo (como en la mayoría de los sistemas internos);
+    // agregar códigos de respaldo y que un administrador pueda reiniciar el MFA si alguien pierde el teléfono
+    const alta = !u.totp && aBase32(randomBytes(20))
+    verificaciones.set(id, { no: u.no, intentos: 0, vence: Date.now() + 5 * 60_000, ...(alta && { alta }) })
+    if (!alta) return { token: id }
+    const cuenta = encodeURIComponent(`${APP_MFA}:${u.email}`)
+    return { token: id, secreto: alta, uri: `otpauth://totp/${cuenta}?secret=${alta}&issuer=${encodeURIComponent(APP_MFA)}` }
   })
 
   // Paso 2: el código de 6 dígitos. Expira a los 5 minutos y admite 5 intentos
@@ -311,7 +345,9 @@ export function build(opts = {}) {
       verificaciones.delete(req.body.token)
       return reply.code(401).send({ error: 'El código expiró. Vuelve a iniciar sesión.' })
     }
-    if (v.codigo !== req.body.codigo) {
+    const u = empleado(v.no)
+    const paso = pasoDelCodigo(v.alta ?? u.totp, req.body.codigo, u.totpPaso)
+    if (paso === undefined) {
       if (++v.intentos >= 5) {
         verificaciones.delete(req.body.token)
         return reply.code(401).send({ error: 'Demasiados intentos. Vuelve a iniciar sesión.' })
@@ -319,6 +355,7 @@ export function build(opts = {}) {
       return reply.code(401).send({ error: 'Código incorrecto.' })
     }
     verificaciones.delete(req.body.token)
+    Object.assign(u, { totpPaso: paso }, v.alta && { totp: v.alta })
     limpiarVencidos(sesiones)
     const id = randomUUID()
     sesiones.set(id, { no: v.no, vence: Date.now() + DURACION_SESION })
@@ -333,13 +370,6 @@ export function build(opts = {}) {
     sesiones.delete(tokenDe(req))
     reply.header('set-cookie', cookie(req, '', '; Max-Age=0'))
     return { ok: true }
-  })
-
-  app.post('/api/login/reenviar', { schema: reenviarSchema }, async (req, reply) => {
-    const v = verificaciones.get(req.body.token)
-    if (!v || v.vence < Date.now()) return reply.code(401).send({ error: 'El código expiró. Vuelve a iniciar sesión.' })
-    Object.assign(v, { codigo: nuevoCodigo(), intentos: 0, vence: Date.now() + 5 * 60_000 })
-    return { codigo: v.codigo }
   })
 
   app.post('/api/registro', { schema: registroSchema }, async (req, reply) => {
@@ -492,7 +522,7 @@ export function build(opts = {}) {
   }))
 
   app.post('/api/actividades', { schema: registrarSchema }, async (req, reply) => {
-    const { por, para, fecha, turno, puntos, comentario = '', prioridad, cierre } = req.body
+    const { por, para, fecha, turno, puntos, comentario = '', prioridad, cierre, criticidad = 'normal' } = req.body
     const encargado = empleado(por)
     if (!encargado || !esEncargado(encargado)) {
       return reply.code(403).send({ error: 'Solo los encargados registran actividades.' })
@@ -511,7 +541,7 @@ export function build(opts = {}) {
         id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
         text: p.texto.trim(), pct: p.avance, status: p.avance === 100 ? 'done' : p.avance > 0 ? 'progress' : 'pending',
         mgr: comentario.trim(), note: '', ...(p.avance === 100 && { doneAt: at }),
-        ...(prioridad === 'urgente' && { prioridad, cierreTurno: cierre }),
+        ...(prioridad === 'urgente' ? { prioridad, cierreTurno: cierre } : { criticidad }),
       }
       actividades.push(a)
       return a
@@ -522,7 +552,7 @@ export function build(opts = {}) {
 
   // El técnico / Ing. Jr agrega una tarea suya: se toman sus datos tal cual (él mismo, su turno, la fecha de hoy)
   app.post('/api/actividades/propia', { schema: propiaSchema }, async (req, reply) => {
-    const { por, texto, prioridad, avance, hoy, cierre } = req.body
+    const { por, texto, prioridad, avance, hoy, cierre, criticidad = 'normal' } = req.body
     const u = empleado(por)
     if (!u || esEncargado(u)) return reply.code(403).send({ error: 'Solo técnicos e Ing. Jr agregan tareas propias.' })
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
@@ -535,7 +565,7 @@ export function build(opts = {}) {
     const a = {
       id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
       pct: avance, status: avance === 100 ? 'done' : avance > 0 ? 'progress' : 'pending', mgr: '', note: '',
-      propia: true, prioridad, ...(prioridad === 'urgente' && { cierreTurno: cierre }), ...(avance === 100 && { doneAt: at }),
+      propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }), ...(avance === 100 && { doneAt: at }),
     }
     actividades.push(a)
     if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: a.id })
@@ -545,8 +575,9 @@ export function build(opts = {}) {
   app.get('/api/actividades/:no', { schema: porEmpleado }, conEmpleado((u) =>
     vigentes()
       .filter((a) => a.to === u.no)
-      // Primero las urgentes abiertas, las realizadas al final; dentro de cada grupo, la más nueva primero
-      .sort((a, b) => urgenteAbierta(b) - urgenteAbierta(a) || (a.status === 'done') - (b.status === 'done') || b.id - a.id)
+      // Primero las urgentes abiertas, las realizadas al final; luego por criticidad y la más nueva primero
+      .sort((a, b) => urgenteAbierta(b) - urgenteAbierta(a) || (a.status === 'done') - (b.status === 'done') ||
+        PESO_CRITICIDAD[b.criticidad ?? 'normal'] - PESO_CRITICIDAD[a.criticidad ?? 'normal'] || b.id - a.id)
       .map((a) => ({ ...a, byName: empleado(a.by)?.name })),
   ))
 
@@ -573,35 +604,179 @@ export function build(opts = {}) {
     return { ...a, byName: empleado(a.by)?.name }
   })
 
-  app.post('/api/actividades/:id/heredar', { schema: heredarSchema }, async (req, reply) => {
-    const a = actividades.find((x) => x.id === req.params.id)
-    if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
-    const { por, para, hoy } = req.body
-    const encargado = empleado(por)
-    const suyos = encargado && esEncargado(encargado) ? asignables(encargado).map((e) => e.no) : []
-    if (!suyos.includes(a.to)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
-    if (a.prioridad === 'urgente') return reply.code(409).send({ error: 'Las tareas urgentes no se heredan.' })
-    if (a.handedTo || !['pending', 'incomplete'].includes(a.status)) {
-      return reply.code(409).send({ error: 'Solo se heredan actividades pendientes o incompletas, una sola vez.' })
-    }
-    const mismo = para === a.to
-    if (!mismo && !(suyos.includes(para) && RANGO[empleado(para).role] >= RANGO.jr)) {
-      return reply.code(403).send({ error: 'Solo se hereda a un técnico o Ing. Jr de tu equipo.' })
-    }
+  // ── Herencia ─────────────────────────────────────────────────────────────────────────────────────────────
+  // Un encargado (Ing. Full o superior) propone heredar una actividad pendiente o incompleta de su equipo, con
+  // motivo, a alguien de cualquier departamento. La valida el encargado directo de quien la recibe: acepta,
+  // rechaza o redirige a alguien de su equipo. Si quien propone ya es ese encargado, entra directo.
+  // Límites por día (fecha local de quien actúa): 2 herencias por turno y 2 a otro departamento a quien propone,
+  // 2 redirecciones a quien valida. La crítica pasa directo al siguiente turno una vez al día, sin límite.
+  const LIMITE = 2
+  const NIVEL = { tec: 'ejecutor', jr: 'ejecutor', full: 'lider', sr: 'lider', gte: 'lider' }
+  // Verificación de quien recibe: cada condición es un sí/no y todas deben cumplirse
+  const condiciones = (a, r) => ({
+    puesto: NIVEL[r.role] === NIVEL[empleado(a.to).role], // técnico ↔ Ing. Jr, Ing. Full ↔ Senior
+    turno: r.no === a.to || r.shift === SIGUIENTE_TURNO[a.shift], // el mismo empleado (día siguiente) u otro del turno siguiente
+  })
+  const puedeRecibir = (a, r) => Object.values(condiciones(a, r)).every(Boolean)
+  const validadorDe = (r) => r.boss ?? r.no
+  const cuenta = (filtro) => herencias.filter((h) => h.estado !== 'rechazada' && h.estado !== 'anulada' && filtro(h)).length
+  const heredable = (a) => a.prioridad !== 'urgente' && !a.handedTo && (a.status === 'pending' || a.status === 'incomplete')
 
-    // Mismo empleado: día siguiente, mismo turno. Otro: siguiente turno (tras el C viene el A del día siguiente).
-    // Se cuenta desde hoy si la actividad es de días anteriores, para no crearla en el pasado
+  // La actividad pasa a quien recibe. Mismo empleado: día siguiente, mismo turno. Otro: siguiente turno (tras el C
+  // viene el A del día siguiente). Se cuenta desde hoy si es de días anteriores, para no crearla en el pasado
+  const traspasar = (a, para, por, hoy) => {
+    const mismo = para === a.to
     const base = a.date > hoy ? a.date : hoy
     const nueva = {
       ...a, id: siguienteId(actividades), to: para, by: por, at: ahora(), status: 'pending', note: '', inh: true,
       date: mismo || a.shift === 'C' ? diaSiguiente(base) : base,
       shift: mismo ? a.shift : SIGUIENTE_TURNO[a.shift],
+      ...(a.criticidad === 'critica' && { pasadaEl: hoy }),
     }
+    delete nueva.herencia
     actividades.push(nueva)
     a.handedTo = para
+    delete a.herencia
     notificar({ for: para, kind: 'inherited', who: por, ref: nueva.id })
-    return reply.code(201).send(nueva)
+    return nueva
+  }
+  const vistaHerencia = (h) => {
+    const a = actividades.find((x) => x.id === h.act)
+    const nombre = (no) => empleado(no)?.name
+    const persona = (no) => { const e = empleado(no); return e && { no, name: e.name, role: e.role, dept: e.dept, shift: e.shift } }
+    return {
+      ...h, de: persona(a.to), porName: nombre(h.por), validaName: nombre(h.valida),
+      paraPersona: persona(h.para), redirigidaName: nombre(h.redirigidaA),
+      actividad: { id: a.id, text: a.text, date: a.date, shift: a.shift, pct: a.pct, status: a.status, criticidad: a.criticidad ?? 'normal' },
+    }
+  }
+
+  // Quiénes pueden recibir esta actividad (cualquier departamento), y quién validaría
+  app.get('/api/actividades/:id/receptores', { schema: { params: heredarSchema.params } }, async (req, reply) => {
+    const a = actividades.find((x) => x.id === req.params.id)
+    const yo = empleado(req.sesion.no)
+    if (!a || !esEncargado(yo) || !asignables(yo).some((e) => e.no === a.to)) {
+      return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    }
+    return usuarios.filter((r) => puedeRecibir(a, r))
+      .sort((x, y) => (x.no !== a.to) - (y.no !== a.to) || (x.dept !== yo.dept) - (y.dept !== yo.dept) || x.name.localeCompare(y.name))
+      .map((r) => ({
+        no: r.no, name: r.name, role: r.role, dept: r.dept, shift: r.shift, mismo: r.no === a.to,
+        // null: entra directo (crítica, o quien propone ya es su encargado)
+        valida: a.criticidad === 'critica' || validadorDe(r) === yo.no ? null : empleado(validadorDe(r))?.name,
+      }))
   })
+
+  app.post('/api/actividades/:id/heredar', { schema: heredarSchema }, async (req, reply) => {
+    const a = actividades.find((x) => x.id === req.params.id)
+    if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    const { por, para, hoy, motivo } = req.body
+    const yo = empleado(por)
+    if (!yo || !esEncargado(yo) || !asignables(yo).some((e) => e.no === a.to)) {
+      return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    }
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    if (a.prioridad === 'urgente') return reply.code(409).send({ error: 'Las tareas urgentes no se heredan.' })
+    if (!heredable(a)) return reply.code(409).send({ error: 'Solo se heredan actividades pendientes o incompletas, una sola vez.' })
+    if (a.herencia) return reply.code(409).send({ error: 'Esa actividad ya espera validación.' })
+    const r = empleado(para)
+    if (!r) return reply.code(404).send({ error: 'Empleado no encontrado.' })
+    const ok = condiciones(a, r)
+    if (!ok.puesto) return reply.code(400).send({ error: 'Solo se hereda entre puestos del mismo nivel: técnico e Ing. Jr, o Ing. Full y Senior.' })
+    if (!ok.turno) return reply.code(400).send({ error: 'Quien recibe debe ser del turno siguiente (o el mismo empleado, al día siguiente).' })
+
+    const critica = a.criticidad === 'critica'
+    const cruzada = r.dept !== empleado(a.to).dept
+    if (critica && a.pasadaEl === hoy) return reply.code(409).send({ error: 'Una actividad crítica pasa de turno una sola vez al día.' })
+    if (!critica) {
+      if (cuenta((h) => h.por === por && h.hoy === hoy && h.turno === a.shift && !h.critica) >= LIMITE) {
+        return reply.code(409).send({ error: 'Ya heredaste 2 actividades de ese turno hoy.' })
+      }
+      if (cruzada && cuenta((h) => h.por === por && h.hoy === hoy && h.cruzada && !h.critica) >= LIMITE) {
+        return reply.code(409).send({ error: 'Ya heredaste 2 actividades a otro departamento hoy.' })
+      }
+    }
+    const valida = validadorDe(r)
+    const directa = critica || valida === por
+    const h = {
+      id: siguienteId(herencias), act: a.id, por, para, motivo: motivo.trim(), hoy, turno: a.shift, cruzada, critica, valida,
+      estado: directa ? 'aceptada' : 'pendiente', at: ahora(),
+    }
+    herencias.push(h)
+    let creada
+    if (directa) h.nueva = (creada = traspasar(a, para, por, hoy)).id
+    else {
+      a.herencia = h.id
+      notificar({ for: valida, kind: 'herencia-pendiente', who: por, ref: a.id })
+    }
+    // creada: la actividad que ya recibió (fecha y turno), si entró directo
+    return reply.code(201).send({ ...vistaHerencia(h), creada })
+  })
+
+  // Lo que el encargado tiene por validar, lo que propuso y cuánto le queda hoy de cada límite
+  app.get('/api/herencias/:no', { schema: { ...porEmpleado, querystring: objeto(['hoy'], { hoy: { type: 'string', format: 'date' } }) } },
+    conEmpleado((u, req, reply) => {
+      if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados heredan actividades.' })
+      const { hoy } = req.query
+      const equipoDe = [u, ...equipo(u.no)]
+      return {
+        limite: LIMITE,
+        usadas: {
+          turnos: Object.fromEntries(['A', 'B', 'C'].map((t) => [t, cuenta((h) => h.por === u.no && h.hoy === hoy && h.turno === t && !h.critica)])),
+          cruzadas: cuenta((h) => h.por === u.no && h.hoy === hoy && h.cruzada && !h.critica),
+          redirecciones: herencias.filter((h) => h.resueltaPor === u.no && h.resueltaHoy === hoy && h.estado === 'redirigida').length,
+        },
+        porValidar: herencias.filter((h) => h.valida === u.no && h.estado === 'pendiente').map((h) => {
+          const a = actividades.find((x) => x.id === h.act)
+          // A quién más de su equipo se puede redirigir
+          const opciones = equipoDe.filter((e) => e.no !== h.para && puedeRecibir(a, e))
+            .map(({ no, name, role, shift }) => ({ no, name, role, shift }))
+          return { ...vistaHerencia(h), opciones }
+        }),
+        enviadas: herencias.filter((h) => h.por === u.no).slice(-20).reverse().map(vistaHerencia),
+      }
+    }))
+
+  app.post('/api/herencias/:id/responder', { schema: responderSchema }, async (req, reply) => {
+    const h = herencias.find((x) => x.id === req.params.id)
+    if (!h) return reply.code(404).send({ error: 'Herencia no encontrada.' })
+    const { por, accion, comentario: nota = '', para, hoy } = req.body
+    if (h.valida !== por) return reply.code(403).send({ error: 'Solo valida el encargado de quien la recibe.' })
+    if (h.estado !== 'pendiente') return reply.code(409).send({ error: 'Esa herencia ya se resolvió.' })
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    if (accion !== 'aceptar' && !nota.trim()) return reply.code(400).send({ error: 'Escribe el motivo.' })
+    const a = actividades.find((x) => x.id === h.act)
+    const resolver = (estado) => {
+      Object.assign(h, { estado, respuesta: nota.trim(), resueltaPor: por, resueltaHoy: hoy, resueltaAt: ahora() })
+      delete a.herencia
+      notificar({ for: h.por, kind: `herencia-${estado}`, who: por, ref: a.id })
+    }
+    if (accion === 'rechazar') {
+      resolver('rechazada')
+      return vistaHerencia(h)
+    }
+    // Mientras esperaba, el ejecutor pudo terminarla
+    if (!heredable(a)) {
+      resolver('anulada')
+      return reply.code(409).send({ error: 'La actividad ya no está pendiente: se anuló la herencia.' })
+    }
+    let destino = h.para
+    if (accion === 'redirigir') {
+      const r = empleado(para)
+      if (!r || r.no === h.para || (r.no !== por && !equipo(por).some((e) => e.no === r.no)) || !puedeRecibir(a, r)) {
+        return reply.code(400).send({ error: 'Redirige a alguien de tu equipo, del mismo nivel de puesto y del turno siguiente.' })
+      }
+      const usadas = herencias.filter((x) => x.resueltaPor === por && x.resueltaHoy === hoy && x.estado === 'redirigida').length
+      if (usadas >= LIMITE) return reply.code(409).send({ error: 'Ya redirigiste 2 actividades hoy.' })
+      destino = r.no
+      h.redirigidaA = r.no
+    }
+    const creada = traspasar(a, destino, h.por, hoy)
+    h.nueva = creada.id
+    resolver(accion === 'redirigir' ? 'redirigida' : 'aceptada')
+    return { ...vistaHerencia(h), creada }
+  })
+
 
   app.post('/api/reportes', { schema: reporteSchema }, async (req, reply) => {
     const { por, empleados, desde, hasta, turno } = req.body
@@ -619,7 +794,7 @@ export function build(opts = {}) {
         const e = empleado(a.to)
         return {
           id: a.id, date: a.date, shift: a.shift, at: a.at, text: a.text, pct: a.pct, status: a.status, note: a.note,
-          mgr: a.mgr, inh: !!a.inh, heredadaA: a.handedTo && empleado(a.handedTo).name, prioridad: a.prioridad, cerrada: !!a.cerrada,
+          mgr: a.mgr, inh: !!a.inh, heredadaA: a.handedTo && empleado(a.handedTo).name, prioridad: a.prioridad, criticidad: a.criticidad, cerrada: !!a.cerrada,
           no: a.to, doneAt: a.doneAt ?? (a.status === 'done' ? a.at : undefined), // para el comparativo
           name: e.name, role: e.role, dept: e.dept,
         }

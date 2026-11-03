@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ESTADOS, api, depto, estado as nombreEstado, finTurno, hora, hoy, iniciales, promedio, rol } from './comun.js'
-import { Anillo, Campo, Estado } from './ui.jsx'
+import { Anillo, Campo, Criticidad, Estado, SelectorCriticidad } from './ui.jsx'
 import { t } from './i18n.js'
 
 export default function MisActividades({ user, recargar, avisar }) {
@@ -104,6 +104,7 @@ function Tarea({ tarea, user, onGuardado }) {
         </div>
         <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {tarea.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
+          <Criticidad valor={tarea.criticidad} />
           {tarea.cerrada && <span className="tag suave">{t('Cerrada con el turno')}</span>}
           {tarea.inh && <span className="tag">{t('Heredada')}</span>}
           <Estado estado={tarea.status} />
@@ -153,6 +154,7 @@ function Tarea({ tarea, user, onGuardado }) {
 function NuevaTarea({ user, alCrear, cancelar }) {
   const [texto, setTexto] = useState('')
   const [prioridad, setPrioridad] = useState('diaria')
+  const [criticidad, setCriticidad] = useState('normal')
   const [avance, setAvance] = useState(0)
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -166,7 +168,10 @@ function NuevaTarea({ user, alCrear, cancelar }) {
     try {
       await api('/api/actividades/propia', {
         method: 'POST',
-        body: { por: user.no, texto: texto.trim(), prioridad, avance, hoy: hoy(), ...(prioridad === 'urgente' && { cierre: cierre.toISOString() }) },
+        body: {
+          por: user.no, texto: texto.trim(), prioridad, avance, hoy: hoy(),
+          ...(prioridad === 'urgente' ? { cierre: cierre.toISOString() } : { criticidad }),
+        },
       })
       alCrear()
     } catch (err) {
@@ -201,6 +206,7 @@ function NuevaTarea({ user, alCrear, cancelar }) {
           </label>
         </div>
       </fieldset>
+      {prioridad === 'diaria' && <SelectorCriticidad valor={criticidad} onChange={setCriticidad} />}
       <div className="field">
         <label htmlFor="avance-nueva">{t('Avance')} <small>{t('100 % = completada')}</small></label>
         <div className="range">

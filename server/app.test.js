@@ -1,13 +1,22 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { build } from './app.js'
+import { build, totp } from './app.js'
 
 const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/api/login', payload })
-// Login completo: usuario y contraseña, luego el código simulado
+// Clave TOTP de cada cuenta por instancia de la app (el primer login la entrega para darla de alta) y último paso usado
+const mfa = new WeakMap()
+// Login completo: usuario y contraseña, luego el código de la app autenticadora
 async function entrar(usuario, password = 'demo1234', app = build()) {
   const paso1 = (await login({ usuario, password }, app)).json()
-  return app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token: paso1.token, codigo: paso1.codigo } })
+  if (!mfa.has(app)) mfa.set(app, new Map())
+  const cuenta = mfa.get(app).get(usuario) ?? { ultimo: -1 }
+  if (paso1.secreto) cuenta.secreto = paso1.secreto
+  mfa.get(app).set(usuario, cuenta)
+  // Un código sirve una vez: si en estos 30 s ya se usó, se toma el del siguiente paso (el servidor tolera +30 s)
+  cuenta.ultimo = Math.max(Math.floor(Date.now() / 30_000), cuenta.ultimo + 1)
+  const codigo = cuenta.secreto ? totp(cuenta.secreto, cuenta.ultimo) : '000000'
+  return app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token: paso1.token, codigo } })
 }
 
 // Cookie de sesión de cada empleado, por instancia de la app (se inicia sesión la primera vez que se necesita)
@@ -21,7 +30,7 @@ async function sesionDe(app, no) {
 }
 // Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
 async function pedir(app, method, url, payload) {
-  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz)\/(\d{5})/)?.[1]
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias)\/(\d{5})/)?.[1]
   const enviar = async () => {
     const cookie = no && await sesionDe(app, no)
     return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
@@ -40,8 +49,10 @@ test('login correcto por correo, alias o número de empleado, en dos pasos', asy
   for (const usuario of ['jorge.salinas@empresa.com', ' Jorge.Salinas ', '10482']) {
     const paso1 = await login({ usuario, password: 'demo1234' })
     assert.equal(paso1.statusCode, 200, usuario)
-    assert.equal(paso1.json().destino, 'j•••••@empresa.com')
-    assert.match(paso1.json().codigo, /^\d{6}$/)
+    // Primera vez: la clave para dar de alta la app autenticadora (y nunca un código ya hecho)
+    assert.match(paso1.json().secreto, /^[A-Z2-7]{32}$/)
+    assert.match(paso1.json().uri, /^otpauth:\/\/totp\/Seguimiento%20de%20Actividades%3Ajorge\.salinas%40empresa\.com\?secret=[A-Z2-7]{32}&issuer=/)
+    assert.equal(paso1.json().codigo, undefined)
     assert.equal(paso1.json().name, undefined) // sin código no hay sesión
     const res = await entrar(usuario)
     assert.equal(res.statusCode, 200, usuario)
@@ -50,22 +61,34 @@ test('login correcto por correo, alias o número de empleado, en dos pasos', asy
   }
 })
 
-test('verificación: código incorrecto, 5 intentos, reenviar y token desconocido', async () => {
+test('TOTP: vector de prueba del RFC 6238', () => {
+  // Clave ASCII "12345678901234567890" en base32; a los 59 s (paso 1) el código de 8 dígitos es 94287082
+  assert.equal(totp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 1), '287082')
+})
+
+test('MFA: alta en el primer login, luego solo el código de la app; incorrecto, reutilizado, 5 intentos', async () => {
   const app = build()
   const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
-  const { token, codigo } = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
-  const malo = codigo === '000000' ? '111111' : '000000'
-  assert.equal((await verificar(token, malo)).json().error, 'Código incorrecto.')
-  const { codigo: nuevo } = (await app.inject({ method: 'POST', url: '/api/login/reenviar', payload: { token } })).json()
-  assert.equal((await verificar(token, nuevo)).statusCode, 200)
-  assert.equal((await verificar(token, nuevo)).statusCode, 401) // el código no se reutiliza
+  const alta = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  const malo = (c) => String((Number(c) + 1) % 1_000_000).padStart(6, '0')
+  assert.equal((await verificar(alta.token, malo(totp(alta.secreto)))).json().error, 'Código incorrecto.')
+  assert.equal((await verificar(alta.token, totp(alta.secreto))).statusCode, 200)
 
+  // Ya dada de alta: no vuelve a entregar la clave, y el código que se acaba de usar no sirve otra vez
   const otro = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
-  for (let i = 0; i < 4; i++) await verificar(otro.token, otro.codigo === '000000' ? '111111' : '000000')
-  assert.match((await verificar(otro.token, otro.codigo === '000000' ? '111111' : '000000')).json().error, /Demasiados intentos/)
-  assert.equal((await verificar(otro.token, otro.codigo)).statusCode, 401) // bloqueado aunque ahora acierte
+  assert.equal(otro.secreto, undefined)
+  assert.equal((await verificar(otro.token, totp(alta.secreto))).statusCode, 401)
+  assert.equal((await verificar(otro.token, totp(alta.secreto, Math.floor(Date.now() / 30_000) + 1))).statusCode, 200)
+
+  // Una clave de alta que no se confirmó no queda guardada; 5 intentos fallidos cierran la verificación
+  const tercero = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  for (let i = 0; i < 4; i++) await verificar(tercero.token, '000000')
+  assert.match((await verificar(tercero.token, '000000')).json().error, /Demasiados intentos/)
+  assert.equal((await verificar(tercero.token, totp(alta.secreto))).statusCode, 401)
   assert.equal((await verificar('no-existe', '123456')).statusCode, 401)
-  assert.equal((await verificar(token, '12ab56')).statusCode, 400)
+  assert.equal((await verificar(otro.token, '12ab56')).statusCode, 400)
+  // Las claves de cada cuenta son distintas
+  assert.notEqual((await login({ usuario: '10490', password: 'demo1234' }, app)).json().secreto, alta.secreto)
 })
 
 test('contraseña o usuario incorrecto da 401', async () => {
@@ -183,7 +206,13 @@ test('sirve el frontend compilado; /assets con caché larga e index.html sin cac
 })
 
 // hoy por defecto = el día de los datos de prueba, para que las fechas esperadas no dependan del reloj
-const heredar = (app, id, por, para, hoy = '2026-10-29') => pedir(app, 'POST', `/api/actividades/${id}/heredar`, { por, para, hoy })
+const heredar = (app, id, por, para, hoy = '2026-10-29', motivo = 'Falta refacción') =>
+  pedir(app, 'POST', `/api/actividades/${id}/heredar`, { por, para, hoy, motivo })
+// Reloj simulado para la prueba: las fechas "hoy" que manda el navegador deben estar a un día o menos del servidor
+const reloj = (t, iso) => {
+  mock.timers.enable({ apis: ['Date'], now: Date.parse(iso) })
+  t.after(() => mock.timers.reset())
+}
 
 test('equipo trae jefe y actividades vigentes de cada miembro', async () => {
   const jorge = (await pedir(build(), 'GET', '/api/equipo/10230')).body.find((e) => e.no === '10482')
@@ -191,10 +220,13 @@ test('equipo trae jefe y actividades vigentes de cada miembro', async () => {
   assert.deepEqual(jorge.actividades.map((a) => a.id), [4, 3, 2, 1])
 })
 
-test('heredar al mismo empleado: día siguiente, mismo turno; la original sale de listas e indicadores', async () => {
+test('heredar al mismo empleado: día siguiente, mismo turno; la original sale de listas e indicadores', async (t) => {
+  reloj(t, '2026-10-29T15:00:00Z')
   const app = build()
-  const { code, body } = await heredar(app, 3, '10230', '10482')
-  assert.equal(code, 201)
+  const r = await heredar(app, 3, '10230', '10482')
+  assert.equal(r.code, 201)
+  assert.deepEqual([r.body.estado, r.body.motivo], ['aceptada', 'Falta refacción']) // Diego es su encargado: entra directo
+  const body = r.body.creada
   assert.deepEqual([body.to, body.by, body.date, body.shift, body.status, body.inh], ['10482', '10230', '2026-10-30', 'A', 'pending', true])
   const ids = (await pedir(app, 'GET', '/api/actividades/10482')).body.map((a) => a.id)
   assert.ok(ids.includes(body.id) && !ids.includes(3))
@@ -205,27 +237,35 @@ test('heredar al mismo empleado: día siguiente, mismo turno; la original sale d
   assert.equal((await heredar(app, 3, '10230', '10482')).code, 409) // una sola vez
 })
 
-test('heredar a otro empleado: siguiente turno; del C pasa al A del día siguiente', async () => {
+test('heredar a otro empleado: siguiente turno; del C pasa al A del día siguiente', async (t) => {
+  reloj(t, '2026-10-29T15:00:00Z')
   const app = build()
   // Luis (turno B, incompleta) → Héctor: mismo día, turno C
-  const b = (await heredar(app, 9, '10251', '10547', '2026-10-28')).body
+  const b = (await heredar(app, 9, '10251', '10547', '2026-10-28')).body.creada
   assert.deepEqual([b.to, b.date, b.shift, b.pct], ['10547', '2026-10-28', 'C', 65])
   // Una actividad del turno C heredada a otro pasa al turno A del día siguiente
   const [c] = (await pedir(app, 'POST', '/api/actividades', asignar({ turno: 'C', fecha: '2026-10-31', puntos: [{ texto: 'Ronda nocturna', avance: 0 }] }))).body
-  const a = (await heredar(app, c.id, '10230', '10490')).body
+  const a = (await heredar(app, c.id, '10230', '10490')).body.creada
   assert.deepEqual([a.to, a.date, a.shift], ['10490', '2026-11-01', 'A'])
 })
 
-test('heredar valida permisos y estado', async () => {
+test('heredar valida permisos, estado, puesto y turno', async (t) => {
+  reloj(t, '2026-10-29T15:00:00Z')
   const app = build()
   assert.equal((await heredar(app, 9, '10230', '10482')).code, 403) // Luis no es del equipo de Diego
   assert.equal((await heredar(app, 3, '10482', '10482')).code, 403) // un técnico no hereda
-  assert.equal((await heredar(app, 3, '10230', '10112')).code, 403) // no a un Senior
+  const puesto = await heredar(app, 3, '10230', '10251') // de técnico a Ing. Full (turno B): otro nivel
+  assert.deepEqual([puesto.code, puesto.body.error], [400, 'Solo se hereda entre puestos del mismo nivel: técnico e Ing. Jr, o Ing. Full y Senior.'])
+  const turno = await heredar(app, 3, '10230', '10490') // María es del mismo turno A, no del siguiente
+  assert.deepEqual([turno.code, turno.body.error], [400, 'Quien recibe debe ser del turno siguiente (o el mismo empleado, al día siguiente).'])
   assert.equal((await heredar(app, 1, '10230', '10482')).code, 409) // ya realizada
   assert.equal((await heredar(app, 999, '10230', '10482')).code, 404)
+  assert.equal((await heredar(app, 3, '10230', '10482', '2030-01-01')).code, 400) // fecha del equipo inválida
+  assert.equal((await pedir(app, 'POST', '/api/actividades/3/heredar', { por: '10230', para: '10482', hoy: '2026-10-29' })).code, 400) // sin motivo
 })
 
-test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomada', async () => {
+test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomada', async (t) => {
+  reloj(t, '2026-10-29T15:00:00Z')
   const app = build()
   const reporte = (cambios) => pedir(app, 'POST', '/api/reportes', { por: '10230', empleados: ['10482', '10490'], desde: '2026-10-28', hasta: '2026-10-29', ...cambios })
   const filas = (await reporte()).body
@@ -237,8 +277,8 @@ test('reportes: filtra por empleados, fechas y turno, y muestra la acción tomad
   assert.equal(filas.find((f) => f.id === 5).doneAt, undefined) // en proceso
   assert.equal((await reporte({ turno: 'B' })).body.length, 0)
   assert.equal((await reporte({ desde: '2026-10-30', hasta: '2026-10-31' })).body.length, 0)
-  await heredar(app, 3, '10230', '10490')
-  assert.equal((await reporte()).body.find((f) => f.id === 3).heredadaA, 'María López')
+  await heredar(app, 3, '10230', '10482')
+  assert.equal((await reporte()).body.find((f) => f.id === 3).heredadaA, 'Jorge Salinas')
   assert.equal((await reporte({ empleados: ['10511'] })).code, 403) // no es de su equipo
   assert.equal((await reporte({ por: '10482' })).code, 403)
   assert.equal((await reporte({ empleados: [] })).code, 400)
@@ -321,7 +361,10 @@ test('departamentos: solo el propio, sin datos sensibles; el rate solo con hoy y
   assert.ok(encargados.every((e) => ['gte', 'sr', 'full'].includes(e.role)))
 })
 
-test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la hora local', async () => {
+test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la hora local', async (t) => {
+  // "Hoy" es el 2 nov en Ciudad de México: lo realizado ahora cae en ese día local
+  mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-02T18:00:00Z') })
+  t.after(() => mock.timers.reset())
   const app = build()
   const rate = async (no, q = CDMX) => (await pedir(app, 'GET', `/api/perfil/${no}?${q}`)).body.rate
   // Jorge, 2 nov: de sus 4 del 29 oct solo la 1 está realizada (ese mismo día) → 25 %
@@ -347,12 +390,13 @@ test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la h
   assert.equal((await pedir(app, 'GET', `/api/equipo/10251?${CDMX}`)).body.find((e) => e.no === '10547').rate, 100)
 })
 
-test('heredar una actividad de días anteriores cuenta desde hoy, no desde su fecha', async () => {
+test('heredar una actividad de días anteriores cuenta desde hoy, no desde su fecha', async (t) => {
+  reloj(t, '2026-11-02T18:00:00Z')
   const app = build()
   // Actividad 3: 29 oct, turno A. Se hereda el 2 nov
-  assert.equal((await heredar(app, 3, '10230', '10482', '2026-11-02')).body.date, '2026-11-03')
+  assert.equal((await heredar(app, 3, '10230', '10482', '2026-11-02')).body.creada.date, '2026-11-03')
   // Actividad 9: 28 oct, turno B, a otro empleado: siguiente turno (C) del día de hoy
-  const otro = (await heredar(app, 9, '10251', '10547', '2026-11-02')).body
+  const otro = (await heredar(app, 9, '10251', '10547', '2026-11-02')).body.creada
   assert.deepEqual([otro.date, otro.shift], ['2026-11-02', 'C'])
   assert.equal((await pedir(app, 'POST', '/api/actividades/8/heredar', { por: '10112', para: '10533' })).code, 400) // falta hoy
 })
@@ -553,7 +597,7 @@ test('urgente: va primero, no se hereda y al cerrar el turno queda fija', async 
   const urgente = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 60, cierre: enUnaHora() }))).body
   const lista = async () => (await pedir(app, 'GET', '/api/actividades/10482')).body
   assert.equal((await lista())[0].id, urgente.id)
-  assert.equal((await pedir(app, 'POST', `/api/actividades/${urgente.id}/heredar`, { por: '10230', para: '10490', hoy: HOY_REAL })).code, 409)
+  assert.equal((await pedir(app, 'POST', `/api/actividades/${urgente.id}/heredar`, { por: '10230', para: '10482', hoy: HOY_REAL, motivo: 'x' })).code, 409)
   // Una urgente terminada antes del cierre queda realizada
   const hecha = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 100, cierre: enUnaHora() }))).body
 
@@ -623,4 +667,106 @@ test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checado
   } finally {
     mock.timers.reset()
   }
+})
+
+// ── Herencia con validación ───────────────────────────────────────────────────────────────────────────────
+const HOY = '2026-11-03'
+// Diego asigna a Jorge una actividad pendiente de hoy en ese turno; devuelve su id
+const pendiente = async (app, turno = 'A', cambios = {}) =>
+  (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY, turno, puntos: [{ texto: `Tarea ${turno}`, avance: 0 }], ...cambios }))).body[0].id
+const responder = (app, id, por, accion, extra = {}) =>
+  pedir(app, 'POST', `/api/herencias/${id}/responder`, { por, accion, hoy: HOY, ...extra })
+const bandeja = (app, no) => pedir(app, 'GET', `/api/herencias/${no}?hoy=${HOY}`).then((r) => r.body)
+
+test('herencia: la valida el encargado de quien recibe; rechazar pide motivo; aceptar la pasa', async (t) => {
+  reloj(t, '2026-11-03T15:00:00Z')
+  const app = build()
+  // Laura propone la 3 de Jorge (turno A) a Luis (turno B); Luis reporta a Sofía, que valida
+  const p = await heredar(app, 3, '10001', '10511', HOY)
+  assert.deepEqual([p.code, p.body.estado, p.body.valida, p.body.validaName, p.body.creada], [201, 'pendiente', '10251', 'Sofía Navarro', undefined])
+  assert.equal((await heredar(app, 3, '10001', '10511', HOY)).code, 409) // ya espera validación
+  const [h] = (await bandeja(app, '10251')).porValidar
+  assert.deepEqual([h.id, h.actividad.text, h.motivo, h.de.name, h.paraPersona.name], [p.body.id, 'Actualizar hoja de WIP de la estación', 'Falta refacción', 'Jorge Salinas', 'Luis Ortega'])
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10251')).body.notificaciones[0].kind, 'herencia-pendiente')
+
+  assert.equal((await responder(app, h.id, '10230', 'aceptar')).code, 403) // Diego no es el encargado de Luis
+  assert.equal((await responder(app, h.id, '10251', 'rechazar')).code, 400) // sin motivo
+  const no = await responder(app, h.id, '10251', 'rechazar', { comentario: 'Luis está en paro de línea' })
+  assert.deepEqual([no.code, no.body.estado, no.body.respuesta], [200, 'rechazada', 'Luis está en paro de línea'])
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10001')).body.notificaciones[0].kind, 'herencia-rechazada')
+  assert.equal((await responder(app, h.id, '10251', 'aceptar')).code, 409) // ya resuelta
+
+  // Rechazada no cuenta en el límite y se puede proponer otra vez
+  const otra = (await heredar(app, 3, '10001', '10511', HOY)).body
+  assert.equal((await bandeja(app, '10001')).usadas.turnos.A, 1)
+  const si = await responder(app, otra.id, '10251', 'aceptar')
+  assert.deepEqual([si.body.estado, si.body.creada.to, si.body.creada.shift, si.body.creada.date], ['aceptada', '10511', 'B', HOY])
+  assert.ok((await pedir(app, 'GET', '/api/actividades/10511')).body.some((a) => a.id === si.body.creada.id))
+  assert.deepEqual((await bandeja(app, '10001')).enviadas.map((x) => x.estado), ['aceptada', 'rechazada'])
+})
+
+test('herencia: redirigir a alguien de su equipo, 2 al día; 2 por turno a quien propone; se anula si ya se hizo', async (t) => {
+  reloj(t, '2026-11-03T15:00:00Z')
+  const app = build()
+  for (const [no, email] of [['20001', 'a@empresa.com'], ['20002', 'b@empresa.com']]) {
+    await pedir(app, 'POST', '/api/registro', registro({ no, email })) // técnicos del turno B a cargo de Sofía
+  }
+  const [a1, a2, a3, a4] = [await pendiente(app), await pendiente(app), await pendiente(app), await pendiente(app)]
+  const h1 = (await heredar(app, a1, '10001', '10511', HOY)).body
+  const h2 = (await heredar(app, a2, '10001', '10511', HOY)).body
+  assert.equal((await heredar(app, a3, '10001', '10511', HOY)).body.error, 'Ya heredaste 2 actividades de ese turno hoy.')
+  assert.deepEqual((await bandeja(app, '10251')).porValidar[0].opciones.map((o) => o.no).sort(), ['20001', '20002'])
+
+  assert.equal((await responder(app, h1.id, '10251', 'redirigir', { para: '20001' })).code, 400) // sin motivo
+  assert.equal((await responder(app, h1.id, '10251', 'redirigir', { para: '10822', comentario: 'x' })).code, 400) // Iván no es de su equipo
+  const r1 = (await responder(app, h1.id, '10251', 'redirigir', { para: '20001', comentario: 'Luis va a capacitación' })).body
+  assert.deepEqual([r1.estado, r1.redirigidaName, r1.creada.to], ['redirigida', 'Ana Prueba', '20001'])
+  await responder(app, h2.id, '10251', 'redirigir', { para: '20002', comentario: 'Reparto de carga' })
+  // Carlos (Senior) también puede proponer; Sofía ya no puede redirigir hoy
+  const h3 = (await heredar(app, a3, '10112', '10511', HOY)).body
+  assert.equal((await responder(app, h3.id, '10251', 'redirigir', { para: '20001', comentario: 'x' })).body.error, 'Ya redirigiste 2 actividades hoy.')
+  assert.equal((await bandeja(app, '10251')).usadas.redirecciones, 2)
+
+  // Si el técnico la termina mientras espera, aceptar la anula
+  const h4 = (await heredar(app, a4, '10112', '10511', HOY)).body
+  await pedir(app, 'PATCH', `/api/actividades/${a4}`, { por: '10482', estado: 'done', avance: 100 })
+  assert.equal((await responder(app, h4.id, '10251', 'aceptar')).code, 409)
+  assert.equal((await bandeja(app, '10112')).enviadas.find((x) => x.id === h4.id).estado, 'anulada')
+})
+
+test('herencia entre departamentos: 2 al día; quién puede recibir según puesto y turno', async (t) => {
+  reloj(t, '2026-11-03T15:00:00Z')
+  const app = build()
+  const [a1, a2, b1] = [await pendiente(app), await pendiente(app), await pendiente(app, 'B')]
+  // Receptores de una actividad del turno A de Jorge: él mismo, y técnicos / Ing. Jr del turno B de cualquier departamento
+  const receptores = (await conCookie(app, 'GET', `/api/actividades/${a1}/receptores`, await sesionDe(app, '10230'))).json()
+  assert.deepEqual(receptores.map((r) => [r.no, r.valida]), [['10482', null], ['10511', 'Sofía Navarro'], ['10822', 'Fernanda Ríos']])
+  assert.equal((await conCookie(app, 'GET', `/api/actividades/${a1}/receptores`, await sesionDe(app, '10482'))).statusCode, 403)
+
+  // Iván (SMT, Ing. Jr, turno B) valida Fernanda; Ricardo (Pruebas Funcionales, turno C) valida Elena
+  const x1 = (await heredar(app, a1, '10230', '10822', HOY)).body
+  assert.deepEqual([x1.estado, x1.cruzada, x1.valida], ['pendiente', true, '10810'])
+  await heredar(app, a2, '10230', '10822', HOY)
+  assert.equal((await heredar(app, b1, '10230', '10604', HOY)).body.error, 'Ya heredaste 2 actividades a otro departamento hoy.')
+  const ok = (await responder(app, x1.id, '10810', 'aceptar')).body
+  assert.deepEqual([ok.creada.to, ok.creada.shift], ['10822', 'B'])
+})
+
+test('criticidad: por omisión normal; la crítica pasa directo al siguiente turno, sin límite, una vez al día', async (t) => {
+  reloj(t, '2026-11-03T15:00:00Z')
+  const app = build()
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar())).body[0].criticidad, 'normal')
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ criticidad: 'urgentisima' }))).code, 400)
+  // Diego ya usó sus 2 herencias del turno A de hoy
+  await heredar(app, await pendiente(app), '10230', '10482', HOY)
+  await heredar(app, await pendiente(app), '10230', '10482', HOY)
+  const critica = await pendiente(app, 'A', { criticidad: 'critica' })
+  const h = (await heredar(app, critica, '10230', '10511', HOY)).body // Luis es de Sofía, pero la crítica no espera validación
+  assert.deepEqual([h.estado, h.critica, h.creada.criticidad, h.creada.pasadaEl, h.creada.shift], ['aceptada', true, 'critica', HOY, 'B'])
+  // Ya pasó de turno hoy: Sofía no puede pasarla de nuevo (B → C) hasta mañana
+  const otra = await heredar(app, h.creada.id, '10251', '10547', HOY)
+  assert.deepEqual([otra.code, otra.body.error], [409, 'Una actividad crítica pasa de turno una sola vez al día.'])
+  mock.timers.tick(86_400_000)
+  const manana = (await heredar(app, h.creada.id, '10251', '10547', '2026-11-04')).body
+  assert.deepEqual([manana.estado, manana.creada.to, manana.creada.shift], ['aceptada', '10547', 'C'])
 })

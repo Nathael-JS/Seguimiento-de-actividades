@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, consultaRate, dia, esEncargado, hora, hoy, iniciales, inicioDeHoy, promedio, rol } from './comun.js'
 import { t } from './i18n.js'
-import { Anillo, Estado, Rate } from './ui.jsx'
+import { Anillo, Criticidad, Estado, Rate } from './ui.jsx'
 
 const conAvance = (acts) => (acts.length ? promedio(acts) : null)
 
@@ -71,6 +71,7 @@ export default function Monitoreo({ user }) {
                       <span title={a.text}>{a.text}</span>
                       <span className="row" style={{ gap: 8, flex: 'none' }}>
                         {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
+                        <Criticidad valor={a.criticidad} />
                         <span className="mono muted">{a.pct}%</span>
                         <Estado estado={a.status} />
                       </span>
@@ -144,6 +145,7 @@ function Detalle({ user, emp, cerrar }) {
                     </span>
                     <span className="row" style={{ gap: 8, flex: 'none' }}>
                       {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
+                      <Criticidad valor={a.criticidad} />
                       <span className="mono muted">{a.pct}%</span>
                       <Estado estado={a.status} />
                     </span>
