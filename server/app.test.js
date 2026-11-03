@@ -21,7 +21,7 @@ async function sesionDe(app, no) {
 }
 // Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
 async function pedir(app, method, url, payload) {
-  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones)\/(\d{5})/)?.[1]
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz)\/(\d{5})/)?.[1]
   const enviar = async () => {
     const cookie = no && await sesionDe(app, no)
     return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
@@ -259,7 +259,8 @@ test('registro de técnico: elige encargado del departamento, hereda su área y 
   assert.deepEqual([yo.name, yo.area, yo.encargado], ['Ana Prueba', 'CDU y Chillers', false])
   // Aparece en el equipo de Sofía y en Departamentos
   assert.ok((await pedir(app, 'GET', '/api/equipo/10251')).body.some((e) => e.no === '20001'))
-  assert.equal((await pedir(app, 'GET', `/api/departamentos?${CDMX}`)).body.find((e) => e.no === '20001').rate, null) // sin actividades
+  const jorge = await sesionDe(app, '10482') // mismo departamento
+  assert.equal((await conCookie(app, 'GET', `/api/departamentos?${CDMX}`, jorge)).json().find((e) => e.no === '20001').rate, null) // sin actividades
 })
 
 test('registro valida duplicados, contraseña y encargado', async () => {
@@ -304,11 +305,20 @@ test('perfil y cambio de contraseña propio', async () => {
   assert.equal((await pedir(app, 'GET', '/api/perfil/99999')).code, 401)
 })
 
-test('departamentos: todos los empleados, sin datos sensibles; el rate solo con hoy y zona', async () => {
-  const lista = (await pedir(build(), 'GET', '/api/departamentos')).body
-  assert.equal(lista.length, 15)
-  assert.deepEqual(Object.keys(lista[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
-  assert.ok('rate' in (await pedir(build(), 'GET', `/api/departamentos?${CDMX}`)).body[0])
+test('departamentos: solo el propio, sin datos sensibles; el rate solo con hoy y zona', async () => {
+  const app = build()
+  const de = async (no, q = '') => (await conCookie(app, 'GET', `/api/departamentos${q}`, await sesionDe(app, no))).json()
+  const lc = await de('10482')
+  assert.equal(lc.length, 10)
+  assert.ok(lc.every((e) => e.dept === 'lc'))
+  assert.deepEqual(Object.keys(lc[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
+  assert.deepEqual((await de('10604')).map((e) => e.no), ['10700', '10620', '10604']) // Pruebas Funcionales
+  assert.ok('rate' in (await de('10482', `?${CDMX}`))[0])
+  assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 401)
+  // Registro, sin sesión, solo ve a los encargados
+  const encargados = (await conCookie(app, 'GET', '/api/encargados', undefined)).json()
+  assert.deepEqual(Object.keys(encargados[0]).sort(), ['dept', 'name', 'no', 'role'])
+  assert.ok(encargados.every((e) => ['gte', 'sr', 'full'].includes(e.role)))
 })
 
 test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la hora local', async () => {
@@ -451,7 +461,7 @@ test('sesión: cookie HttpOnly al entrar, sin sesión no hay datos y al recargar
   }
   assert.equal((await conCookie(app, 'GET', '/api/sesion', undefined)).statusCode, 401)
   // Las públicas no la piden
-  assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 200)
+  assert.equal((await conCookie(app, 'GET', '/api/encargados', undefined)).statusCode, 200)
 })
 
 test('sesión: no se puede actuar como otro empleado', async () => {
@@ -570,4 +580,47 @@ test('aviso de atraso de una tarea propia: al empleado y a su encargado, no dos 
   const deEsta = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}`)).body.notificaciones.filter((n) => n.kind === 'overdue' && n.actividad === body.text)
   assert.equal((await deEsta('10482')).length, 1)
   assert.equal((await deEsta('10230')).length, 1)
+})
+
+test('asignar urgente: el encargado la marca aparte, con el cierre del turno elegido; no se hereda', async () => {
+  const app = build()
+  const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre: enUnaHora(), puntos: [{ texto: 'Fuga en LC245-02', avance: 0 }] }))
+  assert.equal(code, 201)
+  assert.deepEqual([body[0].prioridad, typeof body[0].cierreTurno], ['urgente', 'string'])
+  assert.equal((await heredar(app, body[0].id, '10230', '10482', HOY_REAL)).code, 409)
+  // Diaria es el estándar: sin prioridad
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar())).body[0].prioridad, undefined)
+  for (const cierre of [undefined, new Date(Date.now() - 60_000).toISOString(), new Date(Date.now() + 2 * 86_400_000).toISOString()]) {
+    assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre }))).code, 400, String(cierre))
+  }
+})
+
+test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checador', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-03T15:00:00Z') })
+  try {
+    const app = build()
+    const matriz = (no, q) => pedir(app, 'GET', `/api/matriz/${no}?hoy=2026-11-03&${q}`)
+    const { code, body } = await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')
+    assert.equal(code, 200)
+    assert.deepEqual(body.map((f) => f.no), ['10490', '10482']) // su rama, por puesto
+    const jorge = body.find((f) => f.no === '10482')
+    // 29 oct: 4 diarias, 1 realizada. Hasta ayer: salidas después de las 14:30 suman 517 min; 6 de 6 días hábiles
+    assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.extra, jorge.asistencia], [[1, 4], [0, 0], 517, [6, 6]])
+    const maria = body.find((f) => f.no === '10490')
+    assert.deepEqual([maria.extra, maria.asistencia], [455, [5, 6]]) // faltó el 30 oct
+    // Una urgente abierta aún no cuenta; al cerrar el turno sí
+    await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 40, hoy: '2026-11-03', cierre: enUnaHora() }))
+    const urgentes = async () => (await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')).body.find((f) => f.no === '10482').urgentes
+    assert.deepEqual(await urgentes(), [0, 0])
+    mock.timers.tick(2 * 3_600_000)
+    assert.deepEqual(await urgentes(), [0, 1])
+    // El gerente ve toda su rama; un técnico no tiene matriz; hasta en el futuro se corta en hoy
+    assert.equal((await matriz('10001', 'desde=2026-10-26&hasta=2026-11-03')).body.length, 9)
+    assert.equal((await matriz('10482', 'desde=2026-10-26&hasta=2026-11-03')).code, 403)
+    assert.equal((await matriz('10230', 'desde=2026-10-26&hasta=2026-12-31')).code, 200)
+    assert.equal((await matriz('10230', 'desde=2026-11-04&hasta=2026-11-10')).code, 400)
+    assert.equal((await matriz('10230', 'desde=2026-10-26')).code, 400)
+  } finally {
+    mock.timers.reset()
+  }
 })

@@ -11,6 +11,12 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Sesión:** al terminar los 2 pasos el servidor guarda la sesión en una cookie `HttpOnly` y `SameSite=Strict` (en Render, también `Secure`). Al recargar la página se sigue dentro; se cierra con "Cerrar sesión", al cerrar el navegador o tras 12 h sin uso. El servidor toma de la sesión quién pide: nadie puede ver ni cambiar datos como otro empleado. Cambiar la contraseña cierra las demás sesiones de esa persona (recuperarla, todas). Las sesiones también viven en memoria: al reiniciar el servidor hay que volver a entrar.
 
+**Matriz de seguimiento** (encargados, su rama): yield de diarias y de urgentes (realizadas ÷ asignadas; las de hoy abiertas y las urgentes sin cerrar aún no cuentan), tiempo extra (salida después del fin de turno) y asistencia (días hábiles con entrada ÷ días hábiles), estos dos hasta ayer. **Checador simulado:** `server/checador.json` trae entrada/salida de lunes a viernes, oct–dic 2026; se cambia por el checador real.
+
+**Jerarquía** (encargados): árbol de su rama; cada persona abre su Monitoreo. En **Monitoreo**, tocar el nombre muestra sus actividades asignadas (30 días atrás y lo programado).
+
+**Departamentos:** cada quien ve solo la plantilla de su departamento; los equipos nunca cruzan departamentos.
+
 **Simulado:** el código de la verificación en 2 pasos se muestra en pantalla en lugar de enviarse por correo.
 
 **Rate de aprobación:** % de las actividades de los últimos 30 días realizadas a tiempo (a más tardar el día que les tocaba, en la hora local de quien consulta). Las de hoy que siguen abiertas aún no cuentan. Se muestra en Departamentos, Perfil y Monitoreo.
@@ -35,6 +41,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/login` | Paso 1: usuario (correo, alias o número) y contraseña; genera el código |
 | `POST` | `/api/login/verificar` | Paso 2: código de 6 dígitos (5 min, 5 intentos); abre la sesión (cookie) y devuelve el usuario |
 | `POST` | `/api/login/reenviar` | Nuevo código para la misma verificación |
+| `GET` | `/api/encargados` | Encargados de cada departamento (Registro, sin sesión) |
 | `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
 | `POST` | `/api/logout` | Cerrar sesión |
 | `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
@@ -42,19 +49,20 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
 | `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña; con `?hoy=&zona=`, su rate de aprobación |
 | `POST` | `/api/perfil/:no/password` | Cambiar la contraseña propia (pide la actual) |
-| `GET` | `/api/departamentos` | Plantilla de todos los departamentos; con `?hoy=&zona=` (fecha y zona horaria IANA del navegador), el rate de cada uno |
+| `GET` | `/api/departamentos` | Plantilla del departamento de quien consulta; con `?hoy=&zona=` (fecha y zona horaria IANA del navegador), el rate de cada uno |
 | `GET` | `/api/inicio/:no` | Indicadores y notificaciones. `?desde=` (inicio del día local) cuenta solo lo abierto y lo realizado hoy; `?hoy=` (fecha local) genera los avisos automáticos |
 | `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
 | `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
-| `POST` | `/api/actividades` | Registrar actividades por puntos y notificar al empleado |
+| `POST` | `/api/actividades` | Registrar actividades por puntos (diarias, o urgentes con el cierre del turno elegido) y notificar al empleado |
 | `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una tarea suya, diaria o urgente (con su fin de turno); se avisa a su encargado |
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `POST` | `/api/actividades/:id/heredar` | Heredar una pendiente o incompleta al día siguiente o a otro técnico / Ing. Jr del siguiente turno |
 | `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |
+| `GET` | `/api/matriz/:no` | Matriz de seguimiento del equipo con `?desde=&hasta=&hoy=` |
 
-Las rutas de login, registro, recuperar contraseña y `/api/departamentos` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
+Las rutas de login, registro, recuperar contraseña y `/api/encargados` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
 
 - `render.yaml` — despliegue en Render.
 

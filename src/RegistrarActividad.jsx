@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { TURNOS, api, depto, hoy, iniciales, rol } from './comun.js'
+import { TURNOS, api, cierreTurno, depto, dia, hora, hoy, iniciales, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { Estado } from './ui.jsx'
 import { t } from './i18n.js'
@@ -14,6 +14,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
   const [turno, setTurno] = useState(user.shift)
   const [puntos, setPuntos] = useState([puntoVacio()])
   const [comentario, setComentario] = useState('')
+  const [prioridad, setPrioridad] = useState('diaria')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -24,6 +25,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
   useEffect(() => { cargarEquipo() }, [cargarEquipo])
 
   const emp = equipo?.find((e) => e.no === para)
+  const cierre = fecha && cierreTurno(fecha, turno)
 
   function elegir(no) {
     setPara(no)
@@ -46,7 +48,8 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
       await api('/api/actividades', {
         method: 'POST',
         body: {
-          por: user.no, para, fecha, turno, comentario,
+          por: user.no, para, fecha, turno, comentario, prioridad,
+          ...(prioridad === 'urgente' && { cierre: cierre.toISOString() }),
           puntos: llenos.map((p) => ({ texto: p.texto.trim(), avance: porcentaje(p.avance) })),
         },
       })
@@ -54,6 +57,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
       setPara('')
       setPuntos([puntoVacio()])
       setComentario('')
+      setPrioridad('diaria')
       cargarEquipo()
       recargar()
     } catch (e) {
@@ -100,6 +104,21 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
               </select>
             </label>
           </div>
+
+          {/* Diaria es el estándar; urgente es la excepción y se valida al cerrar el turno elegido */}
+          <fieldset className="field">
+            <legend>{t('Tipo')}</legend>
+            <div className="tipo-tarea">
+              <label>
+                <input type="radio" name="prioridad-reg" checked={prioridad === 'diaria'} onChange={() => setPrioridad('diaria')} />
+                <span><b>{t('Diaria')}</b><small>{t('Se registra como una actividad más del seguimiento.')}</small></span>
+              </label>
+              <label>
+                <input type="radio" name="prioridad-reg" checked={prioridad === 'urgente'} onChange={() => setPrioridad('urgente')} />
+                <span><b>{t('Urgente')}</b><small>{cierre ? t('Va primero y se cierra el {dia} a las {hora}, al terminar el turno {turno}. No se puede heredar.', { dia: dia(cierre.toLocaleDateString('en-CA')), hora: hora(cierre.toISOString()), turno }) : t('Elige la fecha.')}</small></span>
+              </label>
+            </div>
+          </fieldset>
 
           <fieldset className="field">
             <legend>{t('Actividades por puntos')}</legend>

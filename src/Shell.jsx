@@ -6,6 +6,8 @@ import Icono from './Icono.jsx'
 import { BotonIdioma, BotonTema } from './ui.jsx'
 import { t } from './i18n.js'
 import Inicio from './Inicio.jsx'
+import Jerarquia from './Jerarquia.jsx'
+import Matriz from './Matriz.jsx'
 import MisActividades from './MisActividades.jsx'
 import Monitoreo from './Monitoreo.jsx'
 import Perfil from './Perfil.jsx'
@@ -15,7 +17,7 @@ import Reportes from './Reportes.jsx'
 // Una página por cada módulo de MODULOS
 const PAGINAS = {
   inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades,
-  monitoreo: Monitoreo, reportes: Reportes, buzon: Buzon, departamentos: Departamentos, perfil: Perfil,
+  monitoreo: Monitoreo, reportes: Reportes, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, perfil: Perfil,
 }
 
 // #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)
