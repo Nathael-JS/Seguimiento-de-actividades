@@ -92,6 +92,9 @@ const registrarSchema = {
         },
       },
       comentario: texto(500),
+      // Diaria (estándar) o urgente; la urgente trae el fin del turno elegido, en la hora del navegador
+      prioridad: { enum: ['diaria', 'urgente'] },
+      cierre: { type: 'string', format: 'date-time' },
     },
   },
 }
@@ -134,6 +137,11 @@ const heredarSchema = {
   },
 }
 
+const fechaSchema = { type: 'string', format: 'date' }
+const matrizSchema = {
+  ...porEmpleado,
+  querystring: objeto(['desde', 'hasta', 'hoy'], { desde: fechaSchema, hasta: fechaSchema, hoy: fechaSchema }),
+}
 const reporteSchema = {
   body: {
     type: 'object',
@@ -159,6 +167,13 @@ const diasPassword = (u) => VIGENCIA_PASSWORD - Math.floor((Date.now() - Date.pa
 // j•••••@empresa.com
 const ocultarCorreo = (email) => email.replace(/^(.).*(@.*)$/, '$1•••••$2')
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
+// Fin de cada turno en minutos desde la medianoche del día en que empieza (el C termina al día siguiente)
+const FIN_TURNO = { A: 14 * 60 + 30, B: 23 * 60, C: 30 * 60 }
+const minutos = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))
+// Minutos que salió después del fin de su turno; la salida antes de la entrada es del día siguiente
+const tiempoExtra = ({ entrada, salida }, turno) =>
+  Math.max(0, minutos(salida) + (salida < entrada ? 1440 : 0) - FIN_TURNO[turno])
+const diaHabil = (fecha) => new Date(fecha).getUTCDay() % 6 !== 0 // lunes a viernes
 // Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
 const sumarDias = (fecha, n) => new Date(Date.parse(fecha) + n * 86_400_000).toISOString().slice(0, 10)
 const diaSiguiente = (fecha) => sumarDias(fecha, 1)
@@ -174,6 +189,8 @@ export function build(opts = {}) {
   const usuarios = leer('./usuarios.json')
   const actividades = leer('./actividades.json')
   const notificaciones = leer('./notificaciones.json')
+  // shortcut: checador simulado (entrada/salida en hora de planta, lunes a viernes, oct–dic 2026); cambiar por el real
+  const checador = leer('./checador.json')
   // Códigos de verificación y permisos de recuperación pendientes, por token
   const verificaciones = new Map()
   const recuperaciones = new Map()
@@ -185,8 +202,9 @@ export function build(opts = {}) {
   // Acepta correo completo, la parte antes de la @ o el número de empleado
   const buscar = (id) =>
     usuarios.find((u) => u.email === id || u.email.split('@')[0] === id || u.no === id)
-  // Todos los empleados debajo de `no` en la jerarquía, directos e indirectos
-  const equipo = (no) => usuarios.filter((u) => u.boss === no).flatMap((u) => [u, ...equipo(u.no)])
+  // Todos los empleados debajo de `no` en la jerarquía, directos e indirectos; nunca de otro departamento
+  const equipo = (no, dept = empleado(no)?.dept) =>
+    usuarios.filter((u) => u.boss === no && u.dept === dept).flatMap((u) => [u, ...equipo(u.no, dept)])
   // A quién puede asignar un encargado: su equipo, solo con menor rango que él
   const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
@@ -211,10 +229,12 @@ export function build(opts = {}) {
       notificar({ for: u.no, kind: 'password', count: Math.max(dias, 0) })
     }
   }
-  // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído
-  const cambiarPassword = (u, password) => {
+  // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído, y se cierran
+  // las demás sesiones abiertas de esa persona (conservar: la sesión desde la que la cambió, si la hay)
+  const cambiarPassword = (u, password, conservar) => {
     Object.assign(u, { password, pwdChanged: ahora() })
     notificaciones.filter((n) => n.for === u.no && n.kind === 'password').forEach((n) => (n.read = true))
+    sesiones.forEach((s, token) => s.no === u.no && token !== conservar && sesiones.delete(token))
   }
   const urgenteAbierta = (a) => a.prioridad === 'urgente' && !a.cerrada && a.status !== 'done'
   const delTurno = (acts, desde) =>
@@ -245,6 +265,31 @@ export function build(opts = {}) {
 
   const sesion = (u) => ({ no: u.no, name: u.name, role: u.role, dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u) })
 
+  // Sesiones: token aleatorio en una cookie HttpOnly (el JavaScript de la página no la puede leer) y SameSite=Strict
+  // (otros sitios no la mandan). Sin Max-Age: se borra al cerrar el navegador, útil en equipos compartidos de planta.
+  // shortcut: viven en memoria y se pierden al reiniciar el servidor; pasarlas a la base de datos cuando se retome
+  const sesiones = new Map()
+  const DURACION_SESION = 12 * 3_600_000 // sin actividad; se renueva con cada uso
+  const tokenDe = (req) => req.headers.cookie?.match(/(?:^|;\s*)sesion=([^;]+)/)?.[1]
+  const cookie = (req, valor, extra = '') =>
+    `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
+  const PUBLICAS = new Set([
+    '/api/login', '/api/login/verificar', '/api/login/reenviar', '/api/logout',
+    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados',
+  ])
+  app.addHook('preHandler', async (req, reply) => {
+    if (!req.url.startsWith('/api/') || PUBLICAS.has(req.routeOptions.url)) return
+    const s = sesiones.get(tokenDe(req))
+    if (!s || s.vence < Date.now() || !empleado(s.no)) {
+      return reply.code(401).send({ error: 'Tu sesión terminó. Vuelve a iniciar sesión.', sesion: false })
+    }
+    s.vence = Date.now() + DURACION_SESION
+    req.sesion = s
+    // El número que manda el navegador (en la dirección o en "por") tiene que ser el de la sesión
+    const quien = req.params?.no ?? req.body?.por
+    if (quien && quien !== s.no) return reply.code(403).send({ error: 'Solo puedes actuar con tu propia cuenta.' })
+  })
+
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
     const u = buscar(req.body.usuario.trim().toLowerCase())
@@ -274,7 +319,20 @@ export function build(opts = {}) {
       return reply.code(401).send({ error: 'Código incorrecto.' })
     }
     verificaciones.delete(req.body.token)
+    limpiarVencidos(sesiones)
+    const id = randomUUID()
+    sesiones.set(id, { no: v.no, vence: Date.now() + DURACION_SESION })
+    reply.header('set-cookie', cookie(req, id))
     return sesion(empleado(v.no))
+  })
+
+  // Al recargar la página: quién es la sesión de esta cookie
+  app.get('/api/sesion', async (req) => sesion(empleado(req.sesion.no)))
+
+  app.post('/api/logout', async (req, reply) => {
+    sesiones.delete(tokenDe(req))
+    reply.header('set-cookie', cookie(req, '', '; Max-Age=0'))
+    return { ok: true }
   })
 
   app.post('/api/login/reenviar', { schema: reenviarSchema }, async (req, reply) => {
@@ -344,9 +402,17 @@ export function build(opts = {}) {
     if (req.query?.zona && !zonaValida(req.query.zona)) return reply.code(400).send({ error: 'Zona horaria no válida.' })
   })
 
+  // Registro (sin sesión): a quién se puede elegir como encargado
+  app.get('/api/encargados', async () =>
+    usuarios.filter(esEncargado).sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
+      .map(({ no, name, role, dept }) => ({ no, name, role, dept })))
+
+  // La plantilla del departamento de quien consulta: ningún departamento ve a otro
   app.get('/api/departamentos', { schema: conRate }, async (req) => {
     const rate = conRateDe(req.query)
+    const { dept } = empleado(req.sesion.no)
     return usuarios
+      .filter((u) => u.dept === dept)
       .map(({ no, name, role, dept, shift, area }) => ({ no, name, role, dept, shift, area, ...rate(no) }))
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
   })
@@ -362,11 +428,10 @@ export function build(opts = {}) {
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
     if (req.body.actual !== u.password) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
     if (req.body.nueva === u.password) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
-    cambiarPassword(u, req.body.nueva)
+    cambiarPassword(u, req.body.nueva, tokenDe(req))
     return { ok: true }
   }))
 
-  // shortcut: el cliente dice quién es (no, por) sin sesión; validar sesión al agregar seguridad
   app.get('/api/inicio/:no', { schema: conDesde }, conEmpleado((u, req) => {
     // Un reloj mal puesto en el navegador marcaría como atrasado todo y avisaría a todos, sin vuelta atrás:
     // solo se aceptan fechas a un día o menos de la del servidor (cubre cualquier zona horaria)
@@ -427,7 +492,7 @@ export function build(opts = {}) {
   }))
 
   app.post('/api/actividades', { schema: registrarSchema }, async (req, reply) => {
-    const { por, para, fecha, turno, puntos, comentario = '' } = req.body
+    const { por, para, fecha, turno, puntos, comentario = '', prioridad, cierre } = req.body
     const encargado = empleado(por)
     if (!encargado || !esEncargado(encargado)) {
       return reply.code(403).send({ error: 'Solo los encargados registran actividades.' })
@@ -435,12 +500,18 @@ export function build(opts = {}) {
     if (!asignables(encargado).some((e) => e.no === para)) {
       return reply.code(403).send({ error: 'Ese empleado no está a tu cargo.' })
     }
+    // Una urgente es para el turno en curso o el siguiente: se cierra dentro de las próximas 24 h
+    const espera = Date.parse(cierre) - Date.now()
+    if (prioridad === 'urgente' && !(espera > 0 && espera <= DIA)) {
+      return reply.code(400).send({ error: 'Una urgente es para el turno en curso o el siguiente: revisa la fecha y el turno.' })
+    }
     const at = ahora()
     const nuevas = puntos.map((p) => {
       const a = {
         id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
         text: p.texto.trim(), pct: p.avance, status: p.avance === 100 ? 'done' : p.avance > 0 ? 'progress' : 'pending',
         mgr: comentario.trim(), note: '', ...(p.avance === 100 && { doneAt: at }),
+        ...(prioridad === 'urgente' && { prioridad, cierreTurno: cierre }),
       }
       actividades.push(a)
       return a
@@ -554,6 +625,36 @@ export function build(opts = {}) {
         }
       })
   })
+
+  // Matriz de seguimiento del equipo entre dos fechas (hasta hoy):
+  // - yield de diarias y de urgentes: realizadas ÷ las que cuentan. Las de hoy abiertas y las urgentes aún sin
+  //   cerrar no cuentan todavía; una heredada cuenta una vez, en quien la recibió
+  // - tiempo extra (minutos) y asistencia según el checador, hasta ayer (la salida de hoy aún no ocurre)
+  app.get('/api/matriz/:no', { schema: matrizSchema }, conEmpleado((u, req, reply) => {
+    if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
+    const { desde, hoy } = req.query
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    const hasta = req.query.hasta < hoy ? req.query.hasta : hoy
+    if (desde > hasta || sumarDias(desde, 366) < hasta) return reply.code(400).send({ error: 'Elige un periodo de hasta un año, sin fechas futuras.' })
+    const hastaAyer = hasta < hoy ? hasta : sumarDias(hoy, -1)
+    let habiles = 0
+    for (let d = desde; d <= hastaAyer; d = diaSiguiente(d)) habiles += diaHabil(d)
+    const periodo = vigentes().filter((a) => a.date >= desde && a.date <= hasta)
+    const yieldDe = (acts) => [acts.filter((a) => a.status === 'done').length, acts.length]
+    return equipo(u.no)
+      .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
+      .map(({ no, name, role, shift, boss }) => {
+        const suyas = periodo.filter((a) => a.to === no)
+        const marcas = checador.filter((r) => r.no === no && r.date >= desde && r.date <= hastaAyer)
+        return {
+          no, name, role, shift, boss,
+          diarias: yieldDe(suyas.filter((a) => a.prioridad !== 'urgente' && (a.status === 'done' || a.date < hoy))),
+          urgentes: yieldDe(suyas.filter((a) => a.prioridad === 'urgente' && (a.status === 'done' || a.cerrada))),
+          extra: marcas.reduce((s, r) => s + tiempoExtra(r, shift), 0),
+          asistencia: [marcas.filter((r) => diaHabil(r.date)).length, habiles],
+        }
+      })
+  }))
 
   if (existsSync(dist)) {
     app.register(fastifyStatic, {

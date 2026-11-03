@@ -10,6 +10,32 @@ async function entrar(usuario, password = 'demo1234', app = build()) {
   return app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token: paso1.token, codigo: paso1.codigo } })
 }
 
+// Cookie de sesión de cada empleado, por instancia de la app (se inicia sesión la primera vez que se necesita)
+const cookies = new WeakMap()
+const cookieDe = (r) => r.headers['set-cookie']?.split(';')[0]
+async function sesionDe(app, no) {
+  if (!cookies.has(app)) cookies.set(app, new Map())
+  const m = cookies.get(app)
+  if (!m.has(no)) m.set(no, cookieDe(await entrar(no, 'demo1234', app)))
+  return m.get(no)
+}
+// Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
+async function pedir(app, method, url, payload) {
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz)\/(\d{5})/)?.[1]
+  const enviar = async () => {
+    const cookie = no && await sesionDe(app, no)
+    return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
+  }
+  let r = await enviar()
+  // Sesión vencida o cerrada (relojes simulados, cambio de contraseña): se vuelve a entrar una vez
+  if (r.statusCode === 401 && r.json().sesion === false && no) {
+    cookies.get(app).delete(no)
+    r = await enviar()
+  }
+  return { code: r.statusCode, body: r.json() }
+}
+const inicio = (no) => pedir(build(), 'GET', `/api/inicio/${no}`).then((r) => ({ statusCode: r.code, json: () => r.body }))
+
 test('login correcto por correo, alias o número de empleado, en dos pasos', async () => {
   for (const usuario of ['jorge.salinas@empresa.com', ' Jorge.Salinas ', '10482']) {
     const paso1 = await login({ usuario, password: 'demo1234' })
@@ -53,7 +79,6 @@ test('entrada inválida da 400', async () => {
   }
 })
 
-const inicio = (no) => build().inject({ method: 'GET', url: `/api/inicio/${no}` })
 
 test('login indica si es encargado', async () => {
   assert.equal((await entrar('10482')).json().encargado, false)
@@ -76,10 +101,9 @@ test('inicio del encargado cuenta las suyas y las de todo su equipo, directos e 
 
 test('inicio con número inválido o inexistente', async () => {
   assert.equal((await inicio('abc')).statusCode, 400)
-  assert.equal((await inicio('99999')).statusCode, 404)
+  assert.equal((await inicio('99999')).statusCode, 401) // nadie puede tener sesión con ese número
 })
 
-const pedir = (app, method, url, payload) => app.inject({ method, url, payload }).then((r) => ({ code: r.statusCode, body: r.json() }))
 const asignar = (cambios = {}) => ({
   por: '10230', para: '10482', fecha: '2026-10-31', turno: 'A',
   puntos: [{ texto: 'Revisar bomba', avance: 0 }, { texto: 'Cambiar filtro', avance: 100 }], comentario: 'Urgente', ...cambios,
@@ -91,7 +115,7 @@ test('equipo asignable: solo encargados y solo empleados de menor rango', async 
   // Laura (Gerente) puede asignar a Seniors, Fulls, Jrs y Técnicos de toda su rama
   assert.equal((await pedir(app, 'GET', '/api/equipo/10001')).body.length, 9)
   assert.equal((await pedir(app, 'GET', '/api/equipo/10482')).code, 403)
-  assert.equal((await pedir(app, 'GET', '/api/equipo/99999')).code, 404)
+  assert.equal((await pedir(app, 'GET', '/api/equipo/99999')).code, 401)
 })
 
 test('registrar crea una actividad por punto, con estado según el avance, y notifica al ejecutor', async () => {
@@ -235,7 +259,8 @@ test('registro de técnico: elige encargado del departamento, hereda su área y 
   assert.deepEqual([yo.name, yo.area, yo.encargado], ['Ana Prueba', 'CDU y Chillers', false])
   // Aparece en el equipo de Sofía y en Departamentos
   assert.ok((await pedir(app, 'GET', '/api/equipo/10251')).body.some((e) => e.no === '20001'))
-  assert.equal((await pedir(app, 'GET', `/api/departamentos?${CDMX}`)).body.find((e) => e.no === '20001').rate, null) // sin actividades
+  const jorge = await sesionDe(app, '10482') // mismo departamento
+  assert.equal((await conCookie(app, 'GET', `/api/departamentos?${CDMX}`, jorge)).json().find((e) => e.no === '20001').rate, null) // sin actividades
 })
 
 test('registro valida duplicados, contraseña y encargado', async () => {
@@ -277,14 +302,23 @@ test('perfil y cambio de contraseña propio', async () => {
   assert.equal((await cambiar('demo1234', CLAVE)).code, 200)
   assert.equal((await cambiar(CLAVE, CLAVE)).code, 400) // debe ser distinta
   assert.equal((await pedir(app, 'GET', '/api/perfil/10482')).body.diasPassword, 90)
-  assert.equal((await pedir(app, 'GET', '/api/perfil/99999')).code, 404)
+  assert.equal((await pedir(app, 'GET', '/api/perfil/99999')).code, 401)
 })
 
-test('departamentos: todos los empleados, sin datos sensibles; el rate solo con hoy y zona', async () => {
-  const lista = (await pedir(build(), 'GET', '/api/departamentos')).body
-  assert.equal(lista.length, 15)
-  assert.deepEqual(Object.keys(lista[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
-  assert.ok('rate' in (await pedir(build(), 'GET', `/api/departamentos?${CDMX}`)).body[0])
+test('departamentos: solo el propio, sin datos sensibles; el rate solo con hoy y zona', async () => {
+  const app = build()
+  const de = async (no, q = '') => (await conCookie(app, 'GET', `/api/departamentos${q}`, await sesionDe(app, no))).json()
+  const lc = await de('10482')
+  assert.equal(lc.length, 10)
+  assert.ok(lc.every((e) => e.dept === 'lc'))
+  assert.deepEqual(Object.keys(lc[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
+  assert.deepEqual((await de('10604')).map((e) => e.no), ['10700', '10620', '10604']) // Pruebas Funcionales
+  assert.ok('rate' in (await de('10482', `?${CDMX}`))[0])
+  assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 401)
+  // Registro, sin sesión, solo ve a los encargados
+  const encargados = (await conCookie(app, 'GET', '/api/encargados', undefined)).json()
+  assert.deepEqual(Object.keys(encargados[0]).sort(), ['dept', 'name', 'no', 'role'])
+  assert.ok(encargados.every((e) => ['gte', 'sr', 'full'].includes(e.role)))
 })
 
 test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la hora local', async () => {
@@ -408,7 +442,72 @@ test('cambiar la contraseña deja leído el aviso de vencimiento', async () => {
   const { body } = await pedir(app, 'POST', '/api/recuperar', { no: '10490', email: 'maria.lopez@empresa.com' })
   await pedir(app, 'GET', `/api/inicio/10490?hoy=${HOY_REAL}`)
   await pedir(app, 'POST', '/api/recuperar/cambiar', { token: body.token, password: CLAVE })
-  assert.ok((await pedir(app, 'GET', '/api/inicio/10490')).body.notificaciones.filter((n) => n.kind === 'password').every((n) => n.read))
+  const cookie = cookieDe(await entrar('10490', CLAVE, app))
+  const { notificaciones } = (await app.inject({ method: 'GET', url: '/api/inicio/10490', headers: { cookie } })).json()
+  assert.ok(notificaciones.filter((n) => n.kind === 'password').every((n) => n.read))
+})
+
+const conCookie = (app, method, url, cookie, payload) => app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
+
+test('sesión: cookie HttpOnly al entrar, sin sesión no hay datos y al recargar dice quién eres', async () => {
+  const app = build()
+  const res = await entrar('10482', 'demo1234', app)
+  assert.match(res.headers['set-cookie'], /^sesion=[\w-]+; HttpOnly; SameSite=Strict; Path=\/$/)
+  const cookie = cookieDe(res)
+  assert.equal((await conCookie(app, 'GET', '/api/sesion', cookie)).json().name, 'Jorge Salinas')
+  for (const c of [undefined, 'sesion=inventada', 'otra=1']) {
+    const r = await conCookie(app, 'GET', '/api/inicio/10482', c)
+    assert.deepEqual([r.statusCode, r.json().sesion], [401, false], String(c))
+  }
+  assert.equal((await conCookie(app, 'GET', '/api/sesion', undefined)).statusCode, 401)
+  // Las públicas no la piden
+  assert.equal((await conCookie(app, 'GET', '/api/encargados', undefined)).statusCode, 200)
+})
+
+test('sesión: no se puede actuar como otro empleado', async () => {
+  const app = build()
+  const jorge = await sesionDe(app, '10482')
+  for (const [method, url, payload] of [
+    ['GET', '/api/inicio/10230'], ['GET', '/api/perfil/10230'], ['GET', '/api/equipo/10230'], ['GET', '/api/actividades/10490'],
+    ['POST', '/api/notificaciones/10230/leidas'], ['POST', '/api/actividades', asignar()],
+    ['PATCH', '/api/actividades/1', { por: '10490', estado: 'done', avance: 100, nota: '' }],
+    ['POST', '/api/reportes', { por: '10230', empleados: ['10482'], desde: '2026-10-01', hasta: '2026-10-31' }],
+  ]) {
+    const r = await conCookie(app, method, url, jorge, payload)
+    assert.deepEqual([r.statusCode, r.json().error], [403, 'Solo puedes actuar con tu propia cuenta.'], url)
+  }
+})
+
+test('sesión: cerrar sesión, vencer por inactividad y cambio de contraseña', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  try {
+    const app = build()
+    const pide = (cookie) => conCookie(app, 'GET', '/api/sesion', cookie).then((r) => r.statusCode)
+    // Cerrar sesión borra la cookie y la sesión del servidor
+    const a = await sesionDe(app, '10482')
+    const salir = await conCookie(app, 'POST', '/api/logout', a)
+    assert.match(salir.headers['set-cookie'], /^sesion=; .*Max-Age=0$/)
+    assert.equal(await pide(a), 401)
+    // 12 h sin uso la vencen; usarla la renueva
+    const b = cookieDe(await entrar('10482', 'demo1234', app))
+    mock.timers.tick(11 * 3_600_000)
+    assert.equal(await pide(b), 200)
+    mock.timers.tick(11 * 3_600_000)
+    assert.equal(await pide(b), 200)
+    mock.timers.tick(12 * 3_600_000 + 1)
+    assert.equal(await pide(b), 401)
+    // Cambiar la contraseña desde el perfil cierra las otras sesiones, no la actual
+    const [c, d] = [cookieDe(await entrar('10482', 'demo1234', app)), cookieDe(await entrar('10482', 'demo1234', app))]
+    const otra = cookieDe(await entrar('10490', 'demo1234', app))
+    assert.equal((await conCookie(app, 'POST', '/api/perfil/10482/password', c, { actual: 'demo1234', nueva: CLAVE })).statusCode, 200)
+    assert.deepEqual([await pide(c), await pide(d), await pide(otra)], [200, 401, 200])
+    // Recuperarla cierra todas
+    const { token } = (await conCookie(app, 'POST', '/api/recuperar', undefined, { no: '10482', email: 'jorge.salinas@empresa.com' })).json()
+    await conCookie(app, 'POST', '/api/recuperar/cambiar', undefined, { token, password: 'Otra#Clave2026' })
+    assert.equal(await pide(c), 401)
+  } finally {
+    mock.timers.reset()
+  }
 })
 
 test('un hoy lejano a la fecha del servidor no genera avisos', async () => {
@@ -481,4 +580,47 @@ test('aviso de atraso de una tarea propia: al empleado y a su encargado, no dos 
   const deEsta = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}`)).body.notificaciones.filter((n) => n.kind === 'overdue' && n.actividad === body.text)
   assert.equal((await deEsta('10482')).length, 1)
   assert.equal((await deEsta('10230')).length, 1)
+})
+
+test('asignar urgente: el encargado la marca aparte, con el cierre del turno elegido; no se hereda', async () => {
+  const app = build()
+  const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre: enUnaHora(), puntos: [{ texto: 'Fuga en LC245-02', avance: 0 }] }))
+  assert.equal(code, 201)
+  assert.deepEqual([body[0].prioridad, typeof body[0].cierreTurno], ['urgente', 'string'])
+  assert.equal((await heredar(app, body[0].id, '10230', '10482', HOY_REAL)).code, 409)
+  // Diaria es el estándar: sin prioridad
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar())).body[0].prioridad, undefined)
+  for (const cierre of [undefined, new Date(Date.now() - 60_000).toISOString(), new Date(Date.now() + 2 * 86_400_000).toISOString()]) {
+    assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre }))).code, 400, String(cierre))
+  }
+})
+
+test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checador', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-03T15:00:00Z') })
+  try {
+    const app = build()
+    const matriz = (no, q) => pedir(app, 'GET', `/api/matriz/${no}?hoy=2026-11-03&${q}`)
+    const { code, body } = await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')
+    assert.equal(code, 200)
+    assert.deepEqual(body.map((f) => f.no), ['10490', '10482']) // su rama, por puesto
+    const jorge = body.find((f) => f.no === '10482')
+    // 29 oct: 4 diarias, 1 realizada. Hasta ayer: salidas después de las 14:30 suman 517 min; 6 de 6 días hábiles
+    assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.extra, jorge.asistencia], [[1, 4], [0, 0], 517, [6, 6]])
+    const maria = body.find((f) => f.no === '10490')
+    assert.deepEqual([maria.extra, maria.asistencia], [455, [5, 6]]) // faltó el 30 oct
+    // Una urgente abierta aún no cuenta; al cerrar el turno sí
+    await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 40, hoy: '2026-11-03', cierre: enUnaHora() }))
+    const urgentes = async () => (await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')).body.find((f) => f.no === '10482').urgentes
+    assert.deepEqual(await urgentes(), [0, 0])
+    mock.timers.tick(2 * 3_600_000)
+    assert.deepEqual(await urgentes(), [0, 1])
+    // El gerente ve toda su rama; un técnico no tiene matriz; hasta en el futuro se corta en hoy
+    assert.equal((await matriz('10001', 'desde=2026-10-26&hasta=2026-11-03')).body.length, 9)
+    assert.equal((await matriz('10482', 'desde=2026-10-26&hasta=2026-11-03')).code, 403)
+    assert.equal((await matriz('10230', 'desde=2026-10-26&hasta=2026-12-31')).code, 200)
+    assert.equal((await matriz('10230', 'desde=2026-11-04&hasta=2026-11-10')).code, 400)
+    assert.equal((await matriz('10230', 'desde=2026-10-26')).code, 400)
+  } finally {
+    mock.timers.reset()
+  }
 })

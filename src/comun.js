@@ -17,6 +17,8 @@ export const MODULOS = [
   { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte' },
   { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado' },
   { ruta: 'reportes', titulo: 'Reportes', icono: 'file', desc: 'Genera reportes por fecha, turno y hora.', solo: 'encargado' },
+  { ruta: 'matriz', titulo: 'Matriz de seguimiento', icono: 'grid', desc: 'Yield, tiempo extra y asistencia de tu equipo.', solo: 'encargado' },
+  { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },
   { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.' },
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.' },
@@ -41,6 +43,7 @@ export async function api(url, { method = 'GET', body } = {}) {
   }
   const data = await res.json().catch(() => ({}))
   if (res.ok) return data
+  if (data.sesion === false) dispatchEvent(new Event('sesion-terminada')) // App vuelve al login
   // Los errores propios de Fastify (validación del esquema, ruta inexistente) traen statusCode y un texto en inglés;
   // los de la app traen solo `error`, ya redactado para el usuario (en español: se traduce aquí)
   if (data.statusCode) throw new Error(t(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.'))
@@ -58,6 +61,12 @@ export function finTurno(turno, ahora = new Date()) {
   const fin = new Date(ahora)
   fin.setHours(h, m, 0, 0)
   if (fin <= ahora) fin.setDate(fin.getDate() + 1)
+  return fin
+}
+// Fin del turno que empieza en `fecha` (el C termina al día siguiente), en la hora local
+export function cierreTurno(fecha, turno) {
+  const fin = new Date(`${fecha}T${TURNOS[turno].split('–')[1]}`)
+  if (turno === 'C') fin.setDate(fin.getDate() + 1)
   return fin
 }
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"

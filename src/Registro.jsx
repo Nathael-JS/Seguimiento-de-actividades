@@ -15,10 +15,10 @@ export default function Registro({ volver }) {
   const set = (campo) => (e) => setD({ ...d, [campo]: e.target.value })
   const encargado = esEncargado(d.role)
   // Posibles jefes: encargados del departamento elegido, del puesto más bajo al más alto
-  const jefes = empleados.filter((e) => e.dept === d.dept && esEncargado(e.role)).reverse()
+  const jefes = empleados.filter((e) => e.dept === d.dept).reverse()
 
   useEffect(() => {
-    api('/api/departamentos').then(setEmpleados).catch((e) => setError(e.message))
+    api('/api/encargados').then(setEmpleados).catch((e) => setError(e.message))
   }, [])
 
   function siguiente(e) {
