@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ESTADOS, api, depto, estado as nombreEstado, finTurno, hora, hoy, iniciales, promedio, rol } from './comun.js'
+import { ESTADOS, api, depto, estado as nombreEstado, finTurno, hora, hoy, iniciales, pctRealizadas, rol } from './comun.js'
 import { Anillo, Campo, Criticidad, Estado, SelectorCriticidad } from './ui.jsx'
 import { t } from './i18n.js'
+import Icono from './Icono.jsx'
+import { ListaActividades } from './Lista.jsx'
 
 export default function MisActividades({ user, recargar, avisar }) {
   const [tareas, setTareas] = useState(null)
@@ -9,6 +11,9 @@ export default function MisActividades({ user, recargar, avisar }) {
   const [nueva, setNueva] = useState(false)
   // Solo técnicos e Ing. Jr agregan tareas propias
   const puedeAgregar = user.role === 'tec' || user.role === 'jr'
+  // Lista (por defecto: lo que hay por hacer de un vistazo) o tarjetas para comentar cada una
+  const [vista, setVista] = useState(() => { try { return localStorage.getItem('mis-vista') ?? 'lista' } catch { return 'lista' } })
+  const elegirVista = (v) => { setVista(v); try { localStorage.setItem('mis-vista', v) } catch { /* solo esta vez */ } }
 
   const cargar = useCallback(
     () => api(`/api/actividades/${user.no}`).then(setTareas).catch((e) => setError(e.message)),
@@ -17,12 +22,22 @@ export default function MisActividades({ user, recargar, avisar }) {
   useEffect(() => { cargar() }, [cargar])
 
   function guardado() {
-    avisar(t('Avance guardado y notificado a tu encargado.'))
+    avisar(t('Guardado y notificado a tu encargado.'))
     cargar()
     recargar()
   }
 
-  const avance = promedio(tareas ?? [])
+  // Desde la lista: solo el estado; el comentario se conserva
+  async function cambiarEstado(a, estado) {
+    try {
+      await api(`/api/actividades/${a.id}`, { method: 'PATCH', body: { por: user.no, estado, nota: a.note } })
+      guardado()
+    } catch (e) {
+      avisar(e.message)
+    }
+  }
+
+  const realizadas = pctRealizadas(tareas ?? [])
 
   function creada() {
     setNueva(false)
@@ -36,23 +51,33 @@ export default function MisActividades({ user, recargar, avisar }) {
       <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <h1>{t('Tareas asignadas')}</h1>
-          <p>{t('Marca el estado, ajusta el avance y comenta tus actividades.')}</p>
+          <p>{t('Marca el estado y comenta tus actividades.')}</p>
         </div>
         <div className="row" style={{ flexWrap: 'wrap' }}>
-          {tareas && <><Anillo pct={avance} /><span className="meta">{t('Avance promedio')}</span></>}
+          {tareas?.length > 0 && <><Anillo pct={realizadas} /><span className="meta">{t('Realizadas')}</span></>}
           {puedeAgregar && !nueva && <button className="btn btn-primary" onClick={() => setNueva(true)}>+ {t('Nueva tarea')}</button>}
         </div>
       </div>
 
       {nueva && <NuevaTarea user={user} alCrear={creada} cancelar={() => setNueva(false)} />}
 
+      {tareas?.length > 0 && (
+        <div className="row end barra-vista">
+          <div className="segmento" role="group" aria-label={t('Vista')}>
+            <button aria-pressed={vista === 'lista'} onClick={() => elegirVista('lista')}><Icono nombre="list" />{t('Lista')}</button>
+            <button aria-pressed={vista === 'tarjetas'} onClick={() => elegirVista('tarjetas')}><Icono nombre="grid" />{t('Tarjetas')}</button>
+          </div>
+        </div>
+      )}
+
       {error ? <p className="error" role="alert">{error}</p>
         : !tareas ? <p className="muted">{t('Cargando…')}</p>
         : !tareas.length ? <section className="card empty">{t('No tienes actividades asignadas.')}</section>
+        : vista === 'lista' ? <ListaActividades filas={tareas} nombres={{}} cambiarEstado={cambiarEstado} />
         : (
           <section className="card">
-            {/* key con estado y avance: al recargar, el formulario se reinicia con lo guardado */}
-            {tareas.map((x) => <Tarea key={`${x.id}-${x.status}-${x.pct}-${x.note}`} tarea={x} user={user} onGuardado={guardado} />)}
+            {/* key con estado y comentario: al recargar, el formulario se reinicia con lo guardado */}
+            {tareas.map((x) => <Tarea key={`${x.id}-${x.status}-${x.note}`} tarea={x} user={user} onGuardado={guardado} />)}
           </section>
         )}
     </>
@@ -61,31 +86,21 @@ export default function MisActividades({ user, recargar, avisar }) {
 
 function Tarea({ tarea, user, onGuardado }) {
   const [estado, setEstado] = useState(tarea.status)
-  const [avance, setAvance] = useState(tarea.pct)
   const [nota, setNota] = useState(tarea.note)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
-  const cambio = estado !== tarea.status || avance !== tarea.pct || nota.trim() !== tarea.note
+  const cambio = estado !== tarea.status || nota.trim() !== tarea.note
   // Una realizada ya no se trabaja: se muestra plegada y se abre solo para corregirla
   const [abierta, setAbierta] = useState(tarea.status !== 'done')
   const urgenteAbierta = tarea.prioridad === 'urgente' && !tarea.cerrada && tarea.status !== 'done'
 
-  // Realizada es 100 % y 100 % es Realizada, igual que en el servidor
-  function elegirEstado(e) {
-    setEstado(e)
-    if (e === 'done') setAvance(100)
-  }
-  function elegirAvance(v) {
-    setAvance(v)
-    if (v === 100) setEstado('done')
-  }
 
   async function guardar(ev) {
     ev.preventDefault()
     setError('')
     setGuardando(true)
     try {
-      await api(`/api/actividades/${tarea.id}`, { method: 'PATCH', body: { por: user.no, estado, avance, nota } })
+      await api(`/api/actividades/${tarea.id}`, { method: 'PATCH', body: { por: user.no, estado, nota } })
       onGuardado()
     } catch (e) {
       setError(e.message)
@@ -118,26 +133,19 @@ function Tarea({ tarea, user, onGuardado }) {
       {/* Validada al cerrar el turno: queda en su estado, solo se muestra */}
       {!tarea.cerrada && !abierta ? (
         <div className="row between plegada">
-          <span className="meta">{t('Terminada al {pct}%', { pct: tarea.pct })}{tarea.note && <> · “{tarea.note}”</>}</span>
+          <span className="meta">{t('Realizada')}{tarea.note && <> · “{tarea.note}”</>}</span>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierta(true)}>{t('Editar')}</button>
         </div>
       ) : tarea.cerrada ? (
         <p className="muted" style={{ fontSize: 14 }}>
-          {t('Se cerró al terminar el turno con {pct}%: ya no se puede cambiar ni heredar.', { pct: tarea.pct })}
+          {t('Se cerró al terminar el turno: ya no se puede cambiar ni heredar.')}
           {tarea.note && <> {t('Tu comentario')}: “{tarea.note}”</>}
         </p>
       ) : <>
       <div className="status-seg" role="group" aria-label={t('Estado')}>
         {Object.keys(ESTADOS).map((k) => (
-          <button key={k} type="button" data-s={k} aria-pressed={estado === k} onClick={() => elegirEstado(k)}>{nombreEstado(k)}</button>
+          <button key={k} type="button" data-s={k} aria-pressed={estado === k} onClick={() => setEstado(k)}>{nombreEstado(k)}</button>
         ))}
-      </div>
-
-      <div className="range">
-        <label className="sr" htmlFor={`avance-${tarea.id}`}>{t('Avance')}</label>
-        <input id={`avance-${tarea.id}`} type="range" min="0" max="100" step="5" value={avance}
-          disabled={estado === 'done'} onChange={(e) => elegirAvance(Number(e.target.value))} />
-        <output htmlFor={`avance-${tarea.id}`}>{avance}%</output>
       </div>
 
       <label className="field">
@@ -149,7 +157,7 @@ function Tarea({ tarea, user, onGuardado }) {
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row end">
         <button className="btn btn-primary" type="submit" disabled={!cambio || guardando}>
-          {t(guardando ? 'Guardando…' : 'Guardar avance')}
+          {t(guardando ? 'Guardando…' : 'Guardar')}
         </button>
       </div>
       </>}
@@ -162,7 +170,6 @@ function NuevaTarea({ user, alCrear, cancelar }) {
   const [texto, setTexto] = useState('')
   const [prioridad, setPrioridad] = useState('diaria')
   const [criticidad, setCriticidad] = useState('normal')
-  const [avance, setAvance] = useState(0)
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
   const cierre = finTurno(user.shift)
@@ -176,7 +183,7 @@ function NuevaTarea({ user, alCrear, cancelar }) {
       await api('/api/actividades/propia', {
         method: 'POST',
         body: {
-          por: user.no, texto: texto.trim(), prioridad, avance, hoy: hoy(),
+          por: user.no, texto: texto.trim(), prioridad, hoy: hoy(),
           ...(prioridad === 'urgente' ? { cierre: cierre.toISOString() } : { criticidad }),
         },
       })
@@ -214,13 +221,6 @@ function NuevaTarea({ user, alCrear, cancelar }) {
         </div>
       </fieldset>
       {prioridad === 'diaria' && <SelectorCriticidad valor={criticidad} onChange={setCriticidad} />}
-      <div className="field">
-        <label htmlFor="avance-nueva">{t('Avance')} <small>{t('100 % = completada')}</small></label>
-        <div className="range">
-          <input id="avance-nueva" type="range" min="0" max="100" step="5" value={avance} onChange={(e) => setAvance(Number(e.target.value))} />
-          <output htmlFor="avance-nueva">{avance}%</output>
-        </div>
-      </div>
       <p className="error" role="alert">{error}</p>
       <div className="row end">
         <button type="button" className="btn btn-ghost" onClick={cancelar}>{t('Cancelar')}</button>

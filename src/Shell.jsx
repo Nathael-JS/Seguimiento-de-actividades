@@ -16,11 +16,12 @@ import Monitoreo from './Monitoreo.jsx'
 import Perfil from './Perfil.jsx'
 import RegistrarActividad from './RegistrarActividad.jsx'
 import Reportes from './Reportes.jsx'
+import Tablero from './Tablero.jsx'
 
 // Una página por cada módulo de MODULOS
 const PAGINAS = {
   inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades,
-  monitoreo: Monitoreo, reportes: Reportes, herencias: Herencias, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, ajustes: Ajustes, usuarios: Usuarios, registros: Registros, perfil: Perfil,
+  monitoreo: Monitoreo, reportes: Reportes, tablero: Tablero, herencias: Herencias, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, ajustes: Ajustes, usuarios: Usuarios, registros: Registros, perfil: Perfil,
 }
 
 // #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)

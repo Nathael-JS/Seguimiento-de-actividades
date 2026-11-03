@@ -125,7 +125,7 @@ test('login indica si es encargado', async () => {
 
 test('inicio del ejecutor cuenta solo sus actividades', async () => {
   const d = (await inicio('10482')).json()
-  assert.deepEqual([d.asignadas, d.realizadas, d.abiertas, d.avance], [4, 1, 1, 50])
+  assert.deepEqual([d.asignadas, d.realizadas, d.abiertas, d.avance], [4, 1, 1, 25]) // avance: % realizadas
   assert.equal(d.notificaciones.length, 2)
   assert.equal(d.notificaciones[0].who, 'Diego Herrera')
 })
@@ -144,7 +144,7 @@ test('inicio con número inválido o inexistente', async () => {
 
 const asignar = (cambios = {}) => ({
   por: '10230', para: '10482', fecha: '2026-10-31', turno: 'A',
-  puntos: [{ texto: 'Revisar bomba', avance: 0 }, { texto: 'Cambiar filtro', avance: 100 }], comentario: 'Urgente', ...cambios,
+  puntos: [{ texto: 'Revisar bomba' }, { texto: 'Cambiar filtro' }], comentario: 'Urgente', ...cambios,
 })
 
 test('equipo asignable: solo encargados y solo empleados de menor rango', async () => {
@@ -156,14 +156,14 @@ test('equipo asignable: solo encargados y solo empleados de menor rango', async 
   assert.equal((await pedir(app, 'GET', '/api/equipo/99999')).code, 401)
 })
 
-test('registrar crea una actividad por punto, con estado según el avance, y notifica al ejecutor', async () => {
+test('registrar crea una actividad por punto, pendiente, y notifica al ejecutor', async () => {
   const app = build()
   const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar())
   assert.equal(code, 201)
-  assert.deepEqual(body.map((a) => [a.id, a.status, a.pct, a.mgr]), [[15, 'pending', 0, 'Urgente'], [16, 'done', 100, 'Urgente']])
+  assert.deepEqual(body.map((a) => [a.id, a.status, a.mgr]), [[15, 'pending', 'Urgente'], [16, 'pending', 'Urgente']])
   const mias = (await pedir(app, 'GET', '/api/actividades/10482')).body
   assert.equal(mias.length, 6)
-  assert.equal(mias[0].text, 'Revisar bomba')
+  assert.equal(mias[0].text, 'Cambiar filtro') // la más nueva primero
   assert.equal(mias.at(-1).status, 'done')
   const inicio = (await pedir(app, 'GET', '/api/inicio/10482')).body
   assert.equal(inicio.notificaciones[0].kind, 'assigned')
@@ -178,8 +178,7 @@ test('registrar valida permisos y entrada', async () => {
   assert.equal(await codigo({ para: '10511' }), 403) // Luis no está a cargo de Diego
   assert.equal(await codigo({ para: '10112' }), 403) // no puede asignar a alguien de mayor rango
   assert.equal(await codigo({ puntos: [] }), 400)
-  assert.equal(await codigo({ puntos: [{ texto: '  ', avance: 0 }] }), 400)
-  assert.equal(await codigo({ puntos: [{ texto: 'x', avance: 101 }] }), 400)
+  assert.equal(await codigo({ puntos: [{ texto: '  ' }] }), 400)
   assert.equal(await codigo({ fecha: '31/10/2026' }), 400)
   assert.equal(await codigo({ turno: 'D' }), 400)
 })
@@ -187,18 +186,18 @@ test('registrar valida permisos y entrada', async () => {
 test('actualizar: solo el asignado, realizada fuerza 100 % y notifica estado y comentario al encargado', async () => {
   const app = build()
   const actualizar = (id, body) => pedir(app, 'PATCH', `/api/actividades/${id}`, body)
-  assert.equal((await actualizar(3, { por: '10490', estado: 'done', avance: 0 })).code, 403)
-  assert.equal((await actualizar(999, { por: '10482', estado: 'done', avance: 0 })).code, 404)
-  assert.equal((await actualizar(3, { por: '10482', estado: 'otro', avance: 0 })).code, 400)
+  assert.equal((await actualizar(3, { por: '10490', estado: 'done' })).code, 403)
+  assert.equal((await actualizar(999, { por: '10482', estado: 'done' })).code, 404)
+  assert.equal((await actualizar(3, { por: '10482', estado: 'otro' })).code, 400)
 
-  const { code, body } = await actualizar(3, { por: '10482', estado: 'done', avance: 30, nota: 'Listo' })
+  const { code, body } = await actualizar(3, { por: '10482', estado: 'done', nota: 'Listo' })
   assert.equal(code, 200)
   assert.deepEqual([body.status, body.pct, body.note], ['done', 100, 'Listo'])
   const avisos = (await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones.slice(0, 2)
   assert.deepEqual(avisos.map((n) => n.kind), ['comment', 'done'])
 
   // Sin cambios de estado ni de nota, no se notifica nada
-  await actualizar(3, { por: '10482', estado: 'done', avance: 100, nota: 'Listo' })
+  await actualizar(3, { por: '10482', estado: 'done', nota: 'Listo' })
   assert.equal((await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones.length, 2)
 })
 
@@ -248,7 +247,7 @@ test('heredar al mismo empleado: día siguiente, mismo turno; la original sale d
   const inicio = (await pedir(app, 'GET', '/api/inicio/10482')).body
   assert.deepEqual([inicio.asignadas, inicio.abiertas], [4, 1]) // no se cuenta dos veces
   assert.deepEqual([inicio.notificaciones[0].kind, inicio.notificaciones[0].actividad], ['inherited', 'Actualizar hoja de WIP de la estación'])
-  assert.equal((await pedir(app, 'PATCH', '/api/actividades/3', { por: '10482', estado: 'done', avance: 100 })).code, 409)
+  assert.equal((await pedir(app, 'PATCH', '/api/actividades/3', { por: '10482', estado: 'done' })).code, 409)
   assert.equal((await heredar(app, 3, '10230', '10482')).code, 409) // una sola vez
 })
 
@@ -259,7 +258,7 @@ test('heredar a otro empleado: siguiente turno; del C pasa al A del día siguien
   const b = (await heredar(app, 9, '10251', '10547', '2026-10-28')).body.creada
   assert.deepEqual([b.to, b.date, b.shift, b.pct], ['10547', '2026-10-28', 'C', 65])
   // Una actividad del turno C heredada a otro pasa al turno A del día siguiente
-  const [c] = (await pedir(app, 'POST', '/api/actividades', asignar({ turno: 'C', fecha: '2026-10-31', puntos: [{ texto: 'Ronda nocturna', avance: 0 }] }))).body
+  const [c] = (await pedir(app, 'POST', '/api/actividades', asignar({ turno: 'C', fecha: '2026-10-31', puntos: [{ texto: 'Ronda nocturna' }] }))).body
   const a = (await heredar(app, c.id, '10230', '10490')).body.creada
   assert.deepEqual([a.to, a.date, a.shift], ['10490', '2026-11-01', 'A'])
 })
@@ -386,12 +385,13 @@ test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la h
   // Jorge, 2 nov: de sus 4 del 29 oct solo la 1 está realizada (ese mismo día) → 25 %
   assert.equal(await rate('10482'), 25)
   // Realizar hoy una del 29 oct no la hace "a tiempo"
-  await pedir(app, 'PATCH', '/api/actividades/3', { por: '10482', estado: 'done', avance: 100 })
+  await pedir(app, 'PATCH', '/api/actividades/3', { por: '10482', estado: 'done' })
   assert.equal(await rate('10482'), 25)
   // Una de hoy abierta todavía no cuenta; realizada hoy, sí y a tiempo → 2 de 5
-  await pedir(app, 'POST', '/api/actividades', asignar({ fecha: '2026-11-02', puntos: [{ texto: 'Hoy', avance: 0 }] }))
+  await pedir(app, 'POST', '/api/actividades', asignar({ fecha: '2026-11-02', puntos: [{ texto: 'Hoy' }] }))
   assert.equal(await rate('10482'), 25)
-  await pedir(app, 'POST', '/api/actividades', asignar({ fecha: '2026-11-02', puntos: [{ texto: 'Hoy hecha', avance: 100 }] }))
+  const [hecha] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: '2026-11-02', puntos: [{ texto: 'Hoy hecha' }] }))).body
+  await pedir(app, 'PATCH', `/api/actividades/${hecha.id}`, { por: '10482', estado: 'done' })
   assert.equal(await rate('10482'), 40)
   // Fuera de los 30 días ya no cuenta nada
   assert.equal(await rate('10482', 'hoy=2026-12-15&zona=America/Mexico_City'), null)
@@ -417,10 +417,12 @@ test('heredar una actividad de días anteriores cuenta desde hoy, no desde su fe
   assert.equal((await pedir(app, 'POST', '/api/actividades/8/heredar', { por: '10112', para: '10533' })).code, 400) // falta hoy
 })
 
-test('actualizar con 100 % la marca como realizada', async () => {
+test('sin porcentaje: el estado manda (Realizada = 100, lo demás 0) y un avance que llegue se ignora', async () => {
   const app = build()
-  const { body } = await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'pending', avance: 100 })
+  const { body } = await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'done', avance: 30 })
   assert.deepEqual([body.status, body.pct], ['done', 100])
+  assert.equal((await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'progress' })).body.pct, 0)
+  await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'done' })
   assert.equal((await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones[0].kind, 'done')
 })
 
@@ -440,14 +442,11 @@ test('con desde, Inicio y Equipo muestran solo lo abierto y lo realizado ese dí
   assert.deepEqual([(await inicioDe('10482')).asignadas, (await inicioDe('10482', hoy)).asignadas], [4, 3])
   assert.equal((await inicioDe('10482', hoy)).realizadas, 0)
   // Al realizar una hoy, entra en "realizadas hoy" y queda con su instante
-  const hecha = (await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'done', avance: 100 })).body
+  const hecha = (await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'done' })).body
   assert.ok(Date.parse(hecha.doneAt) >= Date.parse(hoy))
   assert.deepEqual([(await inicioDe('10482', hoy)).asignadas, (await inicioDe('10482', hoy)).realizadas], [3, 1])
   // Reabrirla borra el instante; volver a guardarla realizada no lo cambia
-  assert.equal((await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'progress', avance: 90 })).body.doneAt, undefined)
-  // Registrar al 100 % también cuenta como realizada hoy
-  await pedir(app, 'POST', '/api/actividades', asignar({ puntos: [{ texto: 'Lista', avance: 100 }] }))
-  assert.equal((await inicioDe('10482', hoy)).realizadas, 1)
+  assert.equal((await pedir(app, 'PATCH', '/api/actividades/2', { por: '10482', estado: 'progress' })).body.doneAt, undefined)
   // Equipo (Monitoreo) aplica la misma regla; sin desde trae todo (Registrar, Reportes)
   const jorge = async (desde) => (await pedir(app, 'GET', `/api/equipo/10230${desde ? `?desde=${desde}` : ''}`)).body.find((e) => e.no === '10482')
   assert.ok(!(await jorge(hoy)).actividades.some((a) => a.id === 1))
@@ -530,7 +529,7 @@ test('sesión: no se puede actuar como otro empleado', async () => {
   for (const [method, url, payload] of [
     ['GET', '/api/inicio/10230'], ['GET', '/api/perfil/10230'], ['GET', '/api/equipo/10230'], ['GET', '/api/actividades/10490'],
     ['POST', '/api/notificaciones/10230/leidas'], ['POST', '/api/actividades', asignar()],
-    ['PATCH', '/api/actividades/1', { por: '10490', estado: 'done', avance: 100, nota: '' }],
+    ['PATCH', '/api/actividades/1', { por: '10490', estado: 'done', nota: '' }],
     ['POST', '/api/reportes', { por: '10230', empleados: ['10482'], desde: '2026-10-01', hasta: '2026-10-31' }],
   ]) {
     const r = await conCookie(app, method, url, jorge, payload)
@@ -578,18 +577,18 @@ test('un hoy lejano a la fecha del servidor no genera avisos', async () => {
   assert.equal(await avisos(HOY_REAL), 3)
 })
 
-const propia = (cambios = {}) => ({ por: '10482', texto: 'Purgar línea de retorno', prioridad: 'diaria', avance: 0, hoy: HOY_REAL, ...cambios })
+const propia = (cambios = {}) => ({ por: '10482', texto: 'Purgar línea de retorno', prioridad: 'diaria', hoy: HOY_REAL, ...cambios })
 const enUnaHora = () => new Date(Date.now() + 3_600_000).toISOString()
 
 test('tarea propia diaria: con los datos del empleado, aviso a su encargado y sin avisarse a sí mismo', async () => {
   const app = build()
-  const { code, body } = await pedir(app, 'POST', '/api/actividades/propia', propia({ avance: 40 }))
+  const { code, body } = await pedir(app, 'POST', '/api/actividades/propia', propia())
   assert.equal(code, 201)
-  assert.deepEqual([body.to, body.by, body.shift, body.date, body.status, body.prioridad, body.propia], ['10482', '10482', 'A', HOY_REAL, 'progress', 'diaria', true])
+  assert.deepEqual([body.to, body.by, body.shift, body.date, body.status, body.prioridad, body.propia], ['10482', '10482', 'A', HOY_REAL, 'pending', 'diaria', true])
   const aviso = (await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones[0] // Diego, su encargado
   assert.deepEqual([aviso.kind, aviso.who, aviso.actividad], ['propia', 'Jorge Salinas', 'Purgar línea de retorno'])
   // Al actualizarla avisa a su encargado, no a él mismo
-  await pedir(app, 'PATCH', `/api/actividades/${body.id}`, { por: '10482', estado: 'done', avance: 100, nota: 'Listo' })
+  await pedir(app, 'PATCH', `/api/actividades/${body.id}`, { por: '10482', estado: 'done', nota: 'Listo' })
   assert.deepEqual((await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones.slice(0, 2).map((n) => n.kind).sort(), ['comment', 'done'])
   assert.ok(!(await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.some((n) => n.actividad === 'Purgar línea de retorno'))
 })
@@ -600,7 +599,6 @@ test('tarea propia: solo técnico / Ing. Jr y con datos válidos', async () => {
   assert.equal(await codigo({ por: '10230' }), 403) // Ing. Full
   assert.equal(await codigo({ por: '10490' }), 201) // Ing. Jr
   assert.equal(await codigo({ texto: '  ' }), 400)
-  assert.equal(await codigo({ avance: 101 }), 400)
   assert.equal(await codigo({ prioridad: 'normal' }), 400)
   assert.equal(await codigo({ hoy: '2030-01-01' }), 400)
   assert.equal(await codigo({ prioridad: 'urgente' }), 400) // sin cierre de turno
@@ -610,19 +608,20 @@ test('tarea propia: solo técnico / Ing. Jr y con datos válidos', async () => {
 
 test('urgente: va primero, no se hereda y al cerrar el turno queda fija', async () => {
   const app = build()
-  const urgente = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 60, cierre: enUnaHora() }))).body
+  const urgente = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', cierre: enUnaHora() }))).body
   const lista = async () => (await pedir(app, 'GET', '/api/actividades/10482')).body
   assert.equal((await lista())[0].id, urgente.id)
   assert.equal((await pedir(app, 'POST', `/api/actividades/${urgente.id}/heredar`, { por: '10230', para: '10482', hoy: HOY_REAL, motivo: 'x' })).code, 409)
   // Una urgente terminada antes del cierre queda realizada
-  const hecha = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 100, cierre: enUnaHora() }))).body
+  const hecha = (await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', cierre: enUnaHora() }))).body
+  await pedir(app, 'PATCH', `/api/actividades/${hecha.id}`, { por: '10482', estado: 'done' })
 
   mock.timers.enable({ apis: ['Date'], now: Date.now() + 2 * 3_600_000 }) // dos horas después: el turno ya cerró
   try {
     const cerrada = (await lista()).find((a) => a.id === urgente.id)
-    assert.deepEqual([cerrada.status, cerrada.pct, cerrada.cerrada], ['incomplete', 60, true])
+    assert.deepEqual([cerrada.status, cerrada.cerrada], ['incomplete', true])
     assert.equal((await lista()).find((a) => a.id === hecha.id).status, 'done')
-    assert.equal((await pedir(app, 'PATCH', `/api/actividades/${urgente.id}`, { por: '10482', estado: 'done', avance: 100 })).code, 409)
+    assert.equal((await pedir(app, 'PATCH', `/api/actividades/${urgente.id}`, { por: '10482', estado: 'done' })).code, 409)
     // Avisos: al empleado (sin quién) y a su encargado (con quién); la realizada no avisa
     assert.equal((await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.filter((n) => n.kind === 'urgent-closed').length, 1)
     const jefe = (await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones.filter((n) => n.kind === 'urgent-closed')
@@ -644,7 +643,7 @@ test('aviso de atraso de una tarea propia: al empleado y a su encargado, no dos 
 
 test('asignar urgente: el encargado la marca aparte, con el cierre del turno elegido; no se hereda', async () => {
   const app = build()
-  const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre: enUnaHora(), puntos: [{ texto: 'Fuga en LC245-02', avance: 0 }] }))
+  const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre: enUnaHora(), puntos: [{ texto: 'Fuga en LC245-02' }] }))
   assert.equal(code, 201)
   assert.deepEqual([body[0].prioridad, typeof body[0].cierreTurno], ['urgente', 'string'])
   assert.equal((await heredar(app, body[0].id, '10230', '10482', HOY_REAL)).code, 409)
@@ -669,7 +668,7 @@ test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checado
     const maria = body.find((f) => f.no === '10490')
     assert.deepEqual([maria.extra, maria.asistencia], [455, [5, 6]]) // faltó el 30 oct
     // Una urgente abierta aún no cuenta; al cerrar el turno sí
-    await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', avance: 40, hoy: '2026-11-03', cierre: enUnaHora() }))
+    await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', hoy: '2026-11-03', cierre: enUnaHora() }))
     const urgentes = async () => (await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')).body.find((f) => f.no === '10482').urgentes
     assert.deepEqual(await urgentes(), [0, 0])
     mock.timers.tick(2 * 3_600_000)
@@ -689,7 +688,7 @@ test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checado
 const HOY = '2026-11-03'
 // Diego asigna a Jorge una actividad pendiente de hoy en ese turno; devuelve su id
 const pendiente = async (app, turno = 'A', cambios = {}) =>
-  (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY, turno, puntos: [{ texto: `Tarea ${turno}`, avance: 0 }], ...cambios }))).body[0].id
+  (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY, turno, puntos: [{ texto: `Tarea ${turno}` }], ...cambios }))).body[0].id
 const responder = (app, id, por, accion, extra = {}) =>
   pedir(app, 'POST', `/api/herencias/${id}/responder`, { por, accion, hoy: HOY, ...extra })
 const bandeja = (app, no) => pedir(app, 'GET', `/api/herencias/${no}?hoy=${HOY}`).then((r) => r.body)
@@ -745,7 +744,7 @@ test('herencia: redirigir a alguien de su equipo, 2 al día; 2 por turno a quien
 
   // Si el técnico la termina mientras espera, aceptar la anula
   const h4 = (await heredar(app, a4, '10112', '10511', HOY)).body
-  await pedir(app, 'PATCH', `/api/actividades/${a4}`, { por: '10482', estado: 'done', avance: 100 })
+  await pedir(app, 'PATCH', `/api/actividades/${a4}`, { por: '10482', estado: 'done' })
   assert.equal((await responder(app, h4.id, '10251', 'aceptar')).code, 409)
   assert.equal((await bandeja(app, '10112')).enviadas.find((x) => x.id === h4.id).estado, 'anulada')
 })
@@ -952,4 +951,41 @@ test('registros detrás del proxy: la IP que agregó el proxy, no la que inventa
   const sa = cookieDe(await entrar(SA.email, SA.password, app))
   const [fallido] = (await conCookie(app, 'GET', '/api/admin/registros?evento=login-fallido', sa)).json()
   assert.equal(fallido.ip, '203.0.113.7')
+})
+
+// ── Tablero: mover entre columnas de criticidad, fijar y eliminar ─────────────────────────────────────────
+test('tablero: el encargado mueve entre criticidades y a Urgente, fija y elimina; nadie más', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, puntos: [{ texto: 'Ajustar sensor' }] }))).body
+  const mover = (cambios, por = '10230') => pedir(app, 'PATCH', `/api/actividades/${a.id}/tablero`, { por, ...cambios })
+  assert.equal((await mover({ columna: 'alta' }, '10482')).code, 403) // el técnico no mueve
+  assert.equal((await mover({ columna: 'alta' }, '10251')).code, 403) // Sofía no es su encargada
+  assert.equal((await mover({ columna: 'alta' })).body.criticidad, 'alta')
+  assert.equal((await mover({ columna: 'urgente' })).code, 400) // sin cierre de turno
+  const u = (await mover({ columna: 'urgente', cierre: enUnaHora() })).body
+  assert.deepEqual([u.prioridad, u.criticidad, typeof u.cierreTurno], ['urgente', undefined, 'string'])
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones[0].kind, 'urgente')
+  const n = (await mover({ columna: 'critica' })).body
+  assert.deepEqual([n.prioridad, n.cierreTurno, n.criticidad], [undefined, undefined, 'critica'])
+  assert.equal((await mover({ fijada: true })).body.fijada, true)
+  // Eliminar: desaparece de sus listas y sus avisos
+  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10482' })).code, 403)
+  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230' })).code, 200)
+  assert.ok(!(await pedir(app, 'GET', '/api/actividades/10482')).body.some((x) => x.id === a.id))
+  assert.ok(!(await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.some((x) => x.kind === 'urgente'))
+  assert.equal((await mover({ columna: 'alta' })).code, 404)
+})
+
+test('auditoría: los números de actividad no se reutilizan al eliminar; equipo trae quién la creó; login con límite', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ puntos: [{ texto: 'Primera' }] }))).body
+  await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230' })
+  const [b] = (await pedir(app, 'POST', '/api/actividades', asignar({ puntos: [{ texto: 'Segunda' }] }))).body
+  assert.equal(b.id, a.id + 1)
+  const jorge = (await pedir(app, 'GET', '/api/equipo/10001')).body.find((e) => e.no === '10482')
+  assert.equal(jorge.actividades.find((x) => x.id === b.id).byName, 'Diego Herrera')
+  for (let i = 0; i < 10; i++) await login({ usuario: '10490', password: 'mala' }, app)
+  const r = await login({ usuario: '10490', password: 'demo1234' }, app) // ya bloqueado aunque ahora acierte
+  assert.deepEqual([r.statusCode, r.json().error], [429, 'Demasiados intentos. Espera 15 minutos.'])
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' }, app)).statusCode, 200) // otro usuario sigue entrando
 })

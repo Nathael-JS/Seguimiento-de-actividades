@@ -123,11 +123,11 @@ const registrarSchema = {
         maxItems: 20,
         items: {
           type: 'object',
-          required: ['texto', 'avance'],
+          // Sin porcentaje: el avance lo da el estado (nace pendiente; Realizada = hecha)
+          required: ['texto'],
           additionalProperties: false,
           properties: {
             texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
-            avance: { type: 'integer', minimum: 0, maximum: 100 },
           },
         },
       },
@@ -144,12 +144,11 @@ const actualizarSchema = {
   params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
   body: {
     type: 'object',
-    required: ['por', 'estado', 'avance'],
+    required: ['por', 'estado'],
     additionalProperties: false,
     properties: {
       por: noEmpleado,
       estado: { enum: ESTADOS },
-      avance: { type: 'integer', minimum: 0, maximum: 100 },
       nota: texto(500),
     },
   },
@@ -157,12 +156,11 @@ const actualizarSchema = {
 
 // Tarea que registra el propio técnico / Ing. Jr. cierre: fin de su turno (instante UTC calculado en su navegador)
 const propiaSchema = {
-  body: objeto(['por', 'texto', 'prioridad', 'avance', 'hoy'], {
+  body: objeto(['por', 'texto', 'prioridad', 'hoy'], {
     por: noEmpleado,
     texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
     prioridad: { enum: ['diaria', 'urgente'] },
     criticidad,
-    avance: { type: 'integer', minimum: 0, maximum: 100 },
     hoy: { type: 'string', format: 'date' },
     cierre: { type: 'string', format: 'date-time' },
   }),
@@ -306,7 +304,13 @@ export function build({ superadmins = [], ...opts } = {}) {
   const verificaciones = new Map()
   const recuperaciones = new Map()
   const limpiarVencidos = (mapa) => mapa.forEach((v, k) => v.vence < Date.now() && mapa.delete(k))
-  const siguienteId = (lista) => Math.max(0, ...lista.map((x) => x.id)) + 1
+  // Nunca se repite un número aunque se borre el último (los avisos y herencias guardan el número)
+  const ultimosIds = new Map()
+  const siguienteId = (lista) => {
+    const n = Math.max(ultimosIds.get(lista) ?? 0, ...lista.map((x) => x.id)) + 1
+    ultimosIds.set(lista, n)
+    return n
+  }
 
   const empleado = (no) => usuarios.find((u) => u.no === no)
   // Acepta correo completo, la parte antes de la @ o el número de empleado
@@ -421,13 +425,21 @@ export function build({ superadmins = [], ...opts } = {}) {
   const SIN_CAMBIO = new Set(['/api/sesion', '/api/perfil/:no/password'])
 
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
+  // 10 contraseñas incorrectas seguidas desde la misma IP para el mismo usuario bloquean 15 minutos
+  const fallosLogin = new Map()
+  const BLOQUEO = 15 * 60_000
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
     const usuario = req.body.usuario.trim().toLowerCase()
+    const clave = `${ipDe(req)}|${usuario}`
+    limpiarVencidos(fallosLogin)
+    if (fallosLogin.get(clave)?.n >= 10) return reply.code(429).send({ error: 'Demasiados intentos. Espera 15 minutos.' })
     const u = buscar(usuario)
     if (!(await passwordCorrecta(u?.password, req.body.password))) {
       registrar(req, 'login-fallido', { no: u?.no, usuario: usuario.slice(0, 100), ok: false })
+      fallosLogin.set(clave, { n: (fallosLogin.get(clave)?.n ?? 0) + 1, vence: Date.now() + BLOQUEO })
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
+    fallosLogin.delete(clave)
     if (u.activo === false) {
       registrar(req, 'login-bloqueado', { no: u.no, ok: false })
       return reply.code(403).send({ error: 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.' })
@@ -659,11 +671,14 @@ export function build({ superadmins = [], ...opts } = {}) {
       asignadas: acts.length,
       realizadas: acts.filter((a) => a.status === 'done').length,
       abiertas: acts.filter((a) => a.status === 'pending' || a.status === 'incomplete').length,
-      avance: acts.length ? Math.round(acts.reduce((s, a) => s + a.pct, 0) / acts.length) : null, // null: sin actividades
+      // % realizadas (ya no hay porcentaje por actividad); null: sin actividades
+      avance: acts.length ? Math.round((acts.filter((a) => a.status === 'done').length / acts.length) * 100) : null,
       notificaciones: notificaciones
         .filter((n) => n.for === u.no)
         // Por fecha y no por id: el Buzón agrupa por día y los datos pueden llegar fuera de orden
         .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)
+        // Las de una actividad eliminada desde el tablero ya no se muestran
+        .filter((n) => !n.ref || actividades.some((x) => x.id === n.ref))
         .map((n) => {
           const a = actividades.find((x) => x.id === n.ref)
           return {
@@ -702,7 +717,7 @@ export function build({ superadmins = [], ...opts } = {}) {
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role, dept, shift, boss }) => ({
         no, name, role, dept, shift, boss, ...rate(no),
-        actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id),
+        actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id).map((a) => ({ ...a, byName: empleado(a.by)?.name })),
       }))
   }))
 
@@ -724,8 +739,7 @@ export function build({ superadmins = [], ...opts } = {}) {
     const nuevas = puntos.map((p) => {
       const a = {
         id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
-        text: p.texto.trim(), pct: p.avance, status: p.avance === 100 ? 'done' : p.avance > 0 ? 'progress' : 'pending',
-        mgr: comentario.trim(), note: '', ...(p.avance === 100 && { doneAt: at }),
+        text: p.texto.trim(), pct: 0, status: 'pending', mgr: comentario.trim(), note: '',
         ...(prioridad === 'urgente' ? { prioridad, cierreTurno: cierre } : { criticidad }),
       }
       actividades.push(a)
@@ -737,7 +751,7 @@ export function build({ superadmins = [], ...opts } = {}) {
 
   // El técnico / Ing. Jr agrega una tarea suya: se toman sus datos tal cual (él mismo, su turno, la fecha de hoy)
   app.post('/api/actividades/propia', { schema: propiaSchema }, async (req, reply) => {
-    const { por, texto, prioridad, avance, hoy, cierre, criticidad = 'normal' } = req.body
+    const { por, texto, prioridad, hoy, cierre, criticidad = 'normal' } = req.body
     const u = empleado(por)
     if (!u || esEncargado(u)) return reply.code(403).send({ error: 'Solo técnicos e Ing. Jr agregan tareas propias.' })
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
@@ -749,8 +763,8 @@ export function build({ superadmins = [], ...opts } = {}) {
     const at = ahora()
     const a = {
       id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
-      pct: avance, status: avance === 100 ? 'done' : avance > 0 ? 'progress' : 'pending', mgr: '', note: '',
-      propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }), ...(avance === 100 && { doneAt: at }),
+      pct: 0, status: 'pending', mgr: '', note: '',
+      propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }),
     }
     actividades.push(a)
     if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: a.id })
@@ -769,9 +783,7 @@ export function build({ superadmins = [], ...opts } = {}) {
   app.patch('/api/actividades/:id', { schema: actualizarSchema }, async (req, reply) => {
     const a = actividades.find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
-    const { por, avance, nota = a.note } = req.body
-    // 100 % es Realizada (como al registrar) y Realizada es 100 %
-    const estado = avance === 100 ? 'done' : req.body.estado
+    const { por, estado, nota = a.note } = req.body
     if (a.to !== por) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad puede actualizarla.' })
     if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
     if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
@@ -780,13 +792,58 @@ export function build({ superadmins = [], ...opts } = {}) {
     const cambioNota = nota.trim() !== a.note
     // doneAt: cuándo quedó realizada; se conserva si ya lo estaba y se borra si se reabre
     Object.assign(a, {
-      status: estado, pct: estado === 'done' ? 100 : avance, note: nota.trim(),
+      // pct se deriva del estado (lo leen reportes y datos viejos): Realizada = 100, lo demás 0
+      status: estado, pct: estado === 'done' ? 100 : 0, note: nota.trim(),
       doneAt: estado !== 'done' ? undefined : a.status === 'done' ? a.doneAt : ahora(),
     })
     // El encargado se entera del cambio de estado y del comentario por separado, como en el mockup
     if (cambioEstado) notificar({ for: responsable(a), kind: estado, who: por, ref: a.id })
     if (cambioNota) notificar({ for: responsable(a), kind: 'comment', who: por, ref: a.id })
     return { ...a, byName: empleado(a.by)?.name }
+  })
+
+  // ── Tablero ──────────────────────────────────────────────────────────────────────────────────────────────
+  // El encargado mueve las actividades de su equipo entre columnas de criticidad (o a Urgente), las fija arriba
+  // o las elimina. Las columnas son la criticidad: moverla es cambiarla
+  const delEquipo = (por, a) => { const yo = empleado(por); return yo && esEncargado(yo) && asignables(yo).some((e) => e.no === a.to) }
+  const tableroSchema = {
+    params: heredarSchema.params,
+    body: objeto(['por'], { por: noEmpleado, columna: { enum: ['simple', 'normal', 'alta', 'critica', 'urgente'] }, fijada: { type: 'boolean' }, cierre: { type: 'string', format: 'date-time' } }),
+  }
+  app.patch('/api/actividades/:id/tablero', { schema: tableroSchema }, async (req, reply) => {
+    const a = vigentes().find((x) => x.id === req.params.id)
+    if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    const { por, columna, fijada, cierre } = req.body
+    if (!delEquipo(por, a)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    if (columna) {
+      if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
+      if (columna === 'urgente') {
+        // Igual que al asignar una urgente: se cierra al terminar su turno, dentro de las próximas 24 h
+        const espera = Date.parse(cierre) - Date.now()
+        if (a.status === 'done') return reply.code(409).send({ error: 'Una actividad realizada no se marca como urgente.' })
+        if (!(espera > 0 && espera <= DIA)) {
+          return reply.code(400).send({ error: 'Una urgente es para el turno en curso o el siguiente: revisa la fecha y el turno.' })
+        }
+        if (a.prioridad !== 'urgente') notificar({ for: a.to, kind: 'urgente', who: por, ref: a.id })
+        Object.assign(a, { prioridad: 'urgente', cierreTurno: cierre })
+        delete a.criticidad
+      } else {
+        delete a.prioridad
+        delete a.cierreTurno
+        a.criticidad = columna
+      }
+    }
+    if (fijada !== undefined) a.fijada = fijada
+    return a
+  })
+  app.delete('/api/actividades/:id', { schema: { params: heredarSchema.params, body: objeto(['por'], { por: noEmpleado }) } }, async (req, reply) => {
+    const i = actividades.findIndex((x) => x.id === req.params.id && !x.handedTo)
+    if (i < 0) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    if (!delEquipo(req.body.por, actividades[i])) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    if (actividades[i].herencia) return reply.code(409).send({ error: 'Tiene una herencia esperando validación.' })
+    // Se borra; las herencias ya resueltas la conservan en su historial por la original, no por esta
+    actividades.splice(i, 1)
+    return { ok: true }
   })
 
   // ── Herencia ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -918,7 +975,7 @@ export function build({ superadmins = [], ...opts } = {}) {
             .map(({ no, name, role, shift }) => ({ no, name, role, shift }))
           return { ...vistaHerencia(h), opciones }
         }),
-        enviadas: herencias.filter((h) => h.por === u.no).slice(-20).reverse().map(vistaHerencia),
+        enviadas: herencias.filter((h) => h.por === u.no && actividades.some((a) => a.id === h.act)).slice(-20).reverse().map(vistaHerencia),
       }
     }))
 

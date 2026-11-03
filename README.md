@@ -25,11 +25,15 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Super administradores:** fuera de los departamentos; su menú es **Usuarios** (lista y ficha completa: puesto, turno, dar o quitar acceso, restablecer contraseña con una temporal que se muestra una vez y obliga a cambiarla, reiniciar el MFA) y **Registros** (inicios de sesión, intentos fallidos y cambios de los administradores, con fecha, IP y navegador/sistema; filtros, exportar CSV y borrar los anteriores a una fecha). Los cambios piden volver a escribir su contraseña (vale 5 minutos). Sus cuentas no van en el repositorio: se definen en la variable de entorno `SUPERADMINS` (ver Despliegue). La MAC del equipo no se puede obtener desde un navegador.
 
-**Contraseñas:** se guardan con scrypt (`node:crypto`); nadie, ni un super administrador, puede verlas.
+**Contraseñas:** se guardan con scrypt (`node:crypto`); nadie, ni un super administrador, puede verlas. 10 contraseñas incorrectas seguidas (misma IP y usuario) bloquean ese acceso 15 minutos.
 
 **MFA con app autenticadora (TOTP):** el segundo paso del login pide el código de 6 dígitos de Google o Microsoft Authenticator. La primera vez que alguien entra, la app muestra un QR y la clave para vincularla; queda guardada al escribir el primer código. Un código no se acepta dos veces y se tolera ±30 s de desfase del reloj. Sin servicios externos (`node:crypto`). Pendiente: códigos de respaldo y reinicio del MFA por un administrador si alguien pierde el teléfono.
 
 **Herencias** (Ing. Full o superior): se propone heredar una actividad pendiente o incompleta del equipo, con motivo, a cualquier departamento. El servidor verifica dos condiciones sí/no: mismo nivel de puesto (técnico ↔ Ing. Jr, Ing. Full ↔ Senior) y turno siguiente (o el mismo empleado al día siguiente). La valida el encargado directo de quien la recibe: acepta, rechaza o redirige a alguien de su equipo, con comentario. Si quien propone ya es ese encargado, entra directo. Límites por día: 2 por turno y 2 a otro departamento para quien propone; 2 redirecciones para quien valida.
+
+**Tablero** (encargados): las actividades de su equipo en columnas Simple, Normal, Alta, Crítica y Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). Arrastrar una tarjeta a otra columna cambia su criticidad, con animación (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla. El "+" de cada columna registra una actividad con esa criticidad.
+
+**Sin porcentaje de avance:** el avance lo da el estado (Realizada = hecha); los anillos muestran el % de realizadas. **Monitoreo** abre en lista (actividad, prioridad, estado, asignada a, fecha, creada, creada por) con el % de realizadas desplegable por persona; las tarjetas quedan como segunda vista. **Mis actividades** también abre en lista, con el estado editable en la fila.
 
 **Criticidad** de las actividades diarias: simple, normal, alta o crítica. La crítica va después de las urgentes y pasa directo al turno siguiente (sin validación ni límite) una vez al día.
 
@@ -75,6 +79,8 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `GET` | `/api/actividades/:id/receptores` | Quiénes pueden recibir esa actividad (cualquier departamento) y quién la validaría |
+| `PATCH` | `/api/actividades/:id/tablero` | Tablero: mover a otra columna (criticidad o urgente, con `cierre`) o fijar |
+| `DELETE` | `/api/actividades/:id` | Tablero: eliminar una actividad del equipo |
 | `POST` | `/api/actividades/:id/heredar` | Proponer la herencia con motivo; entra directo si es crítica o si quien propone es el encargado de quien la recibe |
 | `GET` | `/api/herencias/:no?hoy=` | Por validar, enviadas y lo usado hoy de cada límite |
 | `POST` | `/api/herencias/:id/responder` | Aceptar, rechazar o redirigir (con comentario) |

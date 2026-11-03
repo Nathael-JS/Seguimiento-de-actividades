@@ -18,6 +18,7 @@ export const clavesDeptos = () => [...Object.keys(DEPARTAMENTOS), ...Object.keys
 export const ACCESOS = { gerencia: ['gte', 'sr', 'full'], operativo: ['jr', 'tec'] }
 export const estado = (k) => t(ESTADOS[k])
 export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
+export const PESO_CRITICIDAD = { simple: 0, normal: 1, alta: 2, critica: 3 }
 
 // `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente); `excepto` lo oculta a un puesto
 // Agrupados por uso: el día a día del turno, el seguimiento del equipo y la organización (el menú los separa
@@ -26,6 +27,7 @@ export const MODULOS = [
   { ruta: 'inicio', titulo: 'Inicio', icono: 'home', grupo: 'Día a día' },
   { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte', grupo: 'Día a día' },
   { ruta: 'registrar', titulo: 'Registrar actividad', icono: 'plus', desc: 'Asigna actividades por puntos a tu equipo.', solo: 'encargado', grupo: 'Día a día' },
+  { ruta: 'tablero', titulo: 'Tablero', icono: 'board', desc: 'Actividades por criticidad, semana a semana.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.', grupo: 'Día a día' },
   { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado', grupo: 'Seguimiento' },
@@ -99,8 +101,9 @@ export function cierreTurno(fecha, turno) {
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
 export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 
-export const promedio = (actividades) =>
-  actividades.length ? Math.round(actividades.reduce((s, a) => s + a.pct, 0) / actividades.length) : 0
+// % de actividades realizadas: ya no hay porcentaje por actividad, el estado manda (Realizada = hecha)
+export const pctRealizadas = (actividades) =>
+  actividades.length ? Math.round((actividades.filter((a) => a.status === 'done').length / actividades.length) * 100) : 0
 
 export const esEncargado = (role) => role === 'gte' || role === 'sr' || role === 'full'
 
@@ -158,4 +161,12 @@ export function dispositivo(ua = '') {
   const so = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS'
     : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null
   return nav || so ? [nav, so].filter(Boolean).join(' · ') : ua.slice(0, 40) || '—'
+}
+
+// "hace 3 horas", "ayer", "in 2 days"… en el idioma actual
+export function hace(iso, ahora = Date.now()) {
+  const s = (Date.parse(iso) - ahora) / 1000
+  const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' })
+  for (const [unidad, n] of [['day', 86_400], ['hour', 3_600], ['minute', 60]]) if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), unidad)
+  return rtf.format(0, 'minute')
 }

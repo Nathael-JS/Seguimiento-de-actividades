@@ -18,6 +18,7 @@ export function Notificacion({ n }) {
     // Sin who: el aviso es para quien tiene la actividad; con who: para quien la asignó
     return n.who ? <>{quien} {t('tiene atrasada')} “{n.actividad}”</> : <>{t('Tu actividad')} “{n.actividad}” {t('está atrasada')}</>
   }
+  if (n.kind === 'urgente') return <>{quien} {t('marcó como urgente')} “{n.actividad}”</>
   if (n.kind === 'herencia-pendiente') return <>{quien} {t('propone heredar')} “{n.actividad}” {t('a alguien de tu equipo: valídala')}</>
   if (n.kind === 'herencia-aceptada') return <>{quien} {t('aceptó tu herencia de')} “{n.actividad}”</>
   if (n.kind === 'herencia-rechazada') return <>{quien} {t('rechazó tu herencia de')} “{n.actividad}”</>

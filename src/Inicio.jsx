@@ -19,7 +19,7 @@ export default function Inicio({ user, datos, error, recargar }) {
             <Kpi n={datos.asignadas} label={t('Abiertas y realizadas hoy')} />
             <Kpi n={datos.realizadas} label={t('Realizadas hoy')} color="var(--status-done)" />
             <Kpi n={datos.abiertas} label={t('Pendientes o incompletas')} color="var(--status-pending)" />
-            <div className="card kpi"><Anillo pct={datos.avance} /><div className="l">{t('Avance promedio')}</div></div>
+            <div className="card kpi"><Anillo pct={datos.avance} /><div className="l">{t('Realizadas')}</div></div>
           </section>
 
           {/* El gerente ve el tablero de su área; los demás, lo que tienen por hacer (el menú ya lleva a cada módulo) */}
@@ -56,7 +56,7 @@ function TareasAbiertas({ user }) {
     <section className="card">
       <div className="row between" style={{ marginBottom: 12 }}>
         <h2 className="card-title" style={{ margin: 0 }}>{t('Tus tareas abiertas')}</h2>
-        {tareas?.length > 0 && <a href="#mis-actividades" style={{ fontSize: 13 }}>{t('Actualizar avance')}</a>}
+        {tareas?.length > 0 && <a href="#mis-actividades" style={{ fontSize: 13 }}>{t('Actualizar estado')}</a>}
       </div>
       {error ? <p className="error" role="alert">{error}</p>
         : !tareas ? <p className="muted">{t('Cargando…')}</p>
@@ -75,7 +75,6 @@ function TareasAbiertas({ user }) {
                     <Criticidad valor={a.criticidad} />
                     <Estado estado={a.status} />
                   </span>
-                  <span className="barra" aria-label={`${a.pct}%`}><i style={{ width: `${a.pct}%` }} /></span>
                 </a>
               </li>
             ))}
