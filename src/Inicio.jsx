@@ -1,10 +1,10 @@
-import { TURNOS, depto } from './comun.js'
-import Icono from './Icono.jsx'
+import { useEffect, useState } from 'react'
+import { TURNOS, api, depto } from './comun.js'
 import TableroGerente from './TableroGerente.jsx'
 import { t } from './i18n.js'
-import { Anillo, AvisoPassword, NotificacionesRecientes } from './ui.jsx'
+import { Anillo, AvisoPassword, Criticidad, Estado, NotificacionesRecientes } from './ui.jsx'
 
-export default function Inicio({ user, modulos, datos, error, recargar }) {
+export default function Inicio({ user, datos, error, recargar }) {
   return (
     <>
       <div className="page-head">
@@ -22,21 +22,10 @@ export default function Inicio({ user, modulos, datos, error, recargar }) {
             <div className="card kpi"><Anillo pct={datos.avance} /><div className="l">{t('Avance promedio')}</div></div>
           </section>
 
-          {/* El gerente ve el tablero de su área; los demás, sus accesos rápidos */}
+          {/* El gerente ve el tablero de su área; los demás, lo que tienen por hacer (el menú ya lleva a cada módulo) */}
           {user.role === 'gte' ? <TableroGerente user={user} notificaciones={datos.notificaciones} recargar={recargar} /> : (
             <div className="cols">
-              <section>
-                <h2 className="card-title" style={{ marginBottom: 12 }}>{t('Accesos rápidos')}</h2>
-                <div className="tiles">
-                  {modulos.filter((m) => m.desc).map((m) => (
-                    <a key={m.ruta} className="card tile" href={`#${m.ruta}`}>
-                      <span className="ic"><Icono nombre={m.icono} /></span>
-                      <span><h3>{t(m.titulo)}</h3><p>{t(m.desc)}</p></span>
-                    </a>
-                  ))}
-                </div>
-              </section>
-
+              <TareasAbiertas user={user} />
               <NotificacionesRecientes user={user} notificaciones={datos.notificaciones} recargar={recargar} />
             </div>
           )}
@@ -51,5 +40,48 @@ function Kpi({ n, label, color }) {
     <div className="card kpi">
       <div><div className="n" style={{ color }}>{n}</div><div className="l">{label}</div></div>
     </div>
+  )
+}
+
+// Las tareas que siguen abiertas, en el orden de Mis actividades (urgentes primero, luego por criticidad)
+const VISIBLES = 5
+function TareasAbiertas({ user }) {
+  const [tareas, setTareas] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    api(`/api/actividades/${user.no}`).then((l) => setTareas(l.filter((a) => a.status !== 'done' && !a.cerrada))).catch((e) => setError(e.message))
+  }, [user.no])
+
+  return (
+    <section className="card">
+      <div className="row between" style={{ marginBottom: 12 }}>
+        <h2 className="card-title" style={{ margin: 0 }}>{t('Tus tareas abiertas')}</h2>
+        {tareas?.length > 0 && <a href="#mis-actividades" style={{ fontSize: 13 }}>{t('Actualizar avance')}</a>}
+      </div>
+      {error ? <p className="error" role="alert">{error}</p>
+        : !tareas ? <p className="muted">{t('Cargando…')}</p>
+        : !tareas.length ? <p className="empty">{t('No tienes tareas abiertas. Cuando te asignen una, llega aquí y a tu buzón.')}</p>
+        : (
+          <ul className="list abiertas">
+            {tareas.slice(0, VISIBLES).map((a) => (
+              <li key={a.id}>
+                <a href="#mis-actividades">
+                  <span className="quien">
+                    <b>{a.text}</b>
+                    <span className="meta">{a.date} · {t('Turno')} {a.shift}</span>
+                  </span>
+                  <span className="row" style={{ gap: 6, flex: 'none' }}>
+                    {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}
+                    <Criticidad valor={a.criticidad} />
+                    <Estado estado={a.status} />
+                  </span>
+                  <span className="barra" aria-label={`${a.pct}%`}><i style={{ width: `${a.pct}%` }} /></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      {tareas?.length > VISIBLES && <a href="#mis-actividades" className="mas">{t('Ver las {n} tareas', { n: tareas.length })}</a>}
+    </section>
   )
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
 import { Registros, Usuarios } from './Admin.jsx'
 import Ajustes from './Ajustes.jsx'
@@ -31,6 +31,14 @@ export default function Shell({ user, onLogout }) {
   const [hash, setHash] = useState(location.hash)
   const ruta = rutaDe(hash)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  // Escritorio: el menú se pliega a una barra de iconos para dar más espacio a la página (se recuerda en el navegador)
+  const [plegado, setPlegado] = useState(() => { try { return localStorage.getItem('menu-plegado') === '1' } catch { return false } })
+  function plegar() {
+    setPlegado(!plegado)
+    try { localStorage.setItem('menu-plegado', plegado ? '0' : '1') } catch { /* sin almacenamiento: solo esta vez */ }
+  }
+  // Con muchas opciones (Gerencia) se separan por grupo; con pocas, una lista corta se lee sola
+  const conGrupos = modulos.length > 6
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
@@ -86,27 +94,37 @@ export default function Shell({ user, onLogout }) {
   const Pagina = PAGINAS[actual.ruta]
 
   return (
-    <div className={`shell${menuAbierto ? ' nav-open' : ''}`}>
+    <div className={`shell${menuAbierto ? ' nav-open' : ''}${plegado ? ' plegado' : ''}`}>
       <aside className="side" aria-label={t('Menú')}>
-        <div className="brandname"><i />{t('Seguimiento de Actividades')}</div>
+        <div className="side-cabeza">
+          <div className="brandname"><i /><span className="etq">{t('Seguimiento de Actividades')}</span></div>
+          <button type="button" className="plegar" onClick={plegar} aria-expanded={!plegado} aria-label={t(plegado ? 'Desplegar menú' : 'Plegar menú')}
+            title={t(plegado ? 'Desplegar menú' : 'Plegar menú')}>
+            <Icono nombre="panel" />
+          </button>
+        </div>
         {/* Cualquier clic en el menú lo cierra en móvil, también el de la página actual (no dispara hashchange) */}
         <nav className="nav" onClick={() => setMenuAbierto(false)}>
-          {modulos.map((m) => (
-            <a key={m.ruta} href={`#${m.ruta}`} aria-current={m === actual ? 'page' : undefined}>
-              <Icono nombre={m.icono} />
-              {t(m.titulo)}
-              {m.ruta === 'buzon' && sinLeer > 0 && <span className="count">{sinLeer}<span className="sr"> {t('sin leer')}</span></span>}
-            </a>
+          {modulos.map((m, i) => (
+            <Fragment key={m.ruta}>
+              {conGrupos && m.grupo !== modulos[i - 1]?.grupo && <span className="nav-grupo"><span className="etq">{t(m.grupo)}</span></span>}
+              {/* data-etq: el nombre que aparece junto al icono con el menú plegado */}
+              <a href={`#${m.ruta}`} aria-current={m === actual ? 'page' : undefined} data-etq={t(m.titulo)}>
+                <Icono nombre={m.icono} />
+                <span className="etq">{t(m.titulo)}</span>
+                {m.ruta === 'buzon' && sinLeer > 0 && <span className="count">{sinLeer}<span className="sr"> {t('sin leer')}</span></span>}
+              </a>
+            </Fragment>
           ))}
-          <button type="button" onClick={() => salir.current.showModal()}>
-            <Icono nombre="logout" />{t('Cerrar sesión')}
+          <button type="button" onClick={() => salir.current.showModal()} data-etq={t('Cerrar sesión')}>
+            <Icono nombre="logout" /><span className="etq">{t('Cerrar sesión')}</span>
           </button>
         </nav>
         <div className="spacer" />
-        <div className="me">
+        <a className="me" href="#perfil" data-etq={user.name} onClick={() => setMenuAbierto(false)}>
           <span className="avatar">{iniciales(user.name)}</span>
-          <div><b>{user.name}</b><div style={{ opacity: 0.75 }}>{rol(user.role)} · {user.no}</div></div>
-        </div>
+          <div className="etq"><b>{user.name}</b><div style={{ opacity: 0.75 }}>{rol(user.role)} · {user.no}</div></div>
+        </a>
       </aside>
 
       <div className="backdrop" aria-hidden="true" onClick={() => setMenuAbierto(false)} />

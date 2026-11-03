@@ -136,7 +136,7 @@ button{font-family:inherit}
 
 .shell{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
 .side{background:var(--ink-deep);color:var(--on-ink-deep);padding:20px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
-.side .brandname{font-size:16px;line-height:22px;padding:4px 10px 18px}
+.side .brandname{font-size:16px;line-height:22px;padding:4px 10px;min-width:0}
 .side .brandname i{width:26px;height:26px}
 .nav{display:flex;flex-direction:column;gap:4px}
 .nav a,.nav button{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-md);color:var(--on-ink-deep);text-decoration:none;font:500 14px/20px var(--font-sans);opacity:.85;background:none;border:0;cursor:pointer;text-align:left}
@@ -146,7 +146,9 @@ button{font-family:inherit}
 .nav .count{margin-left:auto;background:var(--accent);color:var(--on-accent);font:600 11px/18px var(--font-mono);padding:0 7px;border-radius:var(--radius-pill)}
 .spacer{flex:1}
 .backdrop{display:none}
-.side .me{display:flex;gap:10px;align-items:center;padding:12px 10px;border-top:1px solid rgba(255,255,255,.12);margin-top:8px;font-size:13px;line-height:17px}
+.side .me{display:flex;gap:10px;align-items:center;padding:12px 10px;border-top:1px solid rgba(255,255,255,.12);margin-top:8px;font-size:13px;line-height:17px;color:inherit;text-decoration:none;border-radius:var(--radius-md);position:relative}
+.side .me:hover{background:rgba(255,255,255,.06)}
+.side .me:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .avatar{width:36px;height:36px;border-radius:var(--radius-pill);background:var(--brand-soft);color:var(--brand-strong);display:grid;place-items:center;font:600 13px var(--font-sans);flex:none}
 .main{min-width:0;display:flex;flex-direction:column}
 .top{display:flex;align-items:center;gap:12px;padding:14px 32px;border-bottom:1px solid var(--line);background:var(--surface-100);position:sticky;top:0;z-index:5}
@@ -654,3 +656,51 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .evento.admin{background:var(--brand-soft);color:var(--brand-strong)}
 .purgar{display:grid;grid-template-columns:1fr 200px auto;gap:16px;align-items:end;margin-top:24px}
 @media (max-width:760px){.purgar{grid-template-columns:1fr}}
+
+/* Menú lateral: cabecera con el botón de plegar, grupos y la versión plegada (barra de iconos) en escritorio */
+.side-cabeza{display:flex;align-items:center;gap:4px;padding-bottom:18px}
+.plegar{margin-left:auto;width:32px;height:32px;flex:none;display:grid;place-items:center;border:0;border-radius:var(--radius-md);background:none;color:var(--on-ink-deep);opacity:.7;cursor:pointer;transition:opacity .15s,background .15s}
+.plegar:hover{opacity:1;background:rgba(255,255,255,.08)}
+.plegar:focus-visible{outline:2px solid var(--focus);outline-offset:2px;opacity:1}
+.plegar .ico{transition:transform .22s var(--ease-salida)}
+.nav-grupo{display:block;padding:14px 12px 4px;font:500 12px/16px var(--font-sans);color:color-mix(in srgb,var(--on-ink-deep) 58%,transparent)}
+.nav-grupo:first-child{padding-top:0}
+.nav a,.nav button{position:relative}
+.etq{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .15s}
+.side .brandname .etq{white-space:normal}
+/* Desplegado, el menú se desplaza si no cabe (pantallas bajas); plegado no, para que los nombres al pasar el mouse no se corten */
+.shell:not(.plegado) .side{overflow-y:auto}
+@media (min-width:861px){
+  .shell{transition:grid-template-columns .22s var(--ease-salida)}
+  .shell.plegado{grid-template-columns:72px 1fr}
+  .plegado .side{padding:20px 12px}
+  .plegado .etq{opacity:0;width:0;flex:0 0 0}
+  /* Plegado solo queda el botón de desplegar arriba: el logo repetiría lo mismo y quitaría altura al menú */
+  .plegado .brandname{display:none}
+  .plegado .side-cabeza{justify-content:center;padding-bottom:12px}
+  .plegado .plegar{margin:0}
+  .plegado .plegar .ico{transform:scaleX(-1)}
+  .plegado .nav a,.plegado .nav button{justify-content:center;gap:0;padding:8px 0}
+  .plegado .nav-grupo{padding:0;margin:6px 10px;border-top:1px solid rgba(255,255,255,.14)}
+  .plegado .nav-grupo:first-child{display:none}
+  .plegado .nav .count{position:absolute;top:3px;right:5px;padding:0 5px;font-size:10px;line-height:15px}
+  .plegado .side .me{justify-content:center;padding:12px 0;gap:0}
+  /* Con el menú plegado, el nombre aparece junto al icono al pasar el mouse o con el teclado */
+  .plegado [data-etq]:hover::after,.plegado [data-etq]:focus-visible::after{content:attr(data-etq);position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);
+    background:var(--ink);color:var(--surface-100);font:500 13px/18px var(--font-sans);padding:6px 10px;border-radius:var(--radius-md);white-space:nowrap;box-shadow:var(--shadow-pop);z-index:50;pointer-events:none}
+}
+@media (max-width:860px){.plegar{display:none}}
+@media (prefers-reduced-motion:reduce){.shell,.plegar .ico,.etq{transition:none}}
+
+/* Inicio: tareas abiertas (cada fila lleva a Mis actividades) */
+.abiertas li{padding:0;border-top:1px solid var(--line)}
+.abiertas li:first-child{border-top:0}
+.abiertas a{flex:1;display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:12px 8px;margin:0 -8px;border-radius:var(--radius-md);color:inherit;text-decoration:none}
+.abiertas a:hover{background:var(--surface-000)}
+.abiertas a:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.abiertas .quien{display:flex;flex-direction:column;min-width:0}
+.abiertas .quien b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abiertas .barra{grid-column:1/-1;height:4px;border-radius:2px;background:var(--surface-200);overflow:hidden}
+.abiertas .barra i{display:block;height:100%;background:var(--brand)}
+.mas{display:inline-block;margin-top:12px;font-size:13px}
+.task .plegada{padding-top:4px}
