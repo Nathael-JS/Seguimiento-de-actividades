@@ -66,6 +66,8 @@ function Tarea({ tarea, user, onGuardado }) {
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
   const cambio = estado !== tarea.status || avance !== tarea.pct || nota.trim() !== tarea.note
+  // Una realizada ya no se trabaja: se muestra plegada y se abre solo para corregirla
+  const [abierta, setAbierta] = useState(tarea.status !== 'done')
   const urgenteAbierta = tarea.prioridad === 'urgente' && !tarea.cerrada && tarea.status !== 'done'
 
   // Realizada es 100 % y 100 % es Realizada, igual que en el servidor
@@ -114,7 +116,12 @@ function Tarea({ tarea, user, onGuardado }) {
       {tarea.mgr && <div className="mgr-note"><b>{t('Comentario del encargado')}:</b> {tarea.mgr}</div>}
 
       {/* Validada al cerrar el turno: queda en su estado, solo se muestra */}
-      {tarea.cerrada ? (
+      {!tarea.cerrada && !abierta ? (
+        <div className="row between plegada">
+          <span className="meta">{t('Terminada al {pct}%', { pct: tarea.pct })}{tarea.note && <> · “{tarea.note}”</>}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierta(true)}>{t('Editar')}</button>
+        </div>
+      ) : tarea.cerrada ? (
         <p className="muted" style={{ fontSize: 14 }}>
           {t('Se cerró al terminar el turno con {pct}%: ya no se puede cambiar ni heredar.', { pct: tarea.pct })}
           {tarea.note && <> {t('Tu comentario')}: “{tarea.note}”</>}

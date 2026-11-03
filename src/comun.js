@@ -20,21 +20,23 @@ export const estado = (k) => t(ESTADOS[k])
 export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
 
 // `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente); `excepto` lo oculta a un puesto
+// Agrupados por uso: el día a día del turno, el seguimiento del equipo y la organización (el menú los separa
+// cuando hay muchos, como en Gerencia)
 export const MODULOS = [
-  { ruta: 'inicio', titulo: 'Inicio', icono: 'home' },
-  { ruta: 'registrar', titulo: 'Registrar actividad', icono: 'plus', desc: 'Asigna actividades por puntos a tu equipo.', solo: 'encargado' },
-  { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte' },
-  { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado' },
-  { ruta: 'reportes', titulo: 'Reportes', icono: 'file', desc: 'Genera reportes por fecha, turno y hora.', solo: 'encargado' },
-  { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado' },
-  { ruta: 'matriz', titulo: 'Matriz de seguimiento', icono: 'grid', desc: 'Yield, tiempo extra y asistencia de tu equipo.', solo: 'encargado' },
-  { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado' },
-  { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },
-  { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.' },
-  { ruta: 'usuarios', titulo: 'Usuarios', icono: 'users', desc: 'Cuentas, puestos, turnos y acceso al sistema.', solo: 'sa' },
-  { ruta: 'registros', titulo: 'Registros', icono: 'log', desc: 'Quién entra, cuándo y desde dónde.', solo: 'sa' },
-  { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte' },
-  { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.' },
+  { ruta: 'inicio', titulo: 'Inicio', icono: 'home', grupo: 'Día a día' },
+  { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte', grupo: 'Día a día' },
+  { ruta: 'registrar', titulo: 'Registrar actividad', icono: 'plus', desc: 'Asigna actividades por puntos a tu equipo.', solo: 'encargado', grupo: 'Día a día' },
+  { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado', grupo: 'Día a día' },
+  { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.', grupo: 'Día a día' },
+  { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado', grupo: 'Seguimiento' },
+  { ruta: 'reportes', titulo: 'Reportes', icono: 'file', desc: 'Genera reportes por fecha, turno y hora.', solo: 'encargado', grupo: 'Seguimiento' },
+  { ruta: 'matriz', titulo: 'Matriz de seguimiento', icono: 'grid', desc: 'Yield, tiempo extra y asistencia de tu equipo.', solo: 'encargado', grupo: 'Seguimiento' },
+  { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado', grupo: 'Seguimiento' },
+  { ruta: 'usuarios', titulo: 'Usuarios', icono: 'users', desc: 'Cuentas, puestos, turnos y acceso al sistema.', solo: 'sa', grupo: 'Organización' },
+  { ruta: 'registros', titulo: 'Registros', icono: 'log', desc: 'Quién entra, cuándo y desde dónde.', solo: 'sa', grupo: 'Organización' },
+  { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.', grupo: 'Organización' },
+  { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte', grupo: 'Organización' },
+  { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.', grupo: 'Organización' },
 ]
 
 // El super administrador solo administra: sus módulos y su perfil
