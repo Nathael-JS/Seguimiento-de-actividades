@@ -92,7 +92,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
               <span className="avatar">{iniciales(emp.name)}</span>
               <div style={{ flex: 1 }}>
                 <b>{emp.name}</b>
-                <div className="muted" style={{ fontSize: 13 }}><span className="mono">{t('No.')} {emp.no}</span> · {depto(emp.dept)} · {rol(emp.role)}</div>
+                <div className="meta"><span className="mono">{t('No.')} {emp.no}</span> · {depto(emp.dept)} · {rol(emp.role)}</div>
               </div>
               <span className="chip">{t('Turno')} {emp.shift}</span>
             </div>

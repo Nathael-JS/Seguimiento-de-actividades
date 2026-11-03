@@ -99,7 +99,7 @@ export default function Reportes({ user }) {
             {personas.map((p) => (
               <label key={p.no}>
                 <input type="checkbox" checked={elegidos.includes(p.no)} onChange={() => alternar(p.no)} />
-                {p.name} <span className="muted" style={{ fontSize: 12 }}>· {rol(p.role)}</span>
+                {p.name} <span className="meta meta-sm">· {rol(p.role)}</span>
               </label>
             ))}
           </div>
@@ -165,7 +165,7 @@ function Comparativo({ filas, vista, setVista, exportar }) {
       <div className="row between" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 className="card-title" style={{ margin: 0 }}>{t('Comparativo')}</h2>
-          <p className="muted" style={{ fontSize: 13 }}>{t('% a tiempo: realizadas a más tardar el día que les tocaba (las de hoy abiertas aún no cuentan).')}</p>
+          <p className="meta">{t('% a tiempo: realizadas a más tardar el día que les tocaba (las de hoy abiertas aún no cuentan).')}</p>
         </div>
         <div className="row no-imprimir" style={{ flexWrap: 'wrap' }}>
           <div className="chips" role="group" aria-label={t('Comparar por')}>

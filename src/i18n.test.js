@@ -2,38 +2,40 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import en from './en.js'
-import { DEPARTAMENTOS, ESTADOS, MODULOS, ROLES, reglasPassword } from './comun.js'
+import { CRITICIDADES, DEPARTAMENTOS, ESTADOS, MODULOS, ROLES, reglasPassword } from './comun.js'
 
 const leer = (ruta) => readFileSync(new URL(ruta, import.meta.url), 'utf8')
-const literal = "'((?:[^'\\\\]|\\\\.)*)'"
+// Nombres propios, datos de ejemplo y textos que no son de interfaz: iguales en ambos idiomas
+const IGUALES = new Set(['Liquid Cooling', 'SMT', 'Laura Méndez', 'Jorge Salinas', 'Estaciones LC245', 'Escape', 'NFD', 'Simple', 'Normal', 'Senior', 'Content-Type'])
 
-test('todo texto traducible tiene su versión en inglés', () => {
+// Todo texto entre comillas que parezca de interfaz en español: empieza con mayúscula (o ¿ ¡) y tiene palabras.
+// Así entran también los de constantes (SLIDES, FILTROS…), los de condiciones (t(a ? 'x' : 'y')) y los errores
+// del servidor que api() traduce, sin depender de cómo se escribió la llamada a t()
+function textosDe(codigo) {
+  const sinComentarios = codigo.replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  return [...sinComentarios.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"/g)]
+    .map((m) => m[1] ?? m[2])
+    .filter((s) => /^[¿¡A-ZÁÉÍÓÚÑ]/.test(s) && /[a-záéíóúñ]{3}/.test(s) && !/[<>=]|^[A-Z]+$|^[A-Z][a-z]+[A-Z]/.test(s))
+}
+
+test('todo texto de interfaz tiene su versión en inglés', () => {
   const claves = new Set()
-  for (const archivo of readdirSync(new URL('.', import.meta.url)).filter((f) => f.endsWith('.jsx'))) {
-    const codigo = leer(`./${archivo}`)
-    // t('texto') y t(condición ? 'a' : 'b')
-    for (const [, s] of codigo.matchAll(new RegExp(`\\bt\\(\\s*${literal}`, 'g'))) claves.add(s)
-    for (const [, a, b] of codigo.matchAll(new RegExp(`\\bt\\([^)']*\\?\\s*${literal}\\s*:\\s*${literal}`, 'g'))) claves.add(a).add(b)
-    // Singular y plural: cuenta(n, 'uno', 'varios')
-    for (const [, a, b] of codigo.matchAll(new RegExp(`\\bcuenta\\([^,]+,\\s*${literal},\\s*${literal}`, 'g'))) claves.add(a).add(b)
-  }
-  // Listas que se traducen al mostrarse
-  for (const archivo of ['./Buzon.jsx', './Reportes.jsx', './Departamentos.jsx', './Registro.jsx']) {
-    const codigo = leer(archivo)
-    for (const [, lista] of codigo.matchAll(/(?:FILTROS|COLUMNAS|TITULOS) = \[([\s\S]*?)\n?\]|\{\[('Puesto'[^\]]*)\]/g)) {
-      for (const [, s] of (lista ?? '').matchAll(new RegExp(`\\[?${literal}`, 'g'))) claves.add(s)
-    }
-  }
-  for (const [, s] of leer('./Departamentos.jsx').matchAll(new RegExp(literal, 'g'))) if (/^[A-ZÁÉÍÓÚ]/.test(s) && s !== 'Puesto') claves.add(s)
-  for (const v of [...Object.values(ROLES), ...Object.values(DEPARTAMENTOS), ...Object.values(ESTADOS)]) claves.add(v)
+  const src = readdirSync(new URL('.', import.meta.url)).filter((f) => /\.jsx?$/.test(f) && !/test|^en\.js$|^i18n\.js$|^main\.jsx$/.test(f))
+  for (const archivo of src) for (const s of textosDe(leer(`./${archivo}`))) claves.add(s)
+  for (const s of textosDe(leer('../server/app.js'))) claves.add(s)
+  // Listas que se traducen al mostrarse (por si alguna empieza en minúscula)
+  for (const v of [...Object.values(ROLES), ...Object.values(DEPARTAMENTOS), ...Object.values(ESTADOS), ...Object.values(CRITICIDADES)]) claves.add(v)
   for (const m of MODULOS) { claves.add(m.titulo); if (m.desc) claves.add(m.desc) }
   for (const [texto] of reglasPassword('', '')) claves.add(texto)
-  // Mensajes de error del servidor, que api() traduce
-  for (const [, s] of leer('../server/app.js').matchAll(new RegExp(`error: ${literal}`, 'g'))) claves.add(s)
+  // Y las llamadas t('…') en minúscula ("de", "propone heredar"…)
+  for (const archivo of src) for (const [, s] of leer(`./${archivo}`).matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g)) claves.add(s)
 
-  // Iguales en ambos idiomas
-  for (const igual of ['Liquid Cooling', 'SMT', ' ']) claves.delete(igual)
-  const faltan = [...claves].filter((k) => !(k in en))
+  const faltan = [...claves].filter((k) => !IGUALES.has(k) && !(k in en))
   assert.deepEqual(faltan, [])
-  assert.ok(claves.size > 200, `solo se encontraron ${claves.size} textos: revisar las expresiones`)
+  assert.ok(claves.size > 400, `solo se encontraron ${claves.size} textos: revisar la expresión`)
+})
+
+test('ninguna traducción quedó igual al español por descuido', () => {
+  const iguales = Object.entries(en).filter(([es, ingles]) => es === ingles && /[a-z]{4}/.test(es) && !IGUALES.has(es))
+  assert.deepEqual(iguales.map(([es]) => es), [])
 })

@@ -36,8 +36,8 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                       <a className="lider" href={`#monitoreo?lider=${l.no}`} aria-label={t('Ver el equipo de {nombre} en Monitoreo', { nombre: l.name })}>
                         <span className="avatar">{iniciales(l.name)}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <b>{l.name}</b> <span className="muted" style={{ fontSize: 13 }}>· {rol(l.role)} · {cuenta(l.personas, '{n} persona', '{n} personas')}</span>
-                          <div className="muted" style={{ fontSize: 13 }}>
+                          <b>{l.name}</b> <span className="meta">· {rol(l.role)} · {cuenta(l.personas, '{n} persona', '{n} personas')}</span>
+                          <div className="meta">
                             {actividades(l.actividades)}
                             {l.realizadas > 0 && <> · {cuenta(l.realizadas, '{n} realizada hoy', '{n} realizadas hoy')}</>}
                             {l.incompletas > 0 && <> · <span className="txt-incompleta">{cuenta(l.incompletas, '{n} incompleta', '{n} incompletas')}</span></>}
@@ -60,8 +60,8 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                     <div>
                       <b>{t('Turno')} {x.turno}</b>
                       <div className="muted mono" style={{ fontSize: 12 }}>{TURNOS[x.turno]}</div>
-                      <div className="muted" style={{ fontSize: 13 }}>{actividades(x.actividades)}</div>
-                      <div className="muted" style={{ fontSize: 13 }}>{cuenta(x.personas, '{n} persona', '{n} personas')}</div>
+                      <div className="meta">{actividades(x.actividades)}</div>
+                      <div className="meta">{cuenta(x.personas, '{n} persona', '{n} personas')}</div>
                     </div>
                   </div>
                 ))}

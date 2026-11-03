@@ -47,7 +47,7 @@ export default function Perfil({ user, recargar, avisar }) {
             <h2 className="card-title" style={{ margin: 0 }}>{t('Seguridad')}</h2>
             <div className="row between" style={{ flexWrap: 'wrap', gap: 16 }}>
               <div>
-                <div className="muted" style={{ fontSize: 13 }}>{t('Último cambio de contraseña')}</div>
+                <div className="meta">{t('Último cambio de contraseña')}</div>
                 <div className="mono">{fecha(perfil.pwdChanged)}</div>
               </div>
               {!cambiando && <button className="btn btn-secondary" onClick={() => setCambiando(true)}>{t('Cambiar contraseña')}</button>}

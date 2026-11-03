@@ -39,7 +39,7 @@ export default function MisActividades({ user, recargar, avisar }) {
           <p>{t('Marca el estado, ajusta el avance y comenta tus actividades.')}</p>
         </div>
         <div className="row" style={{ flexWrap: 'wrap' }}>
-          {tareas && <><Anillo pct={avance} /><span className="muted" style={{ fontSize: 13 }}>{t('Avance promedio')}</span></>}
+          {tareas && <><Anillo pct={avance} /><span className="meta">{t('Avance promedio')}</span></>}
           {puedeAgregar && !nueva && <button className="btn btn-primary" onClick={() => setNueva(true)}>+ {t('Nueva tarea')}</button>}
         </div>
       </div>
@@ -97,7 +97,7 @@ function Tarea({ tarea, user, onGuardado }) {
       <div className="task-head">
         <div>
           <h3>{tarea.text}</h3>
-          <div className="muted" style={{ fontSize: 13 }}>
+          <div className="meta">
             {tarea.propia ? t('Registrada por ti') : `${t('Asignada por')} ${tarea.byName}`} · <span className="mono">{tarea.date} · {t('Turno')} {tarea.shift} · {hora(tarea.at)}</span>
             {urgenteAbierta && <> · <b className="txt-incompleta">{t('Cierra a las {hora}', { hora: hora(tarea.cierreTurno) })}</b></>}
           </div>
@@ -187,7 +187,7 @@ function NuevaTarea({ user, alCrear, cancelar }) {
         <span className="avatar">{iniciales(user.name)}</span>
         <div style={{ flex: 1 }}>
           <b>{user.name}</b>
-          <div className="muted" style={{ fontSize: 13 }}><span className="mono">{t('No.')} {user.no}</span> · {depto(user.dept)} · {rol(user.role)}</div>
+          <div className="meta"><span className="mono">{t('No.')} {user.no}</span> · {depto(user.dept)} · {rol(user.role)}</div>
         </div>
         <span className="chip">{t('Turno')} {user.shift} · {hoy()}</span>
       </div>

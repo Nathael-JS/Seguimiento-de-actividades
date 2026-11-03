@@ -9,7 +9,8 @@
     "area": "Gerencia",
     "email": "laura.mendez@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10112",
@@ -21,7 +22,8 @@
     "area": "Estaciones LC245",
     "email": "carlos.ruiz@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10145",
@@ -33,7 +35,8 @@
     "area": "CDU y Chillers",
     "email": "ana.torres@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10230",
@@ -45,7 +48,8 @@
     "area": "Estaciones LC245",
     "email": "diego.herrera@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10251",
@@ -57,7 +61,8 @@
     "area": "CDU y Chillers",
     "email": "sofia.navarro@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10482",
@@ -69,7 +74,8 @@
     "area": "Estaciones LC245",
     "email": "jorge.salinas@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10490",
@@ -81,7 +87,8 @@
     "area": "Estaciones LC245",
     "email": "maria.lopez@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10511",
@@ -93,7 +100,8 @@
     "area": "CDU y Chillers",
     "email": "luis.ortega@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10533",
@@ -105,7 +113,8 @@
     "area": "Estaciones LC245",
     "email": "paola.ramirez@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10547",
@@ -117,7 +126,8 @@
     "area": "CDU y Chillers",
     "email": "hector.diaz@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10700",
@@ -129,7 +139,8 @@
     "area": "Gerencia",
     "email": "andres.molina@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10620",
@@ -141,7 +152,8 @@
     "area": "Burn-in",
     "email": "elena.castro@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10604",
@@ -153,7 +165,8 @@
     "area": "Burn-in",
     "email": "ricardo.vega@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10810",
@@ -165,7 +178,8 @@
     "area": "Líneas 1–3",
     "email": "fernanda.rios@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   },
   {
     "no": "10822",
@@ -177,6 +191,7 @@
     "area": "Líneas 1–3",
     "email": "ivan.cruz@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234"
+    "password": "demo1234",
+    "prueba": true
   }
 ]

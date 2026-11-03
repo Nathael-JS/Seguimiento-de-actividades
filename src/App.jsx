@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Login from './Login.jsx'
 import Shell from './Shell.jsx'
 import { t, useIdioma } from './i18n.js'
+import { registrarDeptos } from './comun.js'
 
 export default function App() {
   // undefined: todavía preguntando al servidor si hay sesión (no se muestra nada para no parpadear el login)
@@ -13,7 +14,9 @@ export default function App() {
 
   useEffect(() => {
     // Al recargar, la cookie de sesión dice quién es. fetch directo: sin sesión aquí no es "sesión terminada"
-    fetch('/api/sesion').then((r) => (r.ok ? r.json() : null)).catch(() => null).then(setUser)
+    const json = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    // Los nombres de los departamentos creados por gerentes, antes de pintar cualquier pantalla
+    Promise.all([json('/api/sesion'), json('/api/deptos')]).then(([u, deptos]) => { registrarDeptos(deptos ?? []); setUser(u) })
     // api() avisa cuando el servidor ya no reconoce la sesión (venció, o se cambió la contraseña en otro equipo)
     const terminada = () => { setAviso(t('Tu sesión terminó. Vuelve a iniciar sesión.')); setUser(null) }
     addEventListener('sesion-terminada', terminada)

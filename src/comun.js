@@ -9,7 +9,13 @@ export const CRITICIDADES = { simple: 'Simple', normal: 'Normal', alta: 'Alta', 
 
 // Nombres ya traducidos al idioma actual
 export const rol = (k) => t(ROLES[k])
-export const depto = (k) => t(DEPARTAMENTOS[k])
+// Los creados por un gerente llegan del servidor (/api/deptos) con su nombre tal cual, sin traducción
+const deptosCreados = {}
+export const registrarDeptos = (lista) => lista.forEach((d) => { if (!DEPARTAMENTOS[d.clave]) deptosCreados[d.clave] = d.nombre })
+export const depto = (k) => (DEPARTAMENTOS[k] ? t(DEPARTAMENTOS[k]) : deptosCreados[k] ?? k)
+export const clavesDeptos = () => [...Object.keys(DEPARTAMENTOS), ...Object.keys(deptosCreados)]
+// Acceso desde la portada: Gerencia (encargados) o Jr / Técnico
+export const ACCESOS = { gerencia: ['gte', 'sr', 'full'], operativo: ['jr', 'tec'] }
 export const estado = (k) => t(ESTADOS[k])
 export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
 
@@ -25,11 +31,12 @@ export const MODULOS = [
   { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },
   { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.' },
+  { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte' },
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.' },
 ]
 
 export const modulosDe = (user) =>
-  MODULOS.filter((m) => (!m.solo || user.encargado) && m.excepto !== user.role)
+  MODULOS.filter((m) => (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : user.encargado)) && m.excepto !== user.role)
 
 export const iniciales = (nombre) => nombre.split(' ').map((p) => p[0]).slice(0, 2).join('')
 
@@ -67,6 +74,14 @@ export function finTurno(turno, ahora = new Date()) {
   if (fin <= ahora) fin.setDate(fin.getDate() + 1)
   return fin
 }
+const horas = (txt) => { const [h, m] = txt.split(':').map(Number); return h + m / 60 }
+// Inicio y fin de cada turno en horas; el C cruza la medianoche
+export const RANGOS = Object.fromEntries(Object.entries(TURNOS).map(([k, v]) => {
+  const [a, b] = v.split('–').map(horas)
+  return [k, [a, b < a ? b + 24 : b]]
+}))
+export const turnoDe = (h) => Object.keys(RANGOS).find((k) => { const [a, b] = RANGOS[k]; return (h >= a && h < b) || (h + 24 >= a && h + 24 < b) })
+export const horaActual = (d = new Date()) => d.getHours() + d.getMinutes() / 60
 // Fin del turno que empieza en `fecha` (el C termina al día siguiente), en la hora local
 export function cierreTurno(fecha, turno) {
   const fin = new Date(`${fecha}T${TURNOS[turno].split('–')[1]}`)

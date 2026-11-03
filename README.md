@@ -17,6 +17,12 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Departamentos:** cada quien ve solo la plantilla de su departamento; los equipos nunca cruzan departamentos.
 
+**Portada y acceso:** una presentación de tres slides (un dial de 24 h que avanza por los turnos A, B y C; se puede pausar o saltar y no se mueve con "reducir movimiento") termina en dos accesos: **Gerencia** (Gerente, Senior, Ing. Full) y **Jr / Técnico**. Cada acceso tiene su login y su registro (solo los puestos de ese acceso); entrar por el acceso equivocado lo indica. Después de la primera vez, la portada abre directo en la elección.
+
+**Cuentas de prueba:** las de los mockups (`"prueba": true` en `server/usuarios.json`) entran sin el código de la app, para revisiones rápidas; el login de cada acceso tiene un botón para entrar con Laura (Gerente) o Jorge (Técnico). Las cuentas registradas sí piden MFA. Quitar `prueba` cuando haya usuarios reales.
+
+**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Las personas nuevas crean su contraseña con "¿Olvidaste tu contraseña?". PDF no: sus tablas no se pueden leer de forma confiable.
+
 **MFA con app autenticadora (TOTP):** el segundo paso del login pide el código de 6 dígitos de Google o Microsoft Authenticator. La primera vez que alguien entra, la app muestra un QR y la clave para vincularla; queda guardada al escribir el primer código. Un código no se acepta dos veces y se tolera ±30 s de desfase del reloj. Sin servicios externos (`node:crypto`). Pendiente: códigos de respaldo y reinicio del MFA por un administrador si alguien pierde el teléfono.
 
 **Herencias** (Ing. Full o superior): se propone heredar una actividad pendiente o incompleta del equipo, con motivo, a cualquier departamento. El servidor verifica dos condiciones sí/no: mismo nivel de puesto (técnico ↔ Ing. Jr, Ing. Full ↔ Senior) y turno siguiente (o el mismo empleado al día siguiente). La valida el encargado directo de quien la recibe: acepta, rechaza o redirige a alguien de su equipo, con comentario. Si quien propone ya es ese encargado, entra directo. Límites por día: 2 por turno y 2 a otro departamento para quien propone; 2 redirecciones para quien valida.
@@ -44,7 +50,10 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 |---|---|---|
 | `POST` | `/api/login` | Paso 1: usuario (correo, alias o número) y contraseña; genera el código |
 | `POST` | `/api/login/verificar` | Paso 2: código de la app autenticadora (5 min, 5 intentos); abre la sesión (cookie) y devuelve el usuario |
-| `GET` | `/api/encargados` | Encargados de cada departamento (Registro, sin sesión) |
+| `GET` | `/api/encargados` | Encargados y los departamentos donde pueden serlo (Registro, sin sesión) |
+| `GET` | `/api/deptos` | Catálogo de departamentos (sin sesión) |
+| `POST` | `/api/departamentos` | Un gerente crea un departamento y queda como quien lo dirige |
+| `POST` | `/api/departamentos/:clave/plantilla` | Cargar la plantilla del departamento (`soloRevisar: true` solo valida) |
 | `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
 | `POST` | `/api/logout` | Cerrar sesión |
 | `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
@@ -52,7 +61,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
 | `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña; con `?hoy=&zona=`, su rate de aprobación |
 | `POST` | `/api/perfil/:no/password` | Cambiar la contraseña propia (pide la actual) |
-| `GET` | `/api/departamentos` | Plantilla del departamento de quien consulta; con `?hoy=&zona=` (fecha y zona horaria IANA del navegador), el rate de cada uno |
+| `GET` | `/api/departamentos` | Plantilla de los departamentos de quien consulta (el suyo y los que dirige); con `?hoy=&zona=` (fecha y zona horaria IANA del navegador), el rate de cada uno |
 | `GET` | `/api/inicio/:no` | Indicadores y notificaciones. `?desde=` (inicio del día local) cuenta solo lo abierto y lo realizado hoy; `?hoy=` (fecha local) genera los avisos automáticos |
 | `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
@@ -68,7 +77,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |
 | `GET` | `/api/matriz/:no` | Matriz de seguimiento del equipo con `?desde=&hasta=&hoy=` |
 
-Las rutas de login, registro, recuperar contraseña y `/api/encargados` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
+Las rutas de login, registro, recuperar contraseña, `/api/encargados` y `/api/deptos` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
 
 - `render.yaml` — despliegue en Render.
 
@@ -76,11 +85,11 @@ Las rutas de login, registro, recuperar contraseña y `/api/encargados` son púb
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
 2. Render ejecuta `npm install && npm run build` y luego `npm start`.
-3. Entra con `10482` / `demo1234` (técnico) o `10001` / `demo1234` (gerente) y vincula tu app autenticadora con el QR. Los datos viven en memoria: tras reiniciar el servidor, cada cuenta se vuelve a vincular.
+3. Elige el acceso y entra con `10001` / `demo1234` (Gerencia) o `10482` / `demo1234` (Jr / Técnico), o con el botón de revisión rápida. Una cuenta registrada vincula su app autenticadora con el QR; los datos viven en memoria y tras reiniciar el servidor se vuelve a vincular.
 
 ## Scripts
 
 - `npm run build` — compila el frontend.
 - `npm start` — levanta Fastify (puerto `PORT`, 3000 por defecto).
-- `npm test` — pruebas de la API y de las traducciones.
+- `npm test` — pruebas de la API, de la plantilla y de las traducciones (todo texto de interfaz del código y del servidor debe tener su inglés en `src/en.js`).
 - `npm run lint` — oxlint.
