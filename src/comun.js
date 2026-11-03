@@ -18,7 +18,7 @@ export const clavesDeptos = () => [...Object.keys(DEPARTAMENTOS), ...Object.keys
 export const ACCESOS = { gerencia: ['gte', 'sr', 'full'], operativo: ['jr', 'tec'] }
 export const estado = (k) => t(ESTADOS[k])
 export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
-export const PESO_CRITICIDAD = { simple: 0, normal: 1, alta: 2, critica: 3 }
+export const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critica: 3 }
 
 // `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente); `excepto` lo oculta a un puesto
 // Agrupados por uso: el día a día del turno, el seguimiento del equipo y la organización (el menú los separa
@@ -26,7 +26,6 @@ export const PESO_CRITICIDAD = { simple: 0, normal: 1, alta: 2, critica: 3 }
 export const MODULOS = [
   { ruta: 'inicio', titulo: 'Inicio', icono: 'home', grupo: 'Día a día' },
   { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte', grupo: 'Día a día' },
-  { ruta: 'registrar', titulo: 'Registrar actividad', icono: 'plus', desc: 'Asigna actividades por puntos a tu equipo.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'tablero', titulo: 'Tablero', icono: 'board', desc: 'Actividades por criticidad, semana a semana.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.', grupo: 'Día a día' },

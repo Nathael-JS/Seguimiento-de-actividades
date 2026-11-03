@@ -956,7 +956,9 @@ test('registros detrás del proxy: la IP que agregó el proxy, no la que inventa
 // ── Tablero: mover entre columnas de criticidad, fijar y eliminar ─────────────────────────────────────────
 test('tablero: el encargado mueve entre criticidades y a Urgente, fija y elimina; nadie más', async () => {
   const app = build()
-  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, puntos: [{ texto: 'Ajustar sensor' }] }))).body
+  // Se crea en el panel Por clasificar (criticidad 'nueva') y de ahí se mueve
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, criticidad: 'nueva', puntos: [{ texto: 'Ajustar sensor' }] }))).body
+  assert.equal(a.criticidad, 'nueva')
   const mover = (cambios, por = '10230') => pedir(app, 'PATCH', `/api/actividades/${a.id}/tablero`, { por, ...cambios })
   assert.equal((await mover({ columna: 'alta' }, '10482')).code, 403) // el técnico no mueve
   assert.equal((await mover({ columna: 'alta' }, '10251')).code, 403) // Sofía no es su encargada

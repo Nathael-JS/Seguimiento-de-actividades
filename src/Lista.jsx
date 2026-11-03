@@ -48,7 +48,7 @@ export function ListaActividades({ filas, nombres, conPersona = false, cambiarEs
 function Prioridad({ a }) {
   if (a.prioridad === 'urgente') return <span className="tag urgente">{t('Urgente')}</span>
   const c = a.criticidad ?? 'normal'
-  return <span className={`tag prio crit-${c}`}>{criticidad(c)}</span>
+  return <span className={`tag prio crit-${c}`}>{c === 'nueva' ? t('Por clasificar') : criticidad(c)}</span>
 }
 
 // % de actividades realizadas: el botón despliega el detalle por persona (animado, sin mover el resto de golpe)
