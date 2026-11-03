@@ -37,8 +37,28 @@ const passwordNueva = {
   type: 'string', minLength: 10, maxLength: 100,
   pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9])',
 }
+const claveDepto = { type: 'string', pattern: '^[a-z0-9-]{1,20}$' }
 const objeto = (requeridos, properties) => ({ type: 'object', required: requeridos, additionalProperties: false, properties })
 
+const crearDeptoSchema = { body: objeto(['por', 'nombre'], { por: noEmpleado, nombre: { type: 'string', minLength: 3, maxLength: 60, pattern: '\\S' } }) }
+// Una fila por empleado; las reglas que dependen de otros (encargado, correo repetido) las revisa el servidor
+const filaPlantilla = objeto(['no', 'name', 'email', 'role', 'shift', 'boss'], {
+  no: { type: 'string', pattern: '^\\d{4,10}$' },
+  name: { type: 'string', minLength: 3, maxLength: 100, pattern: '\\S' },
+  email: { type: 'string', format: 'email', maxLength: 100 },
+  role: { enum: ['tec', 'jr', 'full', 'sr'] },
+  shift: { enum: ['A', 'B', 'C'] },
+  area: { type: 'string', maxLength: 100 },
+  boss: { type: 'string', pattern: '^\\d{1,10}$' },
+})
+const plantillaSchema = {
+  params: { type: 'object', properties: { clave: claveDepto } },
+  body: objeto(['por', 'filas'], {
+    por: noEmpleado,
+    filas: { type: 'array', minItems: 1, maxItems: 500, items: filaPlantilla },
+    soloRevisar: { type: 'boolean' },
+  }),
+}
 const verificarSchema = { body: objeto(['token', 'codigo'], { token, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
 const registroSchema = {
   body: objeto(['name', 'no', 'email', 'role', 'dept', 'shift', 'password'], {
@@ -46,7 +66,7 @@ const registroSchema = {
     no: { type: 'string', pattern: '^\\d{4,10}$' },
     email: { type: 'string', format: 'email', maxLength: 100 },
     role: { enum: ['tec', 'jr', 'full', 'sr', 'gte'] },
-    dept: { enum: ['lc', 'pf', 'smt'] },
+    dept: claveDepto,
     shift: { enum: ['A', 'B', 'C'] },
     boss: noEmpleado,
     area: { type: 'string', maxLength: 100 },
@@ -65,6 +85,8 @@ const loginSchema = {
     properties: {
       usuario: { type: 'string', minLength: 1, maxLength: 100, pattern: '\\S' },
       password: { type: 'string', minLength: 1, maxLength: 100 },
+      // Acceso por el que entra: Gerencia (Gerente, Senior, Ing. Full) o Jr / Técnico
+      tipo: { enum: ['gerencia', 'operativo'] },
     },
   },
 }
@@ -220,6 +242,12 @@ export function build(opts = {}) {
   const actividades = leer('./actividades.json')
   const notificaciones = leer('./notificaciones.json')
   const herencias = [] // propuestas de herencia: pendientes de validar y su historial
+  // Los de los mockups y los que crea un gerente, que queda como quien lo dirige
+  const departamentos = [
+    { clave: 'lc', nombre: 'Liquid Cooling', gerente: '10001' },
+    { clave: 'pf', nombre: 'Pruebas Funcionales', gerente: '10700' },
+    { clave: 'smt', nombre: 'SMT', gerente: null },
+  ]
   // shortcut: checador simulado (entrada/salida en hora de planta, lunes a viernes, oct–dic 2026); cambiar por el real
   const checador = leer('./checador.json')
   // Códigos de verificación y permisos de recuperación pendientes, por token
@@ -232,9 +260,11 @@ export function build(opts = {}) {
   // Acepta correo completo, la parte antes de la @ o el número de empleado
   const buscar = (id) =>
     usuarios.find((u) => u.email === id || u.email.split('@')[0] === id || u.no === id)
-  // Todos los empleados debajo de `no` en la jerarquía, directos e indirectos; nunca de otro departamento
-  const equipo = (no, dept = empleado(no)?.dept) =>
-    usuarios.filter((u) => u.boss === no && u.dept === dept).flatMap((u) => [u, ...equipo(u.no, dept)])
+  // Departamentos de alguien: el suyo y los que dirige como gerente
+  const deptosDe = (no) => [...new Set([empleado(no)?.dept, ...departamentos.filter((d) => d.gerente === no).map((d) => d.clave)])]
+  // Todos los empleados debajo de `no` en la jerarquía, directos e indirectos; nunca de un departamento ajeno
+  const equipo = (no, depts = deptosDe(no)) =>
+    usuarios.filter((u) => u.boss === no && depts.includes(u.dept)).flatMap((u) => [u, ...equipo(u.no, depts)])
   // A quién puede asignar un encargado: su equipo, solo con menor rango que él
   const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
@@ -305,8 +335,15 @@ export function build(opts = {}) {
     `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
   const PUBLICAS = new Set([
     '/api/login', '/api/login/verificar', '/api/logout',
-    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados',
+    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados', '/api/deptos',
   ])
+  const abrirSesion = (req, reply, u) => {
+    limpiarVencidos(sesiones)
+    const id = randomUUID()
+    sesiones.set(id, { no: u.no, vence: Date.now() + DURACION_SESION })
+    reply.header('set-cookie', cookie(req, id))
+    return sesion(u)
+  }
   app.addHook('preHandler', async (req, reply) => {
     if (!req.url.startsWith('/api/') || PUBLICAS.has(req.routeOptions.url)) return
     const s = sesiones.get(tokenDe(req))
@@ -323,9 +360,16 @@ export function build(opts = {}) {
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
     const u = buscar(req.body.usuario.trim().toLowerCase())
-    if (!u || u.password !== req.body.password) {
+    if (!u || !u.password || u.password !== req.body.password) {
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
+    const { tipo } = req.body
+    if (tipo && (tipo === 'gerencia') !== esEncargado(u)) {
+      return reply.code(403).send({ error: esEncargado(u) ? 'Esta cuenta es de Gerencia: entra por ese acceso.' : 'Esta cuenta es de Jr / Técnico: entra por ese acceso.' })
+    }
+    // shortcut: las cuentas de prueba (datos de los mockups) entran sin el código de la app para revisiones rápidas;
+    // quitar "prueba" de usuarios.json cuando haya usuarios reales
+    if (u.prueba) return abrirSesion(req, reply, u) // sin token: ya es la sesión
     limpiarVencidos(verificaciones)
     const id = randomUUID()
     // Primera vez: se genera la clave de su app autenticadora y queda guardada al verificar el primer código.
@@ -356,11 +400,7 @@ export function build(opts = {}) {
     }
     verificaciones.delete(req.body.token)
     Object.assign(u, { totpPaso: paso }, v.alta && { totp: v.alta })
-    limpiarVencidos(sesiones)
-    const id = randomUUID()
-    sesiones.set(id, { no: v.no, vence: Date.now() + DURACION_SESION })
-    reply.header('set-cookie', cookie(req, id))
-    return sesion(empleado(v.no))
+    return abrirSesion(req, reply, u)
   })
 
   // Al recargar la página: quién es la sesión de esta cookie
@@ -378,6 +418,7 @@ export function build(opts = {}) {
     if (empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
     if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
 
+    if (!departamentos.some((d) => d.clave === dept)) return reply.code(400).send({ error: 'Ese departamento no existe.' })
     const nuevo = { no, name: name.trim(), role, dept, shift, email, pwdChanged: ahora(), password }
     if (RANGO[role] <= 2) {
       // Encargado: indica su área; no elige jefe (como en el mockup)
@@ -386,7 +427,7 @@ export function build(opts = {}) {
     } else {
       // Técnico / Ing. Jr: elige a su encargado del mismo departamento y hereda su área
       const jefe = boss && empleado(boss)
-      if (!jefe || !esEncargado(jefe) || jefe.dept !== dept) {
+      if (!jefe || !esEncargado(jefe) || !deptosDe(jefe.no).includes(dept)) {
         return reply.code(400).send({ error: 'Elige a tu encargado del departamento.' })
       }
       Object.assign(nuevo, { boss, area: jefe.area })
@@ -435,16 +476,79 @@ export function build(opts = {}) {
   // Registro (sin sesión): a quién se puede elegir como encargado
   app.get('/api/encargados', async () =>
     usuarios.filter(esEncargado).sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
-      .map(({ no, name, role, dept }) => ({ no, name, role, dept })))
+      .map(({ no, name, role }) => ({ no, name, role, depts: deptosDe(no) })))
 
-  // La plantilla del departamento de quien consulta: ningún departamento ve a otro
+  // Catálogo de departamentos (Registro, sin sesión)
+  app.get('/api/deptos', async () => departamentos.map(({ clave, nombre, gerente }) => ({ clave, nombre, gerente })))
+
+  // La plantilla de los departamentos de quien consulta (el suyo y los que dirige): ningún departamento ve a otro
   app.get('/api/departamentos', { schema: conRate }, async (req) => {
     const rate = conRateDe(req.query)
-    const { dept } = empleado(req.sesion.no)
+    const depts = deptosDe(req.sesion.no)
     return usuarios
-      .filter((u) => u.dept === dept)
+      .filter((u) => depts.includes(u.dept))
       .map(({ no, name, role, dept, shift, area }) => ({ no, name, role, dept, shift, area, ...rate(no) }))
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
+  })
+
+  // Un gerente crea un departamento y queda como quien lo dirige
+  app.post('/api/departamentos', { schema: crearDeptoSchema }, async (req, reply) => {
+    const yo = empleado(req.body.por)
+    if (yo?.role !== 'gte') return reply.code(403).send({ error: 'Solo un gerente crea departamentos.' })
+    const nombre = req.body.nombre.trim().replace(/\s+/g, ' ')
+    if (departamentos.some((d) => d.nombre.toLowerCase() === nombre.toLowerCase())) {
+      return reply.code(409).send({ error: 'Ya existe un departamento con ese nombre.' })
+    }
+    // Clave legible a partir del nombre ("Calidad de Proceso" → calidad-de-proce), única
+    const base = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'depto'
+    let clave = base
+    for (let i = 2; departamentos.some((d) => d.clave === clave); i++) clave = `${base.slice(0, 16)}-${i}`
+    const d = { clave, nombre, gerente: yo.no }
+    departamentos.push(d)
+    return reply.code(201).send({ clave, nombre })
+  })
+
+  // Plantilla del departamento: el gerente sube a su gente (Excel o CSV, leído en el navegador) y aquí se valida
+  // todo junto; si una fila tiene error no se guarda nada. Con soloRevisar solo responde qué haría cada fila.
+  // Las personas nuevas no tienen contraseña: la crean con "¿Olvidaste tu contraseña?" (número y correo)
+  app.post('/api/departamentos/:clave/plantilla', { schema: plantillaSchema }, async (req, reply) => {
+    const { clave } = req.params
+    const { por, filas, soloRevisar } = req.body
+    const yo = empleado(por)
+    if (yo?.role !== 'gte' || !deptosDe(por).includes(clave)) {
+      return reply.code(403).send({ error: 'Solo el gerente que dirige el departamento carga su plantilla.' })
+    }
+    const enArchivo = new Map(filas.map((f) => [f.no, f]))
+    const resultado = filas.map((f, i) => {
+      const actual = empleado(f.no)
+      const jefe = enArchivo.get(f.boss) ?? empleado(f.boss) // puede venir en el mismo archivo
+      const jefeDelDepto = jefe && (f.boss === por || enArchivo.has(f.boss) || jefe.dept === clave)
+      // Siempre a cargo de alguien de mayor puesto, y sin dejar a nadie a cargo de alguien de igual o menor
+      // puesto: así la jerarquía nunca hace ciclos
+      const rangoOk = jefe && RANGO[jefe.role] <= 2 && RANGO[jefe.role] < RANGO[f.role] &&
+        usuarios.every((u) => u.boss !== f.no || enArchivo.has(u.no) || RANGO[u.role] > RANGO[f.role])
+      const error =
+        filas.findIndex((x) => x.no === f.no) !== i ? 'Número repetido en el archivo.'
+          : f.no === por ? 'Tú no vas en la plantilla: ya diriges el departamento.'
+          : actual && actual.dept !== clave ? 'Ese número es de otro departamento.'
+          : usuarios.some((u) => u.email === f.email.trim().toLowerCase() && u.no !== f.no) ||
+            filas.findIndex((x) => x.email.trim().toLowerCase() === f.email.trim().toLowerCase()) !== i ? 'Ese correo ya lo usa otra persona.'
+          : !jefeDelDepto ? 'El encargado no existe en este departamento.'
+          : !rangoOk ? 'El encargado debe ser Ing. Full, Senior o Gerente, de mayor puesto que la persona.'
+          : null
+      return { no: f.no, name: f.name, accion: actual ? 'actualizar' : 'crear', error }
+    })
+    const conError = resultado.filter((r) => r.error).length
+    if (soloRevisar || conError) return reply.code(conError && !soloRevisar ? 400 : 200).send({ filas: resultado, conError })
+    for (const f of filas) {
+      const datos = { name: f.name.trim(), email: f.email.trim().toLowerCase(), role: f.role, shift: f.shift, boss: f.boss, dept: clave }
+      const actual = empleado(f.no)
+      if (actual) Object.assign(actual, datos, f.area?.trim() && { area: f.area.trim() })
+      else usuarios.push({ no: f.no, ...datos, area: f.area?.trim() || '', pwdChanged: ahora(), password: null })
+    }
+    // El área vacía se hereda del encargado, ya con todos guardados
+    for (const f of filas) { const u = empleado(f.no); if (!u.area) u.area = empleado(u.boss)?.area ?? '' }
+    return { filas: resultado, conError: 0, creados: resultado.filter((r) => r.accion === 'crear').length, actualizados: resultado.filter((r) => r.accion === 'actualizar').length }
   })
 
   app.get('/api/perfil/:no', { schema: { ...porEmpleado, querystring: consulta } }, conEmpleado((u, req) => {

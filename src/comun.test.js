@@ -9,6 +9,7 @@ test('Mis actividades para todos menos el Gerente; Registrar, Monitoreo, Reporte
   assert.deepEqual(rutas('full', true), ['inicio', 'registrar', 'mis-actividades', 'monitoreo', 'reportes', 'herencias', 'matriz', 'jerarquia', 'buzon', 'departamentos', 'perfil'])
   assert.ok(rutas('sr', true).includes('mis-actividades'))
   assert.ok(!rutas('gte', true).includes('mis-actividades'))
+  assert.ok(rutas('gte', true).includes('ajustes') && !rutas('sr', true).includes('ajustes')) // Ajustes: solo el gerente
 })
 
 test('grupoDia: Hoy, Ayer o la fecha, según el día local', async () => {
@@ -27,4 +28,10 @@ test('finTurno: la próxima hora de salida del turno, en hora local', async () =
   assert.deepEqual(finTurno('C', a(2026, 10, 2, 23, 30)), a(2026, 10, 3, 6, 0)) // turno nocturno: sale al día siguiente
   assert.deepEqual(finTurno('C', a(2026, 10, 3, 2, 0)), a(2026, 10, 3, 6, 0))
   assert.deepEqual(finTurno('A', a(2026, 10, 2, 15, 0)), a(2026, 10, 3, 14, 30)) // ya salió: el de mañana
+})
+
+test('turnoDe: el turno de cada hora del día, también el C que cruza la medianoche', async () => {
+  const { turnoDe, RANGOS } = await import('./comun.js')
+  assert.deepEqual(RANGOS, { A: [6, 14.5], B: [14.5, 23], C: [23, 30] })
+  assert.deepEqual([6, 14.4, 14.5, 22.9, 23, 0, 5.9].map(turnoDe), ['A', 'A', 'B', 'B', 'C', 'C', 'C'])
 })

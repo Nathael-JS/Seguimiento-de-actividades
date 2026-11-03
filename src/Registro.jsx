@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
-import { DEPARTAMENTOS, ROLES, TURNOS, api, depto, esEncargado, passwordValida, rol } from './comun.js'
+import { ACCESOS, TURNOS, api, clavesDeptos, depto, esEncargado, passwordValida, registrarDeptos, rol } from './comun.js'
 import { t } from './i18n.js'
 import { Campo, PasswordNueva } from './ui.jsx'
 
 const TITULOS = ['Datos del empleado', 'Asignación', 'Crea tu contraseña']
 
-export default function Registro({ volver }) {
+// acceso: los puestos que se pueden elegir dependen de si entró por Gerencia o por Jr / Técnico
+export default function Registro({ volver, acceso = 'operativo' }) {
+  const puestos = ACCESOS[acceso]
   const [paso, setPaso] = useState(1)
-  const [d, setD] = useState({ name: '', no: '', email: '', role: 'tec', dept: 'lc', shift: 'A', boss: '', area: '' })
+  const [d, setD] = useState({ name: '', no: '', email: '', role: puestos.at(-1), dept: 'lc', shift: 'A', boss: '', area: '' })
+  const [deptos, setDeptos] = useState(clavesDeptos)
   const [p, setP] = useState(['', ''])
   const [empleados, setEmpleados] = useState([])
   const [error, setError] = useState('')
@@ -15,10 +18,11 @@ export default function Registro({ volver }) {
   const set = (campo) => (e) => setD({ ...d, [campo]: e.target.value })
   const encargado = esEncargado(d.role)
   // Posibles jefes: encargados del departamento elegido, del puesto más bajo al más alto
-  const jefes = empleados.filter((e) => e.dept === d.dept).reverse()
+  const jefes = empleados.filter((e) => e.depts.includes(d.dept)).reverse()
 
   useEffect(() => {
     api('/api/encargados').then(setEmpleados).catch((e) => setError(e.message))
+    api('/api/deptos').then((l) => { registrarDeptos(l); setDeptos(l.map((x) => x.clave)) }).catch(() => {})
   }, [])
 
   function siguiente(e) {
@@ -72,7 +76,7 @@ export default function Registro({ volver }) {
           <fieldset className="field">
             <legend>{t('Puesto')}</legend>
             <div className="role-pick">
-              {Object.keys(ROLES).map((k) => (
+              {puestos.map((k) => (
                 <label key={k}><input type="radio" name="role" value={k} checked={d.role === k} onChange={set('role')} /><span>{rol(k)}</span></label>
               ))}
             </div>
@@ -84,7 +88,7 @@ export default function Registro({ volver }) {
         <>
           <Campo label={t('Departamento')}>
             <select value={d.dept} onChange={(e) => setD({ ...d, dept: e.target.value, boss: '' })}>
-              {Object.keys(DEPARTAMENTOS).map((k) => <option key={k} value={k}>{depto(k)}</option>)}
+              {deptos.map((k) => <option key={k} value={k}>{depto(k)}</option>)}
             </select>
           </Campo>
           {!encargado && (

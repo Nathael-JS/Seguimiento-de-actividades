@@ -16,7 +16,8 @@
     "fastify": "^5.12.7",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "read-excel-file": "^9.3.14"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

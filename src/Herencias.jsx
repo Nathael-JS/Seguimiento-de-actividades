@@ -101,7 +101,7 @@ function Actividad({ a, children }) {
     <div className="row between" style={{ alignItems: 'flex-start', gap: 12 }}>
       <div style={{ minWidth: 0 }}>
         <h3>{a.text}</h3>
-        <div className="muted" style={{ fontSize: 13 }}>{children}</div>
+        <div className="meta">{children}</div>
       </div>
       <div className="row" style={{ gap: 6, flex: 'none', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <Criticidad valor={a.criticidad} />
@@ -278,12 +278,12 @@ function Enviada({ h }) {
     <li className="enviada">
       <div style={{ minWidth: 0 }}>
         <b>{h.actividad.text}</b>
-        <div className="muted" style={{ fontSize: 13 }}>
+        <div className="meta">
           → {h.paraPersona.name}{h.cruzada && ` · ${depto(h.paraPersona.dept)}`}
           {h.redirigidaName && <> → {h.redirigidaName}</>}
           {' · '}{h.estado === 'pendiente' ? t('la valida {nombre}', { nombre: h.validaName }) : <span className="mono">{fechaHora(h.resueltaAt ?? h.at)}</span>}
         </div>
-        {h.respuesta && <div className="muted" style={{ fontSize: 13 }}>“{h.respuesta}”</div>}
+        {h.respuesta && <div className="meta">“{h.respuesta}”</div>}
       </div>
       <div className="row" style={{ gap: 6, flex: 'none' }}>
         {h.critica && <span className="tag crit-critica">{t('Crítica')}</span>}

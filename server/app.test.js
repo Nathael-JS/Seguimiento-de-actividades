@@ -8,7 +8,9 @@ const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/ap
 const mfa = new WeakMap()
 // Login completo: usuario y contraseña, luego el código de la app autenticadora
 async function entrar(usuario, password = 'demo1234', app = build()) {
-  const paso1 = (await login({ usuario, password }, app)).json()
+  const res = await login({ usuario, password }, app)
+  const paso1 = res.json()
+  if (paso1.name) return res // cuenta de prueba: entra sin el código de la app
   if (!mfa.has(app)) mfa.set(app, new Map())
   const cuenta = mfa.get(app).get(usuario) ?? { ultimo: -1 }
   if (paso1.secreto) cuenta.secreto = paso1.secreto
@@ -45,20 +47,23 @@ async function pedir(app, method, url, payload) {
 }
 const inicio = (no) => pedir(build(), 'GET', `/api/inicio/${no}`).then((r) => ({ statusCode: r.code, json: () => r.body }))
 
-test('login correcto por correo, alias o número de empleado, en dos pasos', async () => {
+test('cuentas de prueba: entran directo por correo, alias o número, sin el código de la app', async () => {
   for (const usuario of ['jorge.salinas@empresa.com', ' Jorge.Salinas ', '10482']) {
-    const paso1 = await login({ usuario, password: 'demo1234' })
-    assert.equal(paso1.statusCode, 200, usuario)
-    // Primera vez: la clave para dar de alta la app autenticadora (y nunca un código ya hecho)
-    assert.match(paso1.json().secreto, /^[A-Z2-7]{32}$/)
-    assert.match(paso1.json().uri, /^otpauth:\/\/totp\/Seguimiento%20de%20Actividades%3Ajorge\.salinas%40empresa\.com\?secret=[A-Z2-7]{32}&issuer=/)
-    assert.equal(paso1.json().codigo, undefined)
-    assert.equal(paso1.json().name, undefined) // sin código no hay sesión
-    const res = await entrar(usuario)
+    const res = await login({ usuario, password: 'demo1234' })
     assert.equal(res.statusCode, 200, usuario)
-    assert.equal(res.json().name, 'Jorge Salinas')
-    assert.equal(res.json().password, undefined)
+    assert.deepEqual([res.json().name, res.json().token, res.json().password], ['Jorge Salinas', undefined, undefined])
+    assert.match(res.headers['set-cookie'], /^sesion=/)
   }
+})
+
+test('acceso por tipo: Gerencia (Gerente, Senior, Ing. Full) o Jr / Técnico', async () => {
+  const app = build()
+  assert.equal((await login({ usuario: '10001', password: 'demo1234', tipo: 'gerencia' }, app)).statusCode, 200)
+  assert.equal((await login({ usuario: '10230', password: 'demo1234', tipo: 'gerencia' }, app)).statusCode, 200) // Ing. Full
+  const mal = await login({ usuario: '10482', password: 'demo1234', tipo: 'gerencia' }, app)
+  assert.deepEqual([mal.statusCode, mal.json().error], [403, 'Esta cuenta es de Jr / Técnico: entra por ese acceso.'])
+  assert.equal((await login({ usuario: '10112', password: 'demo1234', tipo: 'operativo' }, app)).json().error, 'Esta cuenta es de Gerencia: entra por ese acceso.')
+  assert.equal((await login({ usuario: '10482', password: 'mala', tipo: 'gerencia' }, app)).statusCode, 401) // primero la contraseña
 })
 
 test('TOTP: vector de prueba del RFC 6238', () => {
@@ -67,28 +72,38 @@ test('TOTP: vector de prueba del RFC 6238', () => {
 })
 
 test('MFA: alta en el primer login, luego solo el código de la app; incorrecto, reutilizado, 5 intentos', async () => {
+  // Una cuenta real (registrada), no de prueba
   const app = build()
+  const clave = 'Nueva#Clave2026'
+  for (const [no, email] of [['20001', 'ana.prueba@empresa.com'], ['20002', 'otra@empresa.com']]) {
+    const cuenta = { name: 'Ana Prueba', no, email, role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: clave }
+    assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: cuenta })).statusCode, 201)
+  }
   const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
-  const alta = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  const alta = (await login({ usuario: 'ana.prueba@empresa.com', password: clave }, app)).json()
+  // Primera vez: la clave para dar de alta la app autenticadora (y nunca un código ya hecho ni la sesión)
+  assert.match(alta.secreto, /^[A-Z2-7]{32}$/)
+  assert.match(alta.uri, /^otpauth:\/\/totp\/Seguimiento%20de%20Actividades%3Aana\.prueba%40empresa\.com\?secret=[A-Z2-7]{32}&issuer=/)
+  assert.deepEqual([alta.codigo, alta.name], [undefined, undefined])
   const malo = (c) => String((Number(c) + 1) % 1_000_000).padStart(6, '0')
   assert.equal((await verificar(alta.token, malo(totp(alta.secreto)))).json().error, 'Código incorrecto.')
   assert.equal((await verificar(alta.token, totp(alta.secreto))).statusCode, 200)
 
   // Ya dada de alta: no vuelve a entregar la clave, y el código que se acaba de usar no sirve otra vez
-  const otro = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  const otro = (await login({ usuario: '20001', password: clave }, app)).json()
   assert.equal(otro.secreto, undefined)
   assert.equal((await verificar(otro.token, totp(alta.secreto))).statusCode, 401)
   assert.equal((await verificar(otro.token, totp(alta.secreto, Math.floor(Date.now() / 30_000) + 1))).statusCode, 200)
 
   // Una clave de alta que no se confirmó no queda guardada; 5 intentos fallidos cierran la verificación
-  const tercero = (await login({ usuario: '10482', password: 'demo1234' }, app)).json()
+  const tercero = (await login({ usuario: '20001', password: clave }, app)).json()
   for (let i = 0; i < 4; i++) await verificar(tercero.token, '000000')
   assert.match((await verificar(tercero.token, '000000')).json().error, /Demasiados intentos/)
   assert.equal((await verificar(tercero.token, totp(alta.secreto))).statusCode, 401)
   assert.equal((await verificar('no-existe', '123456')).statusCode, 401)
   assert.equal((await verificar(otro.token, '12ab56')).statusCode, 400)
   // Las claves de cada cuenta son distintas
-  assert.notEqual((await login({ usuario: '10490', password: 'demo1234' }, app)).json().secreto, alta.secreto)
+  assert.notEqual((await login({ usuario: '20002', password: clave }, app)).json().secreto, alta.secreto)
 })
 
 test('contraseña o usuario incorrecto da 401', async () => {
@@ -357,7 +372,8 @@ test('departamentos: solo el propio, sin datos sensibles; el rate solo con hoy y
   assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 401)
   // Registro, sin sesión, solo ve a los encargados
   const encargados = (await conCookie(app, 'GET', '/api/encargados', undefined)).json()
-  assert.deepEqual(Object.keys(encargados[0]).sort(), ['dept', 'name', 'no', 'role'])
+  assert.deepEqual(Object.keys(encargados[0]).sort(), ['depts', 'name', 'no', 'role'])
+  assert.deepEqual((await conCookie(app, 'GET', '/api/deptos', undefined)).json().map((d) => d.clave), ['lc', 'pf', 'smt'])
   assert.ok(encargados.every((e) => ['gte', 'sr', 'full'].includes(e.role)))
 })
 
@@ -769,4 +785,70 @@ test('criticidad: por omisión normal; la crítica pasa directo al siguiente tur
   mock.timers.tick(86_400_000)
   const manana = (await heredar(app, h.creada.id, '10251', '10547', '2026-11-04')).body
   assert.deepEqual([manana.estado, manana.creada.to, manana.creada.shift], ['aceptada', '10547', 'C'])
+})
+
+// ── Departamentos del gerente: crear y cargar plantilla ─────────────────────────────────────────────────────
+const fila = (cambios = {}) => ({ no: '30001', name: 'Rosa Vega', email: 'rosa.vega@empresa.com', role: 'tec', shift: 'A', area: '', boss: '10230', ...cambios })
+const plantilla = (app, clave, filas, extra = {}) => pedir(app, 'POST', `/api/departamentos/${clave}/plantilla`, { por: '10001', filas, ...extra })
+
+test('crear departamento: solo un gerente, nombre único; lo dirige quien lo crea', async () => {
+  const app = build()
+  const crear = (por, nombre) => pedir(app, 'POST', '/api/departamentos', { por, nombre })
+  assert.equal((await crear('10112', 'Calidad')).code, 403) // un Senior no
+  const d = await crear('10001', '  Calidad   de Proceso ')
+  assert.deepEqual([d.code, d.body.clave, d.body.nombre], [201, 'calidad-de-proce', 'Calidad de Proceso'])
+  assert.equal((await crear('10700', 'calidad de proceso')).code, 409)
+  assert.ok((await pedir(app, 'GET', '/api/deptos')).body.some((x) => x.clave === 'calidad-de-proce'))
+  // Laura puede ser encargada en Registro del departamento nuevo
+  const laura = (await pedir(app, 'GET', '/api/encargados')).body.find((e) => e.no === '10001')
+  assert.deepEqual(laura.depts, ['lc', 'calidad-de-proce'])
+  const reg = { name: 'Nuevo Técnico', no: '20010', email: 'nuevo@empresa.com', role: 'tec', dept: 'calidad-de-proce', shift: 'A', boss: '10001', password: 'Nueva#Clave2026' }
+  assert.equal((await pedir(app, 'POST', '/api/registro', reg)).code, 201)
+  assert.equal((await pedir(app, 'POST', '/api/registro', { ...reg, no: '20011', email: 'x@empresa.com', dept: 'no-existe' })).code, 400)
+})
+
+test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actualiza', async () => {
+  const app = build()
+  // Revisión: una fila nueva válida, otra cuyo encargado viene en el mismo archivo
+  const nuevas = [fila(), fila({ no: '30002', name: 'Iker Soto', email: 'iker.soto@empresa.com', role: 'jr', boss: '30003' }),
+    fila({ no: '30003', name: 'Marta Gil', email: 'marta.gil@empresa.com', role: 'full', boss: '10001', area: 'Línea 9' })]
+  const rev = (await plantilla(app, 'lc', nuevas, { soloRevisar: true })).body
+  assert.deepEqual([rev.conError, rev.filas.map((f) => f.accion)], [0, ['crear', 'crear', 'crear']])
+  assert.equal((await pedir(app, 'GET', '/api/encargados')).body.some((e) => e.no === '30003'), false) // no guardó
+
+  // Errores por fila: nada se guarda
+  const malas = [
+    fila({ no: '10604' }), // de otro departamento
+    fila({ no: '30010', email: 'jorge.salinas@empresa.com' }), // correo de otra persona
+    fila({ no: '30011', email: 'a@empresa.com', boss: '10482' }), // un técnico no es encargado
+    fila({ no: '30012', email: 'b@empresa.com', role: 'sr', boss: '10230' }), // Ing. Full no puede tener a un Senior
+    fila({ no: '30013', email: 'c@empresa.com', boss: '10700' }), // encargado de otro departamento
+    fila({ no: '10001', email: 'd@empresa.com' }), // el gerente mismo
+    fila({ no: '30014', email: 'e@empresa.com' }), fila({ no: '30014', email: 'f@empresa.com' }), // repetido
+  ]
+  const r = await plantilla(app, 'lc', malas)
+  assert.equal(r.code, 400)
+  assert.deepEqual(r.body.filas.map((f) => f.error), [
+    'Ese número es de otro departamento.', 'Ese correo ya lo usa otra persona.',
+    'El encargado debe ser Ing. Full, Senior o Gerente, de mayor puesto que la persona.',
+    'El encargado debe ser Ing. Full, Senior o Gerente, de mayor puesto que la persona.',
+    'El encargado no existe en este departamento.', 'Tú no vas en la plantilla: ya diriges el departamento.',
+    null, 'Número repetido en el archivo.',
+  ])
+  assert.equal((await plantilla(app, 'pf', [fila()])).code, 403) // Laura no dirige Pruebas Funcionales
+  assert.equal((await pedir(app, 'POST', '/api/departamentos/lc/plantilla', { por: '10230', filas: [fila()] })).code, 403) // Ing. Full
+
+  // Guardar: crea las nuevas (sin contraseña: la crean con "¿Olvidaste tu contraseña?") y actualiza a Jorge
+  const ok = (await plantilla(app, 'lc', [...nuevas, fila({ no: '10482', name: 'Jorge Salinas', email: 'jorge.salinas@empresa.com', shift: 'B' })])).body
+  assert.deepEqual([ok.creados, ok.actualizados], [3, 1])
+  assert.equal((await login({ usuario: '30001', password: 'null' }, app)).statusCode, 401) // aún sin contraseña
+  const { token } = (await pedir(app, 'POST', '/api/recuperar', { no: '30001', email: 'rosa.vega@empresa.com' })).body
+  assert.equal((await pedir(app, 'POST', '/api/recuperar/cambiar', { token, password: 'Nueva#Clave2026' })).code, 200)
+  const plantel = (await conCookie(app, 'GET', '/api/departamentos', await sesionDe(app, '10001'))).json()
+  assert.equal(plantel.find((e) => e.no === '30002').area, 'Línea 9') // heredó el área de su encargada
+  assert.equal((await pedir(app, 'GET', '/api/perfil/10482')).body.shift, 'B')
+  assert.ok((await pedir(app, 'GET', '/api/equipo/10001')).body.some((e) => e.no === '30002'))
+  // Bajar de puesto a alguien que tiene gente a su cargo crearía un ciclo: no se permite
+  const ciclo = await plantilla(app, 'lc', [fila({ no: '10230', name: 'Diego Herrera', email: 'diego.herrera@empresa.com', role: 'tec', boss: '10112' })])
+  assert.equal(ciclo.body.filas[0].error, 'El encargado debe ser Ing. Full, Senior o Gerente, de mayor puesto que la persona.')
 })

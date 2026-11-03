@@ -36,7 +36,7 @@ export default function Monitoreo({ user }) {
         </div>
         <div className="row">
           <Anillo pct={conAvance(equipo.flatMap((e) => e.actividades))} />
-          <span className="muted" style={{ fontSize: 13 }}>{t('Avance promedio')}</span>
+          <span className="meta">{t('Avance promedio')}</span>
         </div>
       </div>
 
@@ -58,7 +58,7 @@ export default function Monitoreo({ user }) {
                 <span className="avatar">{iniciales(e.name)}</span>
                 <div className="who">
                   <h3><button className="enlace" onClick={() => setElegido(e.no)} aria-haspopup="dialog">{e.name}</button></h3>
-                  <div className="muted" style={{ fontSize: 12 }}>{rol(e.role)} · <span className="mono">{e.no}</span> · <span className="nowrap">{t('Turno')} {e.shift}</span></div>
+                  <div className="meta meta-sm">{rol(e.role)} · <span className="mono">{e.no}</span> · <span className="nowrap">{t('Turno')} {e.shift}</span></div>
                   <div className="tree">↳ {nombres[e.boss] ?? '—'}</div>
                 </div>
                 <Anillo pct={conAvance(e.actividades)} size={72} width={8} />
@@ -78,7 +78,7 @@ export default function Monitoreo({ user }) {
                     </li>
                   ))}
                 </ul>
-              ) : <p className="muted" style={{ fontSize: 13 }}>{t('Sin actividades.')}</p>}
+              ) : <p className="meta">{t('Sin actividades.')}</p>}
             </article>
           ))}
         </div>
@@ -119,12 +119,12 @@ function Detalle({ user, emp, cerrar }) {
           <span className="avatar">{iniciales(emp.name)}</span>
           <div>
             <h2 id="detalle-titulo" className="card-title" style={{ margin: 0 }}>{emp.name}</h2>
-            <div className="muted" style={{ fontSize: 13 }}>{rol(emp.role)} · <span className="mono">{emp.no}</span> · {t('Turno')} {emp.shift}</div>
+            <div className="meta">{rol(emp.role)} · <span className="mono">{emp.no}</span> · {t('Turno')} {emp.shift}</div>
           </div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => ref.current.close()} autoFocus>{t('Cerrar')}</button>
       </header>
-      <p className="muted" style={{ fontSize: 13 }}>{t('Actividades asignadas de los últimos {n} días y las ya programadas.', { n: DIAS_DETALLE })}</p>
+      <p className="meta">{t('Actividades asignadas de los últimos {n} días y las ya programadas.', { n: DIAS_DETALLE })}</p>
       <div className="detalle-lista">
         {error ? <p className="error" role="alert">{error}</p>
           : !acts ? <p className="muted">{t('Cargando…')}</p>
