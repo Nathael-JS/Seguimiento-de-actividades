@@ -5,7 +5,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 - `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Registrar actividad (con herencia de pendientes), Mis actividades, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
-- `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, **texto plano, sin seguridad todavía**), actividades y notificaciones.
+- `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, guardada con hash), actividades, notificaciones y el checador simulado.
 
 **Sin base de datos por ahora:** los cambios (cuentas nuevas, contraseñas, actividades, avances, notificaciones leídas) viven en la memoria del servidor y se comparten entre usuarios, pero se pierden al reiniciar o redeployar.
 
@@ -22,6 +22,10 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 **Cuentas de prueba:** las de los mockups (`"prueba": true` en `server/usuarios.json`) entran sin el código de la app, para revisiones rápidas; el login de cada acceso tiene un botón para entrar con Laura (Gerente) o Jorge (Técnico). Las cuentas registradas sí piden MFA. Quitar `prueba` cuando haya usuarios reales.
 
 **Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Las personas nuevas crean su contraseña con "¿Olvidaste tu contraseña?". PDF no: sus tablas no se pueden leer de forma confiable.
+
+**Super administradores:** fuera de los departamentos; su menú es **Usuarios** (lista y ficha completa: puesto, turno, dar o quitar acceso, restablecer contraseña con una temporal que se muestra una vez y obliga a cambiarla, reiniciar el MFA) y **Registros** (inicios de sesión, intentos fallidos y cambios de los administradores, con fecha, IP y navegador/sistema; filtros, exportar CSV y borrar los anteriores a una fecha). Los cambios piden volver a escribir su contraseña (vale 5 minutos). Sus cuentas no van en el repositorio: se definen en la variable de entorno `SUPERADMINS` (ver Despliegue). La MAC del equipo no se puede obtener desde un navegador.
+
+**Contraseñas:** se guardan con scrypt (`node:crypto`); nadie, ni un super administrador, puede verlas.
 
 **MFA con app autenticadora (TOTP):** el segundo paso del login pide el código de 6 dígitos de Google o Microsoft Authenticator. La primera vez que alguien entra, la app muestra un QR y la clave para vincularla; queda guardada al escribir el primer código. Un código no se acepta dos veces y se tolera ±30 s de desfase del reloj. Sin servicios externos (`node:crypto`). Pendiente: códigos de respaldo y reinicio del MFA por un administrador si alguien pierde el teléfono.
 
@@ -82,6 +86,15 @@ Las rutas de login, registro, recuperar contraseña, `/api/encargados` y `/api/d
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render
+
+**Super administradores:** en el servicio de Render, *Environment* → agregar `SUPERADMINS` con un JSON (no se sube al repositorio; en local, en un `.env` que git ignora):
+
+```
+[{"name":"Nombre Apellido","email":"correo@empresa.com","password":"…"},{"name":"…","email":"…","password":"…"}]
+```
+
+Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno). Entran por **Gerencia** y la primera vez vinculan su app autenticadora.
+
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
 2. Render ejecuta `npm install && npm run build` y luego `npm start`.

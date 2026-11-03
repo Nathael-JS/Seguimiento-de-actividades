@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Login from './Login.jsx'
+import CambioObligatorio from './CambioObligatorio.jsx'
 import Shell from './Shell.jsx'
 import { t, useIdioma } from './i18n.js'
 import { registrarDeptos } from './comun.js'
@@ -24,6 +25,10 @@ export default function App() {
   }, [])
 
   if (user === undefined) return null
+  if (user?.debeCambiar) {
+    const salir = () => fetch('/api/logout', { method: 'POST' }).catch(() => {}).then(() => setUser(null))
+    return <CambioObligatorio user={user} onListo={() => setUser({ ...user, debeCambiar: false })} onSalir={salir} />
+  }
   return user
     ? <Shell user={user} onLogout={() => setUser(null)} />
     : <Login aviso={aviso} onLogin={(u) => { setAviso(''); setUser(u) }} />

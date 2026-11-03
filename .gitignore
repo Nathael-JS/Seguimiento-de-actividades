@@ -25,3 +25,6 @@ dist-ssr
 
 # Motor de Impeccable (22 MB, por plataforma): su lanzador lo descarga y verifica con engine-checksums.txt
 .claude/skills/impeccable/scripts/bin/
+
+# Variables locales (SUPERADMINS y otras claves)
+.env

@@ -6,7 +6,9 @@ import { CRITICIDADES, DEPARTAMENTOS, ESTADOS, MODULOS, ROLES, reglasPassword } 
 
 const leer = (ruta) => readFileSync(new URL(ruta, import.meta.url), 'utf8')
 // Nombres propios, datos de ejemplo y textos que no son de interfaz: iguales en ambos idiomas
-const IGUALES = new Set(['Liquid Cooling', 'SMT', 'Laura Méndez', 'Jorge Salinas', 'Estaciones LC245', 'Escape', 'NFD', 'Simple', 'Normal', 'Senior', 'Content-Type'])
+const IGUALES = new Set(['Liquid Cooling', 'SMT', 'Laura Méndez', 'Jorge Salinas', 'Estaciones LC245', 'Escape', 'NFD', 'Simple', 'Normal', 'Senior', 'Content-Type',
+  // Navegadores y sistemas (registros) y el área de los super administradores (dato, no interfaz)
+  'Edge', 'Opera', 'Firefox', 'Chrome', 'Safari', 'Windows', 'Android', 'Linux', 'Administración'])
 
 // Todo texto entre comillas que parezca de interfaz en español: empieza con mayúscula (o ¿ ¡) y tiene palabras.
 // Así entran también los de constantes (SLIDES, FILTROS…), los de condiciones (t(a ? 'x' : 'y')) y los errores
