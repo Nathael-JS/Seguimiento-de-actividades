@@ -1,6 +1,6 @@
 import { idiomaActual, t } from './i18n.js'
 
-export const ROLES = { tec: 'Técnico', jr: 'Ing. Jr', full: 'Ing. Full', sr: 'Senior', gte: 'Gerente' }
+export const ROLES = { tec: 'Técnico', jr: 'Ing. Jr', full: 'Ing. Full', sr: 'Senior', gte: 'Gerente', sa: 'Super administrador' }
 export const TURNOS = { A: '06:00–14:30', B: '14:30–23:00', C: '23:00–06:00' }
 export const DEPARTAMENTOS = { lc: 'Liquid Cooling', pf: 'Pruebas Funcionales', smt: 'SMT' }
 export const ESTADOS = { done: 'Realizada', progress: 'En proceso', pending: 'Pendiente', incomplete: 'Incompleta' }
@@ -31,12 +31,17 @@ export const MODULOS = [
   { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },
   { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.' },
+  { ruta: 'usuarios', titulo: 'Usuarios', icono: 'users', desc: 'Cuentas, puestos, turnos y acceso al sistema.', solo: 'sa' },
+  { ruta: 'registros', titulo: 'Registros', icono: 'log', desc: 'Quién entra, cuándo y desde dónde.', solo: 'sa' },
   { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte' },
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.' },
 ]
 
-export const modulosDe = (user) =>
-  MODULOS.filter((m) => (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : user.encargado)) && m.excepto !== user.role)
+// El super administrador solo administra: sus módulos y su perfil
+const permitido = (m, user) =>
+  user.role === 'sa' ? m.solo === 'sa' || m.ruta === 'perfil'
+    : (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : m.solo === 'encargado' && user.encargado)) && m.excepto !== user.role
+export const modulosDe = (user) => MODULOS.filter((m) => permitido(m, user))
 
 export const iniciales = (nombre) => nombre.split(' ').map((p) => p[0]).slice(0, 2).join('')
 
@@ -58,7 +63,8 @@ export async function api(url, { method = 'GET', body } = {}) {
   // Los errores propios de Fastify (validación del esquema, ruta inexistente) traen statusCode y un texto en inglés;
   // los de la app traen solo `error`, ya redactado para el usuario (en español: se traduce aquí)
   if (data.statusCode) throw new Error(t(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.'))
-  throw new Error(t(data.error ?? 'Ocurrió un error. Intenta de nuevo.'))
+  // datos: banderas del servidor (confirmar: pide la contraseña del super administrador; debeCambiar…)
+  throw Object.assign(new Error(t(data.error ?? 'Ocurrió un error. Intenta de nuevo.')), { datos: data })
 }
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">
@@ -125,3 +131,29 @@ export function grupoDia(iso, ahora = new Date()) {
 }
 export const fechaHora = (iso) =>
   new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+
+// Excel ejecuta como fórmula una celda que empieza con = + - @; el apóstrofo la deja como texto
+const celdaCsv = (v) => {
+  const s = String(v ?? '')
+  return `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`
+}
+
+export function descargarCsv(columnas, filas, nombre) {
+  const csv = [columnas.map((c) => t(c)), ...filas].map((fila) => fila.map(celdaCsv).join(',')).join('\r\n')
+  // El BOM hace que Excel lea los acentos como UTF-8
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombre
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// "Chrome · Windows" a partir del user-agent que guardan los registros (la MAC no llega al servidor desde un navegador)
+export function dispositivo(ua = '') {
+  const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox'
+    : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : null
+  const so = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS'
+    : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null
+  return nav || so ? [nav, so].filter(Boolean).join(' · ') : ua.slice(0, 40) || '—'
+}

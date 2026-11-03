@@ -9,7 +9,7 @@
     "area": "Gerencia",
     "email": "laura.mendez@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$4BK+W8AvghReivjazQ8+AQ==$CjoYD7c2Gs7TiFHBgA5aBZ68tcoeK47jbLsosSGdOUq5l5spq25ob+J/7aOChRfnzC57YJWZLYQ8J3gPmJMNVw==",
     "prueba": true
   },
   {
@@ -22,7 +22,7 @@
     "area": "Estaciones LC245",
     "email": "carlos.ruiz@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$AhT4zePlw9TNIu5LpYXSRA==$f/qwf8F2xL1wpRguoo06B08AqxDUoNR4W+8D4Y7R6CBWz9ujUL1FJlDc5Ppg37g5tKZ9GwYF5DAP/mKklFKArg==",
     "prueba": true
   },
   {
@@ -35,7 +35,7 @@
     "area": "CDU y Chillers",
     "email": "ana.torres@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$PzKNSXGbh37FdJfGg7mjBA==$+6k8cSEFM+sGWyZ9Skqjt2gOx2+AwmMFCtbfxVV/hjhfVj1rjo2W+s4jPX0eeg0aLpVsfTqiqFVboQ/5r1AwPw==",
     "prueba": true
   },
   {
@@ -48,7 +48,7 @@
     "area": "Estaciones LC245",
     "email": "diego.herrera@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$MEiSNYqul36jAEjaLLOkhw==$rCfwU82NmBn8Bg59bq+6h6NZhYDHeBesLoyKWi+0Db0swGo6p8+NnrfJZMpsMOKj8TR1D9TsfVnrzRdhkRmURw==",
     "prueba": true
   },
   {
@@ -61,7 +61,7 @@
     "area": "CDU y Chillers",
     "email": "sofia.navarro@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$SF6iAuIeby9ljbGgV+JiAQ==$y17C9SjUQFlFdw6gN5wD0+h3ibK768F3/W8fj0c2k0zd73td+WFl04mkjV5GO0WbC4T05g9MkpJpZHqoAkQIig==",
     "prueba": true
   },
   {
@@ -74,7 +74,7 @@
     "area": "Estaciones LC245",
     "email": "jorge.salinas@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$CVQ0oMjfDQrgrH9cUQfZrw==$xq9tVFhT90iJX5yJZyGnGp7p1XbbLbZcbEm+iiccflz1cB7hQCm/0MiMySbhHLMS0nLjaDS39v9WsCyKGIq7nw==",
     "prueba": true
   },
   {
@@ -87,7 +87,7 @@
     "area": "Estaciones LC245",
     "email": "maria.lopez@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$6UHuk+pagY7wB2ras0r7fw==$8ccnoFv4YHDjDFvhhHADyr4g8mx8ku/UjTtoRjBIkNYiiv648Y5r5OKN3hZOBejft3wwC+iKTtpqCwPtOluheQ==",
     "prueba": true
   },
   {
@@ -100,7 +100,7 @@
     "area": "CDU y Chillers",
     "email": "luis.ortega@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$e5YoofcAzcFGX5pdy35Cvg==$fKgjB8qINDU2m9wFIJIshNDa+npc9W/7TMw3PKzH6JZ4uZm/3Cwuc+IvTZ3d+b7TGU98a3TkI8rUO/gqimae9Q==",
     "prueba": true
   },
   {
@@ -113,7 +113,7 @@
     "area": "Estaciones LC245",
     "email": "paola.ramirez@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$I2cYitqFlpcV4Z2L3E027Q==$xzKNL3mmgTSDFoFImgMid/C0sIW6PfQ6n1KbNkoYLV0k+OnQj5+BYd2z/GuDnUGXeRjFG1rmIPlF2BvF1UroyQ==",
     "prueba": true
   },
   {
@@ -126,7 +126,7 @@
     "area": "CDU y Chillers",
     "email": "hector.diaz@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$O5v2/aJuuWGnD9jN4wxgjw==$hRZ0HSgsSCSXzms5L1yunN+FUpPW/VEEmBITnF+acCRaCLPYpNd7Cf6uWLmkUvxyflAWeAbn/1J8oljobRmV+A==",
     "prueba": true
   },
   {
@@ -139,7 +139,7 @@
     "area": "Gerencia",
     "email": "andres.molina@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$Oue4h5zXcPBdVQpSGtdogQ==$Qqw2W5+9vE6bM6OmR/CLjM5Bb+f8mNfiV9Rw9frHo+jrPPfywVgmbCYShMXexnSZOwg4lsGmhXclP3fqcmPJyw==",
     "prueba": true
   },
   {
@@ -152,7 +152,7 @@
     "area": "Burn-in",
     "email": "elena.castro@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$bcKKWOJjW8AK5lF9KMY0PQ==$VQRxxkTLSdgtYxVFbiQ5G0hOfrjy2YpXkRVMT/Gn07he26fbHgWGITT/tRBSfJFoBQi2xOuRz+hQZsvw30Tlhg==",
     "prueba": true
   },
   {
@@ -165,7 +165,7 @@
     "area": "Burn-in",
     "email": "ricardo.vega@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$ZqLXAjRBlDAJgLyz8lIgjQ==$DJ2tGIVaOlg7axigMTqBkgH4aA6f8sjomZvoCvc6X/SiS2E2baCCB1GuhSpHHdVmQ7f3pMh5LKhvG4183p54Rw==",
     "prueba": true
   },
   {
@@ -178,7 +178,7 @@
     "area": "Líneas 1–3",
     "email": "fernanda.rios@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$gO0wzCfZPvi/aD31HCtDVg==$IJrR+l0Aa0enYoO5r4FNYGcTyMuPAOJz7jQu/Un68pU+zMm8pNnd5bFyQK90u8lLBWmbt+3Iwbg/SrUDViBQ3A==",
     "prueba": true
   },
   {
@@ -191,7 +191,7 @@
     "area": "Líneas 1–3",
     "email": "ivan.cruz@empresa.com",
     "pwdChanged": "2026-08-10T06:00:00.000Z",
-    "password": "demo1234",
+    "password": "scrypt$Ouf71qrW6ZaAslescg8r1A==$+0HiZEoUvbfE0fhU/km86ax5lbAyY7pG4GhIzj7ricgBbwj50LbP7BsbaTRB3SSlsXyQpzdRmJXiDsZt6ef4Rw==",
     "prueba": true
   }
 ]

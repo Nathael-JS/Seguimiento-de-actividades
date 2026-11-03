@@ -36,7 +36,7 @@ export default function Perfil({ user, recargar, avisar }) {
               <dt>{t('Cargo')}</dt><dd>{rol(perfil.role)}</dd>
               <dt>{t('Encargado')}</dt><dd>{perfil.bossName ? `${perfil.bossName} · ${rol(perfil.bossRole)}` : '—'}</dd>
               <dt>{t('Correo')}</dt><dd>{perfil.email}</dd>
-              <dt>{t('Departamento')}</dt><dd>{depto(perfil.dept)} · {perfil.area}</dd>
+              <dt>{t('Departamento')}</dt><dd>{perfil.dept ? `${depto(perfil.dept)} · ${perfil.area}` : perfil.area}</dd>
               <dt>{t('Turno')}</dt><dd>{perfil.shift} · <span className="mono">{TURNOS[perfil.shift]}</span></dd>
               <dt>{t('Idioma')}</dt><dd><BotonIdioma /></dd>
               <dt>{t('Rate de aprobación')}</dt><dd><Rate valor={perfil.rate} /> <small className="muted" style={{ fontWeight: 400 }}>{t('a tiempo, últimos 30 días')}</small></dd>

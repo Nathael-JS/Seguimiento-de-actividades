@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
+import { Registros, Usuarios } from './Admin.jsx'
 import Ajustes from './Ajustes.jsx'
 import Buzon from './Buzon.jsx'
 import Departamentos from './Departamentos.jsx'
@@ -19,7 +20,7 @@ import Reportes from './Reportes.jsx'
 // Una página por cada módulo de MODULOS
 const PAGINAS = {
   inicio: Inicio, registrar: RegistrarActividad, 'mis-actividades': MisActividades,
-  monitoreo: Monitoreo, reportes: Reportes, herencias: Herencias, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, ajustes: Ajustes, perfil: Perfil,
+  monitoreo: Monitoreo, reportes: Reportes, herencias: Herencias, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, ajustes: Ajustes, usuarios: Usuarios, registros: Registros, perfil: Perfil,
 }
 
 // #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)

@@ -1,6 +1,6 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { build, totp } from './app.js'
 
 const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/api/login', payload })
@@ -851,4 +851,105 @@ test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actua
   // Bajar de puesto a alguien que tiene gente a su cargo crearía un ciclo: no se permite
   const ciclo = await plantilla(app, 'lc', [fila({ no: '10230', name: 'Diego Herrera', email: 'diego.herrera@empresa.com', role: 'tec', boss: '10112' })])
   assert.equal(ciclo.body.filas[0].error, 'El encargado debe ser Ing. Full, Senior o Gerente, de mayor puesto que la persona.')
+})
+
+// ── Super administrador ───────────────────────────────────────────────────────────────────────────────────
+// Cuenta ficticia: las reales van en la variable de entorno SUPERADMINS, nunca en el repositorio
+const SA = { name: 'Admin Prueba', email: 'admin@empresa.com', password: 'Admin#Prueba2026' }
+async function conSA() {
+  const app = build({ superadmins: [SA] })
+  const sa = cookieDe(await entrar(SA.email, SA.password, app))
+  const adm = (method, url, payload) => conCookie(app, method, url, sa, payload).then((r) => ({ code: r.statusCode, body: r.json() }))
+  const confirmar = (password = SA.password) => adm('POST', '/api/admin/confirmar', { por: '90001', password })
+  return { app, sa, adm, confirmar }
+}
+
+test('contraseñas: se guardan con hash, nunca tal cual', async () => {
+  assert.ok(!readFileSync(new URL('./usuarios.json', import.meta.url), 'utf8').includes('demo1234'))
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' })).statusCode, 200)
+  assert.equal((await login({ usuario: '10482', password: 'Demo1234' })).statusCode, 401)
+  const { adm } = await conSA()
+  const jorge = (await adm('GET', '/api/admin/usuarios')).body.find((u) => u.no === '10482')
+  assert.equal(['password', 'totp', 'totpPaso'].some((k) => k in jorge), false)
+})
+
+test('super administrador: solo él entra a /api/admin y los cambios piden confirmar su contraseña', async () => {
+  const { app, sa, adm, confirmar } = await conSA()
+  assert.equal((await conCookie(app, 'GET', '/api/admin/usuarios', await sesionDe(app, '10001'))).statusCode, 403) // ni el gerente
+  assert.equal((await login({ usuario: SA.email, password: SA.password, tipo: 'operativo' }, app)).statusCode, 403) // entra por Gerencia
+  const lista = (await adm('GET', '/api/admin/usuarios')).body
+  assert.deepEqual([lista.length, lista.at(-1).role, lista.find((u) => u.no === '10482').bossName], [16, 'sa', 'Diego Herrera'])
+
+  const editar = (no, cambios) => adm('PATCH', `/api/admin/usuarios/${no}`, { por: '90001', ...cambios })
+  assert.deepEqual([(await editar('10482', { shift: 'B' })).code, (await editar('10482', { shift: 'B' })).body.confirmar], [403, true])
+  assert.equal((await confirmar('mala')).body.error, 'La contraseña no es correcta.')
+  assert.equal((await confirmar()).code, 200)
+  assert.equal((await editar('10482', { shift: 'B' })).body.shift, 'B')
+  assert.equal((await editar('10482', { role: 'full' })).body.error, 'Su encargado debe ser de mayor puesto: cambia primero a su encargado.')
+  assert.equal((await editar('10230', { role: 'jr' })).body.error, 'Tiene a su cargo personas de igual o mayor puesto: cámbialas primero.')
+  assert.equal((await editar('90001', { shift: 'B' })).code, 403) // las cuentas SA se manejan en el servidor
+
+  // Quitar el acceso: cierra su sesión y ya no puede entrar
+  const jorge = await sesionDe(app, '10482')
+  assert.equal((await editar('10482', { activo: false })).body.activo, false)
+  assert.equal((await conCookie(app, 'GET', '/api/sesion', jorge)).statusCode, 401)
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' }, app)).json().error, 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.')
+  await editar('10482', { activo: true })
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' }, app)).statusCode, 200)
+
+  // 5 confirmaciones fallidas cierran la sesión del super administrador
+  for (let i = 0; i < 4; i++) await confirmar('mala')
+  assert.equal((await confirmar('mala')).code, 401)
+  assert.equal((await conCookie(app, 'GET', '/api/sesion', sa)).statusCode, 401)
+})
+
+test('restablecer contraseña: temporal de una vez que obliga a cambiarla; reiniciar el MFA', async () => {
+  const { app, adm, confirmar } = await conSA()
+  await confirmar()
+  const { temporal } = (await adm('POST', '/api/admin/usuarios/10482/password', { por: '90001' })).body
+  assert.match(temporal, /^Tmp-[A-Z2-7]{8}!\d{2}$/)
+  assert.equal((await login({ usuario: '10482', password: 'demo1234' }, app)).statusCode, 401)
+  const r = await login({ usuario: '10482', password: temporal }, app)
+  assert.equal(r.json().debeCambiar, true)
+  const cookie = cookieDe(r)
+  assert.equal((await conCookie(app, 'GET', '/api/inicio/10482', cookie)).json().debeCambiar, true) // nada más hasta cambiarla
+  assert.equal((await conCookie(app, 'POST', '/api/perfil/10482/password', cookie, { actual: temporal, nueva: CLAVE })).statusCode, 200)
+  assert.equal((await conCookie(app, 'GET', '/api/inicio/10482', cookie)).statusCode, 200)
+  assert.equal((await conCookie(app, 'GET', '/api/sesion', cookie)).json().debeCambiar, undefined)
+
+  // MFA: una cuenta registrada lo vincula; el super administrador lo reinicia y el siguiente login lo pide de nuevo
+  await app.inject({ method: 'POST', url: '/api/registro', payload: registro() })
+  await entrar('20001', CLAVE, app)
+  assert.equal((await adm('GET', '/api/admin/usuarios')).body.find((u) => u.no === '20001').mfa, true)
+  assert.equal((await adm('POST', '/api/admin/usuarios/20001/mfa', { por: '90001' })).body.mfa, false)
+  assert.match((await login({ usuario: '20001', password: CLAVE }, app)).json().secreto, /^[A-Z2-7]{32}$/)
+})
+
+test('registros: accesos con IP y navegador, fallidos, cambios del administrador; filtros y borrar antiguos', async () => {
+  const { app, adm, confirmar } = await conSA()
+  await app.inject({ method: 'POST', url: '/api/login', payload: { usuario: 'jorge.salinas', password: 'mala' }, headers: { 'user-agent': 'Prueba/1.0' } })
+  await login({ usuario: '10482', password: 'demo1234' }, app)
+  const todos = (await adm('GET', '/api/admin/registros')).body
+  const fallido = todos.find((r) => r.evento === 'login-fallido')
+  assert.deepEqual([fallido.no, fallido.name, fallido.usuario, fallido.ip, fallido.agente, fallido.ok], ['10482', 'Jorge Salinas', 'jorge.salinas', '127.0.0.1', 'Prueba/1.0', false])
+  assert.equal(todos[0].evento, 'login') // del más nuevo al más viejo
+  assert.ok(todos.some((r) => r.evento === 'login' && r.no === '90001' && r.detalle === 'vinculó su app autenticadora'))
+  assert.ok((await adm('GET', '/api/admin/registros?q=jorge')).body.every((r) => r.no === '10482'))
+  assert.equal((await adm('GET', '/api/admin/registros?evento=login-fallido')).body.length, 1)
+  await confirmar()
+  await adm('PATCH', '/api/admin/usuarios/10490', { por: '90001', shift: 'C' })
+  const cambio = (await adm('GET', '/api/admin/registros?evento=admin-usuario')).body[0]
+  assert.deepEqual([cambio.name, cambio.porName, cambio.detalle], ['María López', 'Admin Prueba', 'shift=C'])
+  // Borrar antiguos (todo lo de antes de mañana): queda solo el registro del borrado
+  const manana = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+  assert.ok((await adm('POST', '/api/admin/registros/purgar', { por: '90001', antes: manana })).body.borrados >= 5)
+  assert.deepEqual((await adm('GET', '/api/admin/registros')).body.map((r) => r.evento), ['registros-purgados'])
+})
+
+test('registros detrás del proxy: la IP que agregó el proxy, no la que inventa quien llama', async () => {
+  const app = build({ trustProxy: true, superadmins: [SA] })
+  await app.inject({ method: 'POST', url: '/api/login', payload: { usuario: 'x', password: 'y' }, headers: { 'x-forwarded-for': '6.6.6.6, 203.0.113.7' } })
+  const sa = cookieDe(await entrar(SA.email, SA.password, app))
+  const [fallido] = (await conCookie(app, 'GET', '/api/admin/registros?evento=login-fallido', sa)).json()
+  assert.equal(fallido.ip, '203.0.113.7')
 })

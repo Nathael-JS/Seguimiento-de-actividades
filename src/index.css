@@ -619,3 +619,38 @@ dialog.modal.detalle{max-width:640px;max-height:calc(100dvh - 48px)}
 .soltar small{display:block;font-size:13px;color:var(--ink-muted)}
 .soltar:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
 tr.con-error td{background:var(--status-incomplete-soft)}
+
+/* Super administrador: lista y ficha (maestro-detalle) */
+.auth.solo{grid-template-columns:1fr}
+.admin{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:1100px){.admin{grid-template-columns:1fr}}
+.admin-lista{display:flex;flex-direction:column;gap:12px;padding:16px}
+@media (min-width:1101px){.admin-lista{position:sticky;top:16px;max-height:calc(100dvh - 120px)}}
+.admin-lista .chips button .mono{opacity:.7;margin-left:2px}
+.usuarios{list-style:none;margin:0 -8px;padding:0;overflow-y:auto;display:flex;flex-direction:column}
+.usuarios button{width:100%;display:flex;gap:10px;align-items:center;padding:8px;border:0;border-radius:var(--radius-md);background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.usuarios button:hover{background:var(--surface-000)}
+.usuarios button[aria-current]{background:var(--brand-soft)}
+.usuarios button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.usuarios .avatar{width:32px;height:32px;font-size:12px;flex:none}
+.usuarios .quien{flex:1;min-width:0;display:flex;flex-direction:column}
+.usuarios .quien b{font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-vacio{min-height:240px;display:grid;place-items:center}
+.ficha{display:flex;flex-direction:column;gap:20px}
+.datos{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px 24px;margin:0}
+.datos dt{font-size:12px;color:var(--ink-muted)}
+.datos dd{margin:2px 0 0;font-size:14px;overflow-wrap:anywhere}
+.ficha-edicion{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;padding-top:16px;border-top:1px solid var(--line)}
+@media (max-width:560px){.ficha-edicion{grid-template-columns:1fr}}
+.ficha-acciones{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:16px;border-top:1px solid var(--line)}
+.temporal code{font:600 15px var(--font-mono);margin:0 8px;user-select:all}
+/* Registros */
+.filters.registros-filtros{grid-template-columns:2fr 1.4fr 1fr 1fr;margin-bottom:16px}
+@media (max-width:860px){.filters.registros-filtros{grid-template-columns:1fr 1fr}}
+.registros td{font-size:13px;vertical-align:top}
+.registros tr.fallo td{background:color-mix(in srgb,var(--status-incomplete-soft) 55%,transparent)}
+.evento{display:inline-block;padding:2px 8px;border-radius:var(--radius-sm);background:var(--surface-200);font-weight:500;white-space:nowrap}
+.evento.mal{background:var(--status-incomplete-soft);color:var(--status-incomplete)}
+.evento.admin{background:var(--brand-soft);color:var(--brand-strong)}
+.purgar{display:grid;grid-template-columns:1fr 200px auto;gap:16px;align-items:end;margin-top:24px}
+@media (max-width:760px){.purgar{grid-template-columns:1fr}}

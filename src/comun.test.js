@@ -10,6 +10,8 @@ test('Mis actividades para todos menos el Gerente; Registrar, Monitoreo, Reporte
   assert.ok(rutas('sr', true).includes('mis-actividades'))
   assert.ok(!rutas('gte', true).includes('mis-actividades'))
   assert.ok(rutas('gte', true).includes('ajustes') && !rutas('sr', true).includes('ajustes')) // Ajustes: solo el gerente
+  assert.deepEqual(rutas('sa', false), ['usuarios', 'registros', 'perfil']) // el super administrador solo administra
+  assert.ok(!rutas('gte', true).includes('usuarios'))
 })
 
 test('grupoDia: Hoy, Ayer o la fecha, según el día local', async () => {
@@ -34,4 +36,13 @@ test('turnoDe: el turno de cada hora del día, también el C que cruza la median
   const { turnoDe, RANGOS } = await import('./comun.js')
   assert.deepEqual(RANGOS, { A: [6, 14.5], B: [14.5, 23], C: [23, 30] })
   assert.deepEqual([6, 14.4, 14.5, 22.9, 23, 0, 5.9].map(turnoDe), ['A', 'A', 'B', 'B', 'C', 'C', 'C'])
+})
+
+test('dispositivo: navegador y sistema a partir del user-agent', async () => {
+  const { dispositivo } = await import('./comun.js')
+  assert.equal(dispositivo('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0'), 'Edge · Windows')
+  assert.equal(dispositivo('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1'), 'Safari · iOS')
+  assert.equal(dispositivo('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36'), 'Chrome · Android')
+  assert.equal(dispositivo('Prueba/1.0'), 'Prueba/1.0')
+  assert.equal(dispositivo(''), '—')
 })

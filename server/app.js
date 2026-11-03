@@ -1,7 +1,8 @@
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 import { existsSync, readFileSync } from 'node:fs'
-import { createHmac, randomBytes, randomUUID } from 'node:crypto'
+import { createHmac, randomBytes, randomInt, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto'
+import { promisify } from 'node:util'
 
 const leer = (archivo) => JSON.parse(readFileSync(new URL(archivo, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
@@ -9,6 +10,8 @@ const dist = new URL('../dist/', import.meta.url)
 // Menor número = más rango. Encargados: Gerente, Senior, Ing. Full
 const RANGO = { gte: 0, sr: 1, full: 2, jr: 3, tec: 4 }
 const esEncargado = (u) => RANGO[u.role] <= 2
+// Super administrador: fuera de los departamentos; maneja usuarios y registros
+const esSA = (u) => u?.role === 'sa'
 const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
@@ -59,6 +62,19 @@ const plantillaSchema = {
     soloRevisar: { type: 'boolean' },
   }),
 }
+// Super administrador. :empleado (no :no) porque :no se reserva para "mi propia cuenta"
+const porEmpleadoAdmin = { params: { type: 'object', properties: { empleado: noEmpleado } } }
+const confirmarSchema = { body: objeto(['por', 'password'], { por: noEmpleado, password: { type: 'string', minLength: 1, maxLength: 100 } }) }
+const editarUsuarioSchema = {
+  ...porEmpleadoAdmin,
+  body: objeto(['por'], {
+    por: noEmpleado, shift: { enum: ['A', 'B', 'C'] }, role: { enum: ['tec', 'jr', 'full', 'sr', 'gte'] }, activo: { type: 'boolean' },
+  }),
+}
+const accionAdminSchema = { ...porEmpleadoAdmin, body: objeto(['por'], { por: noEmpleado }) }
+const fecha = { type: 'string', format: 'date' }
+const registrosSchema = { querystring: objeto([], { q: { type: 'string', maxLength: 100 }, evento: { type: 'string', maxLength: 40 }, desde: fecha, hasta: fecha }) }
+const purgarSchema = { body: objeto(['por', 'antes'], { por: noEmpleado, antes: fecha }) }
 const verificarSchema = { body: objeto(['token', 'codigo'], { token, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
 const registroSchema = {
   body: objeto(['name', 'no', 'email', 'role', 'dept', 'shift', 'password'], {
@@ -218,6 +234,23 @@ export function totp(secreto, paso = pasoActual()) {
 const pasoDelCodigo = (secreto, codigo, ultimo = -1) =>
   [pasoActual() - 1, pasoActual(), pasoActual() + 1].find((p) => p > ultimo && totp(secreto, p) === codigo)
 const APP_MFA = 'Seguimiento de Actividades'
+
+// Contraseñas con scrypt ("scrypt$sal$hash" en base64): nunca se guardan ni se pueden ver tal cual
+const scryptAsync = promisify(scrypt)
+const formato = (sal, hash) => `scrypt$${sal.toString('base64')}$${hash.toString('base64')}`
+export const hashSync = (password) => { const sal = randomBytes(16); return formato(sal, scryptSync(password, sal, 64)) }
+const hashPassword = async (password) => { const sal = randomBytes(16); return formato(sal, await scryptAsync(password, sal, 64)) }
+// Con un usuario que no existe se compara contra un hash cualquiera: tarda lo mismo y no delata qué usuarios hay
+const HASH_FALSO = hashSync(randomUUID())
+async function passwordCorrecta(guardada, intento) {
+  const [tipo, sal, hash] = (guardada ?? HASH_FALSO).split('$')
+  if (tipo !== 'scrypt') return false
+  const esperado = Buffer.from(hash, 'base64')
+  const real = await scryptAsync(intento, Buffer.from(sal, 'base64'), esperado.length)
+  return timingSafeEqual(real, esperado) && !!guardada
+}
+// Temporal que da el super administrador: cumple las reglas (mayúscula, minúscula, número, símbolo, 10+)
+const passwordTemporal = () => `Tmp-${aBase32(randomBytes(5))}!${randomInt(10, 100)}`
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
 // Fin de cada turno en minutos desde la medianoche del día en que empieza (el C termina al día siguiente)
 const FIN_TURNO = { A: 14 * 60 + 30, B: 23 * 60, C: 30 * 60 }
@@ -233,12 +266,31 @@ const zonaValida = (zona) => {
   try { return !!new Intl.DateTimeFormat('en', { timeZone: zona }) } catch { return false }
 }
 
-export function build(opts = {}) {
+// superadmins: [{ name, email, password, no? }] (de la variable de entorno SUPERADMINS; ver server/index.js)
+export function build({ superadmins = [], ...opts } = {}) {
   const app = Fastify(opts)
 
-  // shortcut: datos de prueba en memoria (cada arranque vuelve a los JSON) y contraseñas en texto plano;
-  // cambiar a PostgreSQL + hash cuando se retome la base de datos
+  // shortcut: datos de prueba en memoria (cada arranque vuelve a los JSON); pasar a PostgreSQL al retomar la base de datos
   const usuarios = leer('./usuarios.json')
+  superadmins.forEach((sa, i) => usuarios.push({
+    no: String(sa.no ?? 90001 + i), name: sa.name, email: sa.email.trim().toLowerCase(), role: 'sa', dept: null, boss: null,
+    shift: 'A', area: 'Administración', pwdChanged: ahora(), password: hashSync(sa.password),
+  }))
+  // Registro de auditoría: quién entra, desde dónde y qué cambia un super administrador.
+  // shortcut: en memoria, los últimos 5000 (también van al log del servidor, que Render guarda); pasar a la base de datos
+  const registros = []
+  // IP del equipo: la última que agregó el proxy de Render a X-Forwarded-For (las anteriores las puede inventar
+  // quien hace la petición). shortcut: si Render agrega otro salto de proxy, revisar en sus registros cuál es la real
+  const ipDe = (req) => req.ips?.[1] ?? req.ip
+  const registrar = (req, evento, datos = {}) => {
+    const r = {
+      id: (registros.at(-1)?.id ?? 0) + 1, at: ahora(), evento, ip: ipDe(req),
+      agente: String(req.headers['user-agent'] ?? '').slice(0, 300), ok: true, ...datos,
+    }
+    registros.push(r)
+    if (registros.length > 5000) registros.shift()
+    req.log.info({ registro: r }, evento)
+  }
   const actividades = leer('./actividades.json')
   const notificaciones = leer('./notificaciones.json')
   const herencias = [] // propuestas de herencia: pendientes de validar y su historial
@@ -291,8 +343,9 @@ export function build(opts = {}) {
   }
   // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído, y se cierran
   // las demás sesiones abiertas de esa persona (conservar: la sesión desde la que la cambió, si la hay)
-  const cambiarPassword = (u, password, conservar) => {
-    Object.assign(u, { password, pwdChanged: ahora() })
+  const cambiarPassword = async (u, password, conservar) => {
+    Object.assign(u, { password: await hashPassword(password), pwdChanged: ahora() })
+    delete u.debeCambiar
     notificaciones.filter((n) => n.for === u.no && n.kind === 'password').forEach((n) => (n.read = true))
     sesiones.forEach((s, token) => s.no === u.no && token !== conservar && sesiones.delete(token))
   }
@@ -323,7 +376,10 @@ export function build(opts = {}) {
     return handler(u, req, reply)
   }
 
-  const sesion = (u) => ({ no: u.no, name: u.name, role: u.role, dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u) })
+  const sesion = (u) => ({
+    no: u.no, name: u.name, role: u.role, dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u),
+    ...(u.debeCambiar && { debeCambiar: true }),
+  })
 
   // Sesiones: token aleatorio en una cookie HttpOnly (el JavaScript de la página no la puede leer) y SameSite=Strict
   // (otros sitios no la mandan). Sin Max-Age: se borra al cerrar el navegador, útil en equipos compartidos de planta.
@@ -355,26 +411,44 @@ export function build(opts = {}) {
     // El número que manda el navegador (en la dirección o en "por") tiene que ser el de la sesión
     const quien = req.params?.no ?? req.body?.por
     if (quien && quien !== s.no) return reply.code(403).send({ error: 'Solo puedes actuar con tu propia cuenta.' })
+    const yo = empleado(s.no)
+    // Con contraseña temporal solo se puede cambiarla (o salir)
+    if (yo.debeCambiar && !SIN_CAMBIO.has(req.routeOptions.url)) {
+      return reply.code(403).send({ error: 'Cambia tu contraseña temporal para continuar.', debeCambiar: true })
+    }
+    if (req.url.startsWith('/api/admin/') && !esSA(yo)) return reply.code(403).send({ error: 'Solo un super administrador.' })
   })
+  const SIN_CAMBIO = new Set(['/api/sesion', '/api/perfil/:no/password'])
 
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
-    const u = buscar(req.body.usuario.trim().toLowerCase())
-    if (!u || !u.password || u.password !== req.body.password) {
+    const usuario = req.body.usuario.trim().toLowerCase()
+    const u = buscar(usuario)
+    if (!(await passwordCorrecta(u?.password, req.body.password))) {
+      registrar(req, 'login-fallido', { no: u?.no, usuario: usuario.slice(0, 100), ok: false })
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
+    if (u.activo === false) {
+      registrar(req, 'login-bloqueado', { no: u.no, ok: false })
+      return reply.code(403).send({ error: 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.' })
+    }
+    // El super administrador entra por Gerencia
     const { tipo } = req.body
-    if (tipo && (tipo === 'gerencia') !== esEncargado(u)) {
-      return reply.code(403).send({ error: esEncargado(u) ? 'Esta cuenta es de Gerencia: entra por ese acceso.' : 'Esta cuenta es de Jr / Técnico: entra por ese acceso.' })
+    const gerencia = esEncargado(u) || esSA(u)
+    if (tipo && (tipo === 'gerencia') !== gerencia) {
+      return reply.code(403).send({ error: gerencia ? 'Esta cuenta es de Gerencia: entra por ese acceso.' : 'Esta cuenta es de Jr / Técnico: entra por ese acceso.' })
     }
     // shortcut: las cuentas de prueba (datos de los mockups) entran sin el código de la app para revisiones rápidas;
     // quitar "prueba" de usuarios.json cuando haya usuarios reales
-    if (u.prueba) return abrirSesion(req, reply, u) // sin token: ya es la sesión
+    if (u.prueba) {
+      registrar(req, 'login', { no: u.no, detalle: 'cuenta de prueba, sin código de la app' })
+      return abrirSesion(req, reply, u) // sin token: ya es la sesión
+    }
     limpiarVencidos(verificaciones)
     const id = randomUUID()
     // Primera vez: se genera la clave de su app autenticadora y queda guardada al verificar el primer código.
-    // shortcut: el alta va con la contraseña como único respaldo (como en la mayoría de los sistemas internos);
-    // agregar códigos de respaldo y que un administrador pueda reiniciar el MFA si alguien pierde el teléfono
+    // Si alguien pierde el teléfono, un super administrador le reinicia el MFA y lo vuelve a vincular.
+    // shortcut: el alta va con la contraseña como único respaldo; agregar códigos de respaldo
     const alta = !u.totp && aBase32(randomBytes(20))
     verificaciones.set(id, { no: u.no, intentos: 0, vence: Date.now() + 5 * 60_000, ...(alta && { alta }) })
     if (!alta) return { token: id }
@@ -392,6 +466,7 @@ export function build(opts = {}) {
     const u = empleado(v.no)
     const paso = pasoDelCodigo(v.alta ?? u.totp, req.body.codigo, u.totpPaso)
     if (paso === undefined) {
+      registrar(req, 'mfa-fallido', { no: u.no, ok: false })
       if (++v.intentos >= 5) {
         verificaciones.delete(req.body.token)
         return reply.code(401).send({ error: 'Demasiados intentos. Vuelve a iniciar sesión.' })
@@ -400,6 +475,7 @@ export function build(opts = {}) {
     }
     verificaciones.delete(req.body.token)
     Object.assign(u, { totpPaso: paso }, v.alta && { totp: v.alta })
+    registrar(req, 'login', { no: u.no, detalle: v.alta ? 'vinculó su app autenticadora' : 'con código de la app' })
     return abrirSesion(req, reply, u)
   })
 
@@ -407,6 +483,8 @@ export function build(opts = {}) {
   app.get('/api/sesion', async (req) => sesion(empleado(req.sesion.no)))
 
   app.post('/api/logout', async (req, reply) => {
+    const s = sesiones.get(tokenDe(req))
+    if (s) registrar(req, 'logout', { no: s.no })
     sesiones.delete(tokenDe(req))
     reply.header('set-cookie', cookie(req, '', '; Max-Age=0'))
     return { ok: true }
@@ -419,7 +497,7 @@ export function build(opts = {}) {
     if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
 
     if (!departamentos.some((d) => d.clave === dept)) return reply.code(400).send({ error: 'Ese departamento no existe.' })
-    const nuevo = { no, name: name.trim(), role, dept, shift, email, pwdChanged: ahora(), password }
+    const nuevo = { no, name: name.trim(), role, dept, shift, email, pwdChanged: ahora(), password: await hashPassword(password) }
     if (RANGO[role] <= 2) {
       // Encargado: indica su área; no elige jefe (como en el mockup)
       if (!area.trim()) return reply.code(400).send({ error: 'Escribe tu área dentro del departamento.' })
@@ -433,6 +511,7 @@ export function build(opts = {}) {
       Object.assign(nuevo, { boss, area: jefe.area })
     }
     usuarios.push(nuevo)
+    registrar(req, 'registro', { no })
     return reply.code(201).send({ ok: true })
   })
 
@@ -451,7 +530,8 @@ export function build(opts = {}) {
     const r = recuperaciones.get(req.body.token)
     recuperaciones.delete(req.body.token) // un solo uso
     if (!r || r.vence < Date.now()) return reply.code(401).send({ error: 'El permiso expiró. Vuelve a validar tus datos.' })
-    cambiarPassword(empleado(r.no), req.body.password)
+    await cambiarPassword(empleado(r.no), req.body.password)
+    registrar(req, 'password-recuperada', { no: r.no })
     return { ok: true }
   })
 
@@ -559,10 +639,11 @@ export function build(opts = {}) {
     }
   }))
 
-  app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado((u, req, reply) => {
-    if (req.body.actual !== u.password) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
-    if (req.body.nueva === u.password) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
-    cambiarPassword(u, req.body.nueva, tokenDe(req))
+  app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado(async (u, req, reply) => {
+    if (!(await passwordCorrecta(u.password, req.body.actual))) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
+    if (req.body.nueva === req.body.actual) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
+    await cambiarPassword(u, req.body.nueva, tokenDe(req))
+    registrar(req, 'password-cambiada', { no: u.no })
     return { ok: true }
   }))
 
@@ -934,6 +1015,116 @@ export function build(opts = {}) {
         }
       })
   }))
+
+  // ── Super administrador ──────────────────────────────────────────────────────────────────────────────────
+  // Todo /api/admin/ exige sesión de super administrador (preHandler). Los cambios piden además volver a
+  // escribir su contraseña: vale 5 minutos; 5 intentos fallidos cierran su sesión
+  const CONFIRMACION = 5 * 60_000
+  const confirmado = (req, reply) => {
+    if (req.sesion.confirmado > Date.now()) return true
+    reply.code(403).send({ error: 'Confirma tu contraseña para continuar.', confirmar: true })
+    return false
+  }
+  app.post('/api/admin/confirmar', { schema: confirmarSchema }, async (req, reply) => {
+    const yo = empleado(req.sesion.no)
+    if (!(await passwordCorrecta(yo.password, req.body.password))) {
+      registrar(req, 'admin-confirmacion-fallida', { no: yo.no, ok: false })
+      req.sesion.fallos = (req.sesion.fallos ?? 0) + 1
+      if (req.sesion.fallos >= 5) {
+        sesiones.delete(tokenDe(req))
+        return reply.code(401).send({ error: 'Tu sesión terminó. Vuelve a iniciar sesión.', sesion: false })
+      }
+      return reply.code(401).send({ error: 'La contraseña no es correcta.' })
+    }
+    Object.assign(req.sesion, { confirmado: Date.now() + CONFIRMACION, fallos: 0 })
+    registrar(req, 'admin-confirmacion', { no: yo.no })
+    return { hasta: new Date(req.sesion.confirmado).toISOString() }
+  })
+
+  const ultimoAcceso = (no) => registros.findLast((r) => r.no === no && r.evento === 'login')?.at ?? null
+  const vistaUsuario = (u) => ({
+    no: u.no, name: u.name, email: u.email, role: u.role, dept: u.dept, shift: u.shift, area: u.area,
+    boss: u.boss, bossName: empleado(u.boss)?.name, activo: u.activo !== false, prueba: !!u.prueba, mfa: !!u.totp,
+    sinPassword: !u.password, debeCambiar: !!u.debeCambiar, pwdChanged: u.pwdChanged, diasPassword: diasPassword(u),
+    ultimoAcceso: ultimoAcceso(u.no),
+  })
+  app.get('/api/admin/usuarios', async () =>
+    usuarios.map(vistaUsuario).sort((a, b) => (a.role === 'sa') - (b.role === 'sa') || a.name.localeCompare(b.name)))
+
+  // Quién recibe el cambio: existe y no es super administrador (esas cuentas se manejan en el servidor)
+  const destino = (req, reply) => {
+    const u = empleado(req.params.empleado)
+    if (!u) { reply.code(404).send({ error: 'Empleado no encontrado.' }); return null }
+    if (esSA(u)) { reply.code(403).send({ error: 'Las cuentas de super administrador se manejan en el servidor.' }); return null }
+    return u
+  }
+  const cerrarSesionesDe = (no) => sesiones.forEach((s, token) => s.no === no && sesiones.delete(token))
+
+  app.patch('/api/admin/usuarios/:empleado', { schema: editarUsuarioSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const u = destino(req, reply)
+    if (!u) return
+    const { shift, role, activo } = req.body
+    if (role && role !== u.role) {
+      // Igual que la plantilla: su encargado de mayor puesto y su gente de menor, para que la jerarquía no haga ciclos
+      const jefe = empleado(u.boss)
+      if (jefe && !(RANGO[jefe.role] < RANGO[role])) return reply.code(400).send({ error: 'Su encargado debe ser de mayor puesto: cambia primero a su encargado.' })
+      if (usuarios.some((x) => x.boss === u.no && RANGO[x.role] <= RANGO[role])) {
+        return reply.code(400).send({ error: 'Tiene a su cargo personas de igual o mayor puesto: cámbialas primero.' })
+      }
+    }
+    const cambios = Object.entries({ shift, role, activo }).filter(([k, v]) => v !== undefined && v !== (k === 'activo' ? u.activo !== false : u[k]))
+    if (!cambios.length) return vistaUsuario(u)
+    for (const [k, v] of cambios) u[k] = v
+    if (activo === false) cerrarSesionesDe(u.no) // sin acceso: fuera de inmediato
+    registrar(req, 'admin-usuario', { no: u.no, por: req.sesion.no, detalle: cambios.map(([k, v]) => `${k}=${v}`).join(', ') })
+    return vistaUsuario(u)
+  })
+
+  // Contraseña temporal: se muestra una sola vez, cierra sus sesiones y al entrar debe cambiarla
+  app.post('/api/admin/usuarios/:empleado/password', { schema: accionAdminSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const u = destino(req, reply)
+    if (!u) return
+    const temporal = passwordTemporal()
+    Object.assign(u, { password: await hashPassword(temporal), pwdChanged: ahora(), debeCambiar: true })
+    cerrarSesionesDe(u.no)
+    registrar(req, 'admin-password', { no: u.no, por: req.sesion.no })
+    return { temporal }
+  })
+
+  // Reiniciar MFA (perdió el teléfono): en su próximo login vuelve a vincular la app
+  app.post('/api/admin/usuarios/:empleado/mfa', { schema: accionAdminSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const u = destino(req, reply)
+    if (!u) return
+    delete u.totp
+    delete u.totpPaso
+    cerrarSesionesDe(u.no)
+    registrar(req, 'admin-mfa', { no: u.no, por: req.sesion.no })
+    return vistaUsuario(u)
+  })
+
+  // Registros: solo lectura, del más nuevo al más viejo. q busca en número, nombre, usuario escrito, IP y detalle
+  app.get('/api/admin/registros', { schema: registrosSchema }, async (req) => {
+    const { q, evento, desde, hasta } = req.query
+    const texto = q?.trim().toLowerCase()
+    return registros.filter((r) => {
+      const dia = r.at.slice(0, 10)
+      if ((evento && r.evento !== evento) || (desde && dia < desde) || (hasta && dia > hasta)) return false
+      return !texto || [r.no, empleado(r.no)?.name, r.usuario, r.ip, r.detalle, empleado(r.por)?.name].some((v) => v?.toLowerCase().includes(texto))
+    }).slice(-1000).reverse().map((r) => ({ ...r, name: empleado(r.no)?.name, porName: empleado(r.por)?.name }))
+  })
+
+  // Borrar los anteriores a una fecha (no sueltos: un registro de auditoría no se edita). El borrado queda registrado
+  app.post('/api/admin/registros/purgar', { schema: purgarSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const antes = registros.length
+    for (let i = registros.length - 1; i >= 0; i--) if (registros[i].at.slice(0, 10) < req.body.antes) registros.splice(i, 1)
+    const borrados = antes - registros.length
+    registrar(req, 'registros-purgados', { no: req.sesion.no, por: req.sesion.no, detalle: `${borrados} anteriores a ${req.body.antes}` })
+    return { borrados }
+  })
 
   if (existsSync(dist)) {
     app.register(fastifyStatic, {

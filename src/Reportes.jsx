@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, depto, estado, hora, hoy, promedio, rol } from './comun.js'
+import { TURNOS, api, depto, descargarCsv, estado, hora, hoy, promedio, rol } from './comun.js'
 import { t } from './i18n.js'
 import { comparar } from './reporte.js'
 import { Estado, Rate } from './ui.jsx'
@@ -16,26 +16,9 @@ function accion(f) {
 }
 const celdas = (f) => [f.date, f.shift, hora(f.at), f.name, rol(f.role), depto(f.dept), f.text, f.pct, estado(f.status), f.note, accion(f)]
 
-// Excel ejecuta como fórmula una celda que empieza con = + - @; el apóstrofo la deja como texto
-const celdaCsv = (v) => {
-  const s = String(v ?? '')
-  return `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`
-}
-
 // El % a tiempo va primero: es la cifra que se compara y en móvil queda a la vista sin desplazar
 const COLUMNAS_COMPARATIVO = ['Nombre', 'Puesto', '% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades', 'Avance %']
 const celdasComparativo = (x) => [x.name, rol(x.role), x.aTiempo ?? '', x.atrasadas, x.incompletas, x.realizadas, x.actividades, x.avance ?? '']
-
-function descargarCsv(columnas, filas, nombre) {
-  const csv = [columnas.map((c) => t(c)), ...filas].map((fila) => fila.map(celdaCsv).join(',')).join('\r\n')
-  // El BOM hace que Excel lea los acentos como UTF-8
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombre
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 export default function Reportes({ user }) {
   const [equipo, setEquipo] = useState(null)
