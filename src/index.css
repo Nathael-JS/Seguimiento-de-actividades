@@ -449,19 +449,20 @@ dialog.modal.detalle{max-width:640px;max-height:calc(100dvh - 48px)}
 .arbol,.arbol ul{list-style:none;margin:0;padding:0}
 .arbol ul{padding-left:30px}
 .arbol li{position:relative;padding-top:10px}
-.arbol ul>li::before{content:'';position:absolute;left:-18px;top:0;bottom:0;border-left:2px solid var(--line)}
+.arbol ul>li::before{content:'';position:absolute;left:-18px;top:0;bottom:0;width:2px;background:var(--line)}
 .arbol ul>li:last-child::before{bottom:auto;height:38px}
 .arbol ul>li::after{content:'';position:absolute;left:-18px;top:36px;width:16px;border-top:2px solid var(--line)}
 .arbol summary{list-style:none;cursor:pointer;display:inline-block;border-radius:var(--radius-md)}
 .arbol summary::-webkit-details-marker{display:none}
 .arbol summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .arbol details:not([open])>summary .nodo{box-shadow:4px 4px 0 -1px var(--surface-100),4px 4px 0 0 var(--line-strong)}
-.nodo{display:inline-flex;gap:12px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:var(--radius-md);background:var(--surface-100);max-width:100%}
-.nodo[data-rol=gte]{border-left-color:var(--ink-deep)}
-.nodo[data-rol=sr]{border-left-color:var(--brand-strong)}
-.nodo[data-rol=full]{border-left-color:var(--brand)}
-.nodo[data-rol=jr],.nodo[data-rol=tec]{border-left-color:var(--accent)}
-.nodo .avatar{width:34px;height:34px;font-size:12px;flex:none}
+/* El puesto se marca con un anillo de color en el avatar */
+.nodo{--rol:var(--line-strong);display:inline-flex;gap:12px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-100);max-width:100%}
+.nodo[data-rol=gte]{--rol:var(--ink-deep)}
+.nodo[data-rol=sr]{--rol:var(--brand-strong)}
+.nodo[data-rol=full]{--rol:var(--brand)}
+.nodo[data-rol=jr],.nodo[data-rol=tec]{--rol:var(--accent)}
+.nodo .avatar{width:34px;height:34px;font-size:12px;flex:none;box-shadow:0 0 0 2px var(--surface-100),0 0 0 4px var(--rol)}
 .nodo-txt{display:flex;flex-direction:column;min-width:0}
 .nodo-txt a{color:var(--ink);text-decoration:none}
 .nodo-txt a:hover{color:var(--brand);text-decoration:underline}
