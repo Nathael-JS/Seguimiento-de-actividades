@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { api, rol } from './comun.js'
+import { useEffect, useState } from 'react'
+import QRCode from 'qrcode'
+import { api } from './comun.js'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
 import Registro from './Registro.jsx'
@@ -36,7 +37,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
       <main className="auth-main">
         <div className="auth-top"><BotonIdioma /><BotonTema /></div>
         {pantalla === 'login' && (
-          <Credenciales aviso={aviso} ir={setPantalla} onLogin={onLogin}
+          <Credenciales aviso={aviso} ir={setPantalla}
             onPaso1={(v) => { setVerificacion(v); setAviso(''); setPantalla('codigo') }} />
         )}
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
@@ -47,10 +48,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
   )
 }
 
-// Cuentas de prueba para mostrar la app sin escribir credenciales ni código
-const DEMOS = [['gte', 'Laura', '10001'], ['tec', 'Jorge', '10482']]
-
-function Credenciales({ aviso, ir, onPaso1, onLogin }) {
+function Credenciales({ aviso, ir, onPaso1 }) {
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -76,19 +74,6 @@ function Credenciales({ aviso, ir, onPaso1, onLogin }) {
     }
   }
 
-  // shortcut: entra con la contraseña de prueba y el código simulado; quitar cuando haya usuarios reales
-  async function demo(usuario) {
-    setError('')
-    setLoading(true)
-    try {
-      const { token, codigo } = await api('/api/login', { method: 'POST', body: { usuario, password: 'demo1234' } })
-      onLogin(await api('/api/login/verificar', { method: 'POST', body: { token, codigo } }))
-    } catch (err) {
-      setError(err.message)
-      setLoading(false)
-    }
-  }
-
   return (
     <form className="auth-form" onSubmit={submit} noValidate>
       <h1>{t('Iniciar sesión')}</h1>
@@ -104,19 +89,14 @@ function Credenciales({ aviso, ir, onPaso1, onLogin }) {
       <p className="muted" style={{ textAlign: 'center' }}>
         {t('¿No tienes cuenta?')} <button type="button" className="link" onClick={() => ir('registro')}>{t('Registrarse')}</button>
       </p>
-      <div className="demo-links">
-        <span>{t('Entrar en modo demo como:')}</span>
-        {DEMOS.map(([puesto, nombre, usuario]) => (
-          <button key={usuario} type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => demo(usuario)}>{rol(puesto)} · {nombre}</button>
-        ))}
-      </div>
     </form>
   )
 }
 
+// Paso 2: código de la app autenticadora. La primera vez (alta) se muestra el QR y la clave para vincularla
 function Codigo({ verificacion, onLogin, volver }) {
+  const { token, secreto, uri } = verificacion
   const [codigo, setCodigo] = useState('')
-  const [simulado, setSimulado] = useState(verificacion.codigo)
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -126,41 +106,68 @@ function Codigo({ verificacion, onLogin, volver }) {
     setError('')
     setEnviando(true)
     try {
-      onLogin(await api('/api/login/verificar', { method: 'POST', body: { token: verificacion.token, codigo } }))
+      onLogin(await api('/api/login/verificar', { method: 'POST', body: { token, codigo } }))
     } catch (err) {
       setError(err.message)
-      setEnviando(false)
-    }
-  }
-
-  async function reenviar() {
-    setError('')
-    try {
-      setSimulado((await api('/api/login/reenviar', { method: 'POST', body: { token: verificacion.token } })).codigo)
       setCodigo('')
-    } catch (err) {
-      setError(err.message)
+      setEnviando(false)
     }
   }
 
   return (
     <form className="auth-form" onSubmit={verificar} noValidate>
       <span className="avatar" style={{ width: 48, height: 48 }}><Icono nombre="shield" /></span>
-      <h1>{t('Verificación en dos pasos')}</h1>
-      <p className="lead">{t('Escribe el código de 6 dígitos que enviamos a')} <b>{verificacion.destino}</b></p>
-      {/* shortcut: código visible porque el envío por correo está simulado; quitar al conectar el servicio de email */}
-      <div className="notice warn" role="status">
-        <Icono nombre="alert" />
-        <span>{t('Modo de prueba: el correo es simulado. Tu código es')} <b className="mono">{simulado}</b></span>
-      </div>
-      <Campo label={t('Código de verificación')} id="codigo" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-        className="codigo" value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))} autoFocus />
+      <h1>{t(secreto ? 'Vincula tu app autenticadora' : 'Verificación en dos pasos')}</h1>
+      {secreto ? <Alta secreto={secreto} uri={uri} /> : (
+        <p className="lead">{t('Abre tu app autenticadora y escribe el código de 6 dígitos de Seguimiento de Actividades.')}</p>
+      )}
+      <Campo label={t('Código de la app')} id="codigo" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+        className="codigo" value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))} autoFocus={!secreto} />
       <p className="error" role="alert">{error}</p>
-      <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{t(enviando ? 'Verificando…' : 'Verificar')}</button>
-      <div className="row between">
+      <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>
+        {t(enviando ? 'Verificando…' : secreto ? 'Vincular y entrar' : 'Verificar')}
+      </button>
+      <div className="row">
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => volver()}>← {t('Volver')}</button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={reenviar}>{t('Reenviar código')}</button>
       </div>
     </form>
+  )
+}
+
+function Alta({ secreto, uri }) {
+  const [qr, setQr] = useState('')
+  const [copiada, setCopiada] = useState(false)
+  // Siempre oscuro sobre blanco, también en tema oscuro: así lo leen todas las cámaras
+  useEffect(() => {
+    QRCode.toString(uri, { type: 'svg', margin: 1, color: { dark: '#16202a', light: '#ffffff' } }).then(setQr)
+  }, [uri])
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(secreto)
+      setCopiada(true)
+    } catch { /* sin permiso de portapapeles: la clave sigue a la vista para escribirla */ }
+  }
+
+  return (
+    <>
+      <ol className="pasos-alta">
+        <li>{t('Instala Google Authenticator o Microsoft Authenticator en tu teléfono.')}</li>
+        <li>{t('Escanea el código QR con la app, o escribe la clave.')}</li>
+        <li>{t('Escribe el código de 6 dígitos que muestra la app.')}</li>
+      </ol>
+      <div className="alta-mfa">
+        <div className="qr" role="img" aria-label={t('Código QR para vincular la app autenticadora')} dangerouslySetInnerHTML={{ __html: qr }} />
+        <div className="clave">
+          <span className="muted">{t('Clave')}</span>
+          <code>{secreto.match(/.{4}/g).join(' ')}</code>
+          <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={copiar}>{t(copiada ? 'Copiada' : 'Copiar clave')}</button>
+            <a className="btn btn-ghost btn-sm" href={uri}>{t('Abrir en la app')}</a>
+          </div>
+        </div>
+      </div>
+      <p className="muted" style={{ fontSize: 13 }}>{t('Después de vincularla, cada inicio de sesión pide el código de la app.')}</p>
+    </>
   )
 }

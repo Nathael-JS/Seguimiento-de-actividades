@@ -17,7 +17,11 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Departamentos:** cada quien ve solo la plantilla de su departamento; los equipos nunca cruzan departamentos.
 
-**Simulado:** el código de la verificación en 2 pasos se muestra en pantalla en lugar de enviarse por correo.
+**MFA con app autenticadora (TOTP):** el segundo paso del login pide el código de 6 dígitos de Google o Microsoft Authenticator. La primera vez que alguien entra, la app muestra un QR y la clave para vincularla; queda guardada al escribir el primer código. Un código no se acepta dos veces y se tolera ±30 s de desfase del reloj. Sin servicios externos (`node:crypto`). Pendiente: códigos de respaldo y reinicio del MFA por un administrador si alguien pierde el teléfono.
+
+**Herencias** (Ing. Full o superior): se propone heredar una actividad pendiente o incompleta del equipo, con motivo, a cualquier departamento. El servidor verifica dos condiciones sí/no: mismo nivel de puesto (técnico ↔ Ing. Jr, Ing. Full ↔ Senior) y turno siguiente (o el mismo empleado al día siguiente). La valida el encargado directo de quien la recibe: acepta, rechaza o redirige a alguien de su equipo, con comentario. Si quien propone ya es ese encargado, entra directo. Límites por día: 2 por turno y 2 a otro departamento para quien propone; 2 redirecciones para quien valida.
+
+**Criticidad** de las actividades diarias: simple, normal, alta o crítica. La crítica va después de las urgentes y pasa directo al turno siguiente (sin validación ni límite) una vez al día.
 
 **Rate de aprobación:** % de las actividades de los últimos 30 días realizadas a tiempo (a más tardar el día que les tocaba, en la hora local de quien consulta). Las de hoy que siguen abiertas aún no cuentan. Se muestra en Departamentos, Perfil y Monitoreo.
 
@@ -39,8 +43,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | Método | Ruta | Uso |
 |---|---|---|
 | `POST` | `/api/login` | Paso 1: usuario (correo, alias o número) y contraseña; genera el código |
-| `POST` | `/api/login/verificar` | Paso 2: código de 6 dígitos (5 min, 5 intentos); abre la sesión (cookie) y devuelve el usuario |
-| `POST` | `/api/login/reenviar` | Nuevo código para la misma verificación |
+| `POST` | `/api/login/verificar` | Paso 2: código de la app autenticadora (5 min, 5 intentos); abre la sesión (cookie) y devuelve el usuario |
 | `GET` | `/api/encargados` | Encargados de cada departamento (Registro, sin sesión) |
 | `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
 | `POST` | `/api/logout` | Cerrar sesión |
@@ -58,7 +61,10 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una tarea suya, diaria o urgente (con su fin de turno); se avisa a su encargado |
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
-| `POST` | `/api/actividades/:id/heredar` | Heredar una pendiente o incompleta al día siguiente o a otro técnico / Ing. Jr del siguiente turno |
+| `GET` | `/api/actividades/:id/receptores` | Quiénes pueden recibir esa actividad (cualquier departamento) y quién la validaría |
+| `POST` | `/api/actividades/:id/heredar` | Proponer la herencia con motivo; entra directo si es crítica o si quien propone es el encargado de quien la recibe |
+| `GET` | `/api/herencias/:no?hoy=` | Por validar, enviadas y lo usado hoy de cada límite |
+| `POST` | `/api/herencias/:id/responder` | Aceptar, rechazar o redirigir (con comentario) |
 | `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |
 | `GET` | `/api/matriz/:no` | Matriz de seguimiento del equipo con `?desde=&hasta=&hoy=` |
 
@@ -70,7 +76,7 @@ Las rutas de login, registro, recuperar contraseña y `/api/encargados` son púb
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
 2. Render ejecuta `npm install && npm run build` y luego `npm start`.
-3. Entra con `10482` / `demo1234` (técnico) o `10001` / `demo1234` (gerente). El código de verificación aparece en pantalla (simulado).
+3. Entra con `10482` / `demo1234` (técnico) o `10001` / `demo1234` (gerente) y vincula tu app autenticadora con el QR. Los datos viven en memoria: tras reiniciar el servidor, cada cuenta se vuelve a vincular.
 
 ## Scripts
 

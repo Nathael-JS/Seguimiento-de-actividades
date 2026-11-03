@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
+import { CRITICIDADES, api, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
 
@@ -18,6 +18,11 @@ export function Notificacion({ n }) {
     // Sin who: el aviso es para quien tiene la actividad; con who: para quien la asignó
     return n.who ? <>{quien} {t('tiene atrasada')} “{n.actividad}”</> : <>{t('Tu actividad')} “{n.actividad}” {t('está atrasada')}</>
   }
+  if (n.kind === 'herencia-pendiente') return <>{quien} {t('propone heredar')} “{n.actividad}” {t('a alguien de tu equipo: valídala')}</>
+  if (n.kind === 'herencia-aceptada') return <>{quien} {t('aceptó tu herencia de')} “{n.actividad}”</>
+  if (n.kind === 'herencia-rechazada') return <>{quien} {t('rechazó tu herencia de')} “{n.actividad}”</>
+  if (n.kind === 'herencia-redirigida') return <>{quien} {t('redirigió tu herencia de')} “{n.actividad}”</>
+  if (n.kind === 'herencia-anulada') return <>{t('Se anuló tu herencia de')} “{n.actividad}”: {t('ya no estaba pendiente')}</>
   if (n.kind === 'password') {
     return n.count > 0 ? t(n.count === 1 ? 'Tu contraseña vence en {n} día' : 'Tu contraseña vence en {n} días', { n: n.count }) : t('Tu contraseña venció.')
   }
@@ -124,6 +129,7 @@ export function BotonIdioma() {
 // A dónde lleva una notificación: a atender la actividad (la propia o la del equipo) o al Perfil
 function destinoDe(n, user) {
   if (n.kind === 'password') return 'perfil'
+  if (n.kind.startsWith('herencia-')) return 'herencias'
   return (n.activityTo ?? user.no) === user.no ? 'mis-actividades' : 'monitoreo'
 }
 
@@ -174,5 +180,25 @@ export function Rate({ valor }) {
       <span className="bar"><i style={{ width: `${valor}%` }} /></span>
       <span className="mono">{valor}%</span>
     </span>
+  )
+}
+
+// Etiqueta de criticidad: la normal no se marca, para que resalte lo que se sale de lo común
+export function Criticidad({ valor }) {
+  if (!valor || valor === 'normal') return null
+  return <span className={`tag crit-${valor}`}>{criticidad(valor)}</span>
+}
+
+export function SelectorCriticidad({ valor, onChange }) {
+  return (
+    <fieldset className="field">
+      <legend>{t('Criticidad')}</legend>
+      <div className="chips crit" role="group">
+        {Object.keys(CRITICIDADES).map((k) => (
+          <button key={k} type="button" data-crit={k} aria-pressed={valor === k} onClick={() => onChange(k)}>{criticidad(k)}</button>
+        ))}
+      </div>
+      {valor === 'critica' && <small>{t('Va después de las urgentes. Se puede pasar directo al turno siguiente una vez al día, sin validación.')}</small>}
+    </fieldset>
   )
 }

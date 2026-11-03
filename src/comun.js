@@ -4,11 +4,14 @@ export const ROLES = { tec: 'Técnico', jr: 'Ing. Jr', full: 'Ing. Full', sr: 'S
 export const TURNOS = { A: '06:00–14:30', B: '14:30–23:00', C: '23:00–06:00' }
 export const DEPARTAMENTOS = { lc: 'Liquid Cooling', pf: 'Pruebas Funcionales', smt: 'SMT' }
 export const ESTADOS = { done: 'Realizada', progress: 'En proceso', pending: 'Pendiente', incomplete: 'Incompleta' }
+// Criticidad de una actividad diaria, de menor a mayor. La crítica va debajo de la urgente y sí se hereda
+export const CRITICIDADES = { simple: 'Simple', normal: 'Normal', alta: 'Alta', critica: 'Crítica' }
 
 // Nombres ya traducidos al idioma actual
 export const rol = (k) => t(ROLES[k])
 export const depto = (k) => t(DEPARTAMENTOS[k])
 export const estado = (k) => t(ESTADOS[k])
+export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
 
 // `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente); `excepto` lo oculta a un puesto
 export const MODULOS = [
@@ -17,6 +20,7 @@ export const MODULOS = [
   { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte' },
   { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado' },
   { ruta: 'reportes', titulo: 'Reportes', icono: 'file', desc: 'Genera reportes por fecha, turno y hora.', solo: 'encargado' },
+  { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado' },
   { ruta: 'matriz', titulo: 'Matriz de seguimiento', icono: 'grid', desc: 'Yield, tiempo extra y asistencia de tu equipo.', solo: 'encargado' },
   { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.' },

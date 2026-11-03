@@ -11,6 +11,7 @@ const FILTROS = [
   ['Pendientes', ['pending']],
   ['Incompletas', ['incomplete']],
   ['Comentarios', ['comment']],
+  ['Herencias', ['herencia-pendiente', 'herencia-aceptada', 'herencia-rechazada', 'herencia-redirigida', 'herencia-anulada']],
   ['Avisos', ['overdue', 'password', 'urgent-closed']],
 ]
 const POR_PAGINA = 20

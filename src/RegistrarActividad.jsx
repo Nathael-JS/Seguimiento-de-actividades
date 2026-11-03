@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { TURNOS, api, cierreTurno, depto, dia, hora, hoy, iniciales, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { Estado } from './ui.jsx'
+import { SelectorCriticidad } from './ui.jsx'
 import { t } from './i18n.js'
 
 const puntoVacio = () => ({ texto: '', avance: 0 })
@@ -15,6 +15,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
   const [puntos, setPuntos] = useState([puntoVacio()])
   const [comentario, setComentario] = useState('')
   const [prioridad, setPrioridad] = useState('diaria')
+  const [criticidad, setCriticidad] = useState('normal')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -49,6 +50,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
         method: 'POST',
         body: {
           por: user.no, para, fecha, turno, comentario, prioridad,
+          ...(prioridad === 'diaria' && { criticidad }),
           ...(prioridad === 'urgente' && { cierre: cierre.toISOString() }),
           puntos: llenos.map((p) => ({ texto: p.texto.trim(), avance: porcentaje(p.avance) })),
         },
@@ -58,6 +60,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
       setPuntos([puntoVacio()])
       setComentario('')
       setPrioridad('diaria')
+      setCriticidad('normal')
       cargarEquipo()
       recargar()
     } catch (e) {
@@ -71,10 +74,10 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
     <>
       <div className="page-head">
         <h1>{t('Registrar actividades')}</h1>
-        <p>{t('Solo Ing. Full, Senior y Gerente pueden registrar y modificar.')}</p>
+        <p>{t('Solo Ing. Full, Senior y Gerente pueden registrar y modificar.')} <a href="#herencias">{t('Las pendientes e incompletas se heredan en Herencias.')}</a></p>
       </div>
 
-      <div className="cols">
+      <div className="registrar">
         <form className="card form-card" onSubmit={registrar} noValidate>
           <label className="field">
             <span>{t('Empleado')}</span>
@@ -120,6 +123,8 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
             </div>
           </fieldset>
 
+          {prioridad === 'diaria' && <SelectorCriticidad valor={criticidad} onChange={setCriticidad} />}
+
           <fieldset className="field">
             <legend>{t('Actividades por puntos')}</legend>
             <div className="points">
@@ -160,72 +165,7 @@ export default function RegistrarActividad({ user, recargar, avisar }) {
             </button>
           </div>
         </form>
-        {equipo && <Herencia user={user} equipo={equipo} alHeredar={() => { cargarEquipo(); recargar() }} avisar={avisar} />}
       </div>
     </>
-  )
-}
-
-function Herencia({ user, equipo, alHeredar, avisar }) {
-  const abiertas = equipo.flatMap((e) =>
-    e.actividades.filter((a) => (a.status === 'pending' || a.status === 'incomplete') && a.prioridad !== 'urgente').map((a) => ({ ...a, nombre: e.name })))
-  // Se hereda a un técnico o Ing. Jr del equipo
-  const ejecutores = equipo.filter((e) => e.role === 'tec' || e.role === 'jr')
-
-  return (
-    <section className="card">
-      <h2 className="card-title" style={{ marginBottom: 4 }}>{t('Pendientes e incompletas')}</h2>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
-        {t('Hereda la actividad al día siguiente o a otro técnico / Ing. Jr del siguiente turno.')}
-      </p>
-      {abiertas.length ? (
-        <div className="inherit">
-          {abiertas.map((a) => (
-            <ItemHerencia key={a.id} a={a} user={user} ejecutores={ejecutores.filter((e) => e.no !== a.to)}
-              alHeredar={alHeredar} avisar={avisar} />
-          ))}
-        </div>
-      ) : <p className="empty">{t('No hay actividades pendientes.')}</p>}
-    </section>
-  )
-}
-
-function ItemHerencia({ a, user, ejecutores, alHeredar, avisar }) {
-  const [para, setPara] = useState(a.to)
-  const [error, setError] = useState('')
-  const [enviando, setEnviando] = useState(false)
-
-  async function heredar() {
-    setError('')
-    setEnviando(true)
-    try {
-      await api(`/api/actividades/${a.id}/heredar`, { method: 'POST', body: { por: user.no, para, hoy: hoy() } })
-      avisar(t('Actividad heredada.'))
-      alHeredar()
-    } catch (e) {
-      setError(e.message)
-      setEnviando(false)
-    }
-  }
-
-  return (
-    <div className="inherit-item">
-      <div className="row between" style={{ alignItems: 'flex-start' }}>
-        <div>
-          <b style={{ fontSize: 14 }}>{a.text}</b>
-          <div className="muted" style={{ fontSize: 12 }}>{a.nombre} · <span className="mono">{a.date} · {a.shift}</span> · {a.pct}%</div>
-        </div>
-        <Estado estado={a.status} />
-      </div>
-      {a.mgr && <div className="mgr-note">{a.mgr}</div>}
-      <div className="row" style={{ flexWrap: 'wrap' }}>
-        <select aria-label={t('Heredar “{actividad}” a', { actividad: a.text })} value={para} onChange={(e) => setPara(e.target.value)} className="select-sm">
-          <option value={a.to}>{t('Día siguiente (mismo empleado)')}</option>
-          {ejecutores.map((e) => <option key={e.no} value={e.no}>{t('Otro empleado · siguiente turno')}: {e.name}</option>)}
-        </select>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={heredar} disabled={enviando}>{t('Heredar')}</button>
-      </div>
-      {error && <p className="error" role="alert">{error}</p>}
-    </div>
   )
 }

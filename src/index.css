@@ -342,8 +342,6 @@ tbody tr:hover td{background:var(--surface-000)}
   .dl{grid-template-columns:1fr;gap:2px}.dl dd{margin-bottom:10px}
 }
 
-.demo-links{display:flex;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--ink-muted);align-items:center;border-top:1px solid var(--line);padding-top:16px}
-.demo-links>span{width:100%}
 .auth-top{display:flex;justify-content:flex-end;gap:8px}
 .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--surface-100)}
 .seg button{border:0;background:transparent;color:var(--ink);padding:0 12px;min-height:34px;font:500 13px var(--font-sans);cursor:pointer}
@@ -451,21 +449,66 @@ dialog.modal.detalle{max-width:640px;max-height:calc(100dvh - 48px)}
 .arbol,.arbol ul{list-style:none;margin:0;padding:0}
 .arbol ul{padding-left:30px}
 .arbol li{position:relative;padding-top:10px}
-.arbol ul>li::before{content:'';position:absolute;left:-18px;top:0;bottom:0;border-left:2px solid var(--line)}
+.arbol ul>li::before{content:'';position:absolute;left:-18px;top:0;bottom:0;width:2px;background:var(--line)}
 .arbol ul>li:last-child::before{bottom:auto;height:38px}
 .arbol ul>li::after{content:'';position:absolute;left:-18px;top:36px;width:16px;border-top:2px solid var(--line)}
 .arbol summary{list-style:none;cursor:pointer;display:inline-block;border-radius:var(--radius-md)}
 .arbol summary::-webkit-details-marker{display:none}
 .arbol summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .arbol details:not([open])>summary .nodo{box-shadow:4px 4px 0 -1px var(--surface-100),4px 4px 0 0 var(--line-strong)}
-.nodo{display:inline-flex;gap:12px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:var(--radius-md);background:var(--surface-100);max-width:100%}
-.nodo[data-rol=gte]{border-left-color:var(--ink-deep)}
-.nodo[data-rol=sr]{border-left-color:var(--brand-strong)}
-.nodo[data-rol=full]{border-left-color:var(--brand)}
-.nodo[data-rol=jr],.nodo[data-rol=tec]{border-left-color:var(--accent)}
-.nodo .avatar{width:34px;height:34px;font-size:12px;flex:none}
+/* El puesto se marca con un anillo de color en el avatar */
+.nodo{--rol:var(--line-strong);display:inline-flex;gap:12px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-100);max-width:100%}
+.nodo[data-rol=gte]{--rol:var(--ink-deep)}
+.nodo[data-rol=sr]{--rol:var(--brand-strong)}
+.nodo[data-rol=full]{--rol:var(--brand)}
+.nodo[data-rol=jr],.nodo[data-rol=tec]{--rol:var(--accent)}
+.nodo .avatar{width:34px;height:34px;font-size:12px;flex:none;box-shadow:0 0 0 2px var(--surface-100),0 0 0 4px var(--rol)}
 .nodo-txt{display:flex;flex-direction:column;min-width:0}
 .nodo-txt a{color:var(--ink);text-decoration:none}
 .nodo-txt a:hover{color:var(--brand);text-decoration:underline}
 .nodo-txt small{font-size:12px;color:var(--ink-muted)}
 @media (max-width:560px){.arbol ul{padding-left:18px}.arbol ul>li::before,.arbol ul>li::after{left:-11px}.arbol ul>li::after{width:9px}.nodo .chip{display:none}}
+
+/* Alta del MFA: pasos, QR y clave */
+.pasos-alta{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:20px;color:var(--ink-muted)}
+.alta-mfa{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-000)}
+.alta-mfa .qr{flex:none;width:152px;height:152px;border-radius:var(--radius-md);overflow:hidden;background:#fff}
+.alta-mfa .qr svg{display:block;width:100%;height:100%}
+.alta-mfa .clave{display:flex;flex-direction:column;gap:8px;min-width:0}
+.alta-mfa .clave .muted{font-size:12px}
+.alta-mfa code{font:600 15px/22px var(--font-mono);letter-spacing:.04em;word-break:break-word;color:var(--ink)}
+@media (max-width:420px){.alta-mfa{flex-direction:column;align-items:stretch}.alta-mfa .qr{align-self:center}}
+.registrar{max-width:760px}
+
+/* Criticidad: la normal no lleva marca; simple apagada, alta ámbar, crítica roja (debajo de la urgente, que es sólida) */
+.tag.crit-simple{background:var(--surface-200);color:var(--ink-muted)}
+.tag.crit-alta{background:var(--status-pending-soft);color:var(--status-pending)}
+.tag.crit-critica{background:var(--status-incomplete-soft);color:var(--status-incomplete);box-shadow:inset 0 0 0 1px var(--status-incomplete)}
+.chips.crit button[aria-pressed="true"][data-crit=alta]{background:var(--status-pending);border-color:var(--status-pending);color:var(--surface-100)}
+.chips.crit button[aria-pressed="true"][data-crit=critica]{background:var(--status-incomplete);border-color:var(--status-incomplete);color:var(--surface-100)}
+
+/* Herencias */
+.cupos{display:flex;gap:16px 24px;align-items:center;flex-wrap:wrap;padding:14px 20px;margin-bottom:16px}
+.cupos h2{font:600 13px/18px var(--font-sans);color:var(--ink-muted)}
+.cupos ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 20px}
+.cupos li{display:flex;gap:8px;align-items:center;font-size:13px}
+.cupos li b{font-size:13px}
+.cupos li.lleno{color:var(--status-incomplete)}
+.pips{display:inline-flex;gap:3px}
+.pips i{width:8px;height:8px;border-radius:2px;background:var(--surface-200);box-shadow:inset 0 0 0 1px var(--line)}
+.pips i.on{background:var(--brand);box-shadow:none}
+.lleno .pips i.on{background:var(--status-incomplete)}
+.tabs .count{background:var(--accent);color:var(--on-accent);font:600 11px/18px var(--font-mono);padding:0 7px;border-radius:var(--radius-pill)}
+#panel-herencias{margin-top:16px}
+.herencias{display:grid;gap:12px;max-width:880px}
+.herencia{display:flex;flex-direction:column;gap:12px;padding:18px 20px}
+.herencia h3{font:600 15px/20px var(--font-sans)}
+.heredar-form{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--line)}
+.ruta-herencia{display:flex;flex-wrap:wrap;gap:6px 24px;margin:0;font-size:13px}
+.ruta-herencia div{display:flex;gap:6px}
+.ruta-herencia dt{color:var(--ink-muted)}
+.ruta-herencia dd{margin:0}
+.enviadas li.enviada{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.badge-anulada{background:var(--surface-200);color:var(--ink-muted)}
+.ndot.herencia-pendiente{background:var(--accent)}.ndot.herencia-aceptada{background:var(--status-done)}.ndot.herencia-redirigida{background:var(--status-progress)}.ndot.herencia-rechazada,.ndot.herencia-anulada{background:var(--status-incomplete)}
+.enviadas li:last-child{padding-bottom:0}
