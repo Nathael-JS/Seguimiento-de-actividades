@@ -12,6 +12,24 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #25] 2026-11-04: Reportes en PDF real (vista previa y descarga)
+
+### Cambiado
+- **Exportar PDF en Reportes** ya no abre la impresión del navegador: genera un PDF de verdad.
+  - **Contenido:** encabezado con logo y filtros, recuadros de resumen (registros, % realizadas, incompletas y pendientes), tabla comparativa, detalle con el estado en color, y en el pie quién lo generó, cuándo y el número de página.
+  - **En escritorio** se abre una vista previa con *Descargar PDF*. **En celular** se descarga directo, porque los visores de PDF dentro de la página no funcionan bien ahí.
+
+### Agregado
+- Dependencias `jspdf` y `jspdf-autotable`, que se cargan solo al exportar (137 kB comprimido). El JS inicial no cambió.
+
+### Advertencias
+- `npm audit` marca 3 avisos moderados en una dependencia de `@fastify/static` (`glob` / `minimatch`). No vienen de este cambio; se revisan en la ronda de optimización.
+
+### Archivos
+`src/pdf.js` (nuevo), `src/Reportes.jsx`, `src/en.js`, `src/index.css`, `package.json`, `package-lock.json`, `DOCUMENTACION.md`, `PRUEBAS.md`, `CHANGELOG.md`
+
+---
+
 ## [PR #24] 2026-11-04: Errores, salud, rendimiento, registro validado con la plantilla y preparación del deploy
 
 ### Agregado

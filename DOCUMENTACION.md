@@ -62,6 +62,7 @@ El flujo de una petición tiene cuatro pasos:
 | Base de datos | **pg** (node-postgres) | 8.16 | Conexión a PostgreSQL / Neon (`pg.Pool`) |
 | MFA | **qrcode** | 1.5 | QR del alta en la app autenticadora (se carga solo al usarse) |
 | Excel | **read-excel-file** | 9.3 | Leer la plantilla `.xlsx` de un departamento (se carga solo al usarse) |
+| PDF | **jspdf** + **jspdf-autotable** | 4.2 / 5.0 | Reporte en PDF real (vista previa y descarga) en `src/pdf.js`; se carga solo al exportar |
 | Lint | **oxlint** | 1.89 | Revisión de código (`npm run lint`) |
 | Pruebas | `node:test` + `node:assert` | integrado | Pruebas de API, BD y utilidades |
 | Navegador de prueba | Playwright (fuera del repo) | — | Verificación visual durante el desarrollo |
@@ -165,7 +166,9 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
 ### Seguimiento (encargados)
 - **Inicio del gerente:** avance por líder y por turno, y lo que necesita atención (`TableroGerente.jsx`, `tablero.js`).
 - **Monitoreo:** avance del equipo en tiempo real, % de realizadas con detalle desplegable y lista con persona.
-- **Reportes:** por fechas, turno y hora; exporta a CSV (Excel) o PDF (imprimir). Incluye un comparativo entre periodos (`reporte.js`).
+- **Reportes:** por fechas, turno y hora. Incluye un comparativo entre periodos (`reporte.js`). Se exporta a:
+  - **CSV (Excel).**
+  - **PDF real** (`src/pdf.js`, con jsPDF): encabezado con logo y filtros, recuadros de resumen, comparativo y detalle con el estado en color, y en el pie quién lo generó, cuándo y el número de página. En escritorio se abre una **vista previa** con *Descargar PDF*; en celular se descarga directo.
 - **Matriz de seguimiento:** por persona y periodo, muestra:
   - el yield de diarias y de urgentes (realizadas ÷ las que cuentan);
   - el tiempo extra y la asistencia, según el checador.

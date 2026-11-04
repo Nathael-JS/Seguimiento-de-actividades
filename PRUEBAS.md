@@ -51,7 +51,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B12 | Aprobar solicitud | (después de C4) en la tarjeta con borde ámbar → Aprobar | Se mueve a la columna pedida; al Jr le llega el aviso | | |
 | B13 | Herencias | Herencias → proponer una pendiente a alguien del turno siguiente | Queda por validar (o entra directo si eres su encargado) | | |
 | B14 | Monitoreo | Monitoreo → lista y % de realizadas | Datos del equipo, detalle desplegable | | |
-| B15 | Reportes | Reportes → fechas → Exportar CSV / PDF | Archivo correcto | | |
+| B15 | Reportes | Reportes → fechas → Exportar Excel; Exportar PDF | CSV correcto; el PDF abre **vista previa** (en celular se descarga) y *Descargar PDF* baja el archivo con logo, resumen, comparativo y detalle | | |
 | B16 | Matriz y Jerarquía | Abrir ambas | Cargan sin error | | |
 | B17 | Ajustes (solo gerente) | Cargar plantilla de ejemplo (.xlsx) | Vista previa; al cargar, las personas nuevas quedan **por registrar** (ver D7) | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |

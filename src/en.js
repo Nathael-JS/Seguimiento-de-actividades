@@ -724,4 +724,10 @@ export default {
   'Tiene personas a su cargo, un departamento o actividades: corrige la plantilla y vuelve a cargarla.': 'They manage people, a department or have activities: fix the staff list and upload it again.',
   '{nombre} se quitó de la plantilla.': '{nombre} was removed from the staff list.',
   '{nombre} ya se registró': '{nombre} has already registered',
+  // Reporte en PDF
+  'Reporte de actividades': 'Activity report',
+  'Generado el {fecha} por {nombre}': 'Generated on {fecha} by {nombre}',
+  'Creando PDF…': 'Creating PDF…',
+  'Vista previa del PDF': 'PDF preview',
+  'Descargar PDF': 'Download PDF',
 }
