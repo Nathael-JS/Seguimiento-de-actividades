@@ -12,6 +12,30 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #24] 2026-11-04: Errores, salud, rendimiento y preparación del deploy
+
+### Agregado
+- **Manejo de errores del servidor:** un 500 se registra con un código de 8 caracteres y el usuario ve "Ocurrió un error en el servidor. Si se repite, comparte este código: …", sin detalles internos.
+- **`SiFalla`:** si una pantalla falla, muestra "Algo falló en esta pantalla" con Recargar en vez de quedar en blanco. El error del navegador llega al log de Render a través de `POST /api/errores`.
+- **`/api/salud`:** health check de Render (`healthCheckPath` en `render.yaml`) que también revisa la base.
+- **`CUENTAS_PRUEBA=no`:** apaga las cuentas de prueba en producción. No entran, sus sesiones dejan de servir y se oculta la revisión rápida. Endpoint nuevo `GET /api/config`.
+- **`PRUEBAS.md`:** lista de pruebas manuales por rol y lista para el deploy completo.
+- **`CHANGELOG.md`, bitácora de incidentes y plantilla de PR.**
+
+### Cambiado
+- **Carga diferida:** las páginas (salvo Inicio) se descargan al abrirlas. El JS inicial bajó de 409 a 262 kB.
+- **`npm run build`:** precomprime los archivos (Brotli y gzip). El JS principal viaja en unos 70 kB.
+- **Notificaciones:** cada persona conserva sus últimas 200.
+
+### Advertencias
+- **Antes de abrir a usuarios reales:** poner `CUENTAS_PRUEBA=no` en Render. Mientras no se haga, `10001` / `demo1234` (publicado en el repositorio) entra sin MFA.
+- **Plan de Render:** el plan gratis se duerme tras 15 min sin uso; la primera visita tarda hasta un minuto.
+
+### Archivos
+`server/app.js`, `server/index.js`, `server/app.test.js`, `src/main.jsx`, `src/App.jsx`, `src/Shell.jsx`, `src/Login.jsx`, `src/ui.jsx`, `src/comun.js`, `src/en.js`, `src/index.css`, `scripts/comprimir.js`, `package.json`, `render.yaml`, `PRUEBAS.md`, `CHANGELOG.md`, `DOCUMENTACION.md`, `README.md`, `.github/pull_request_template.md`
+
+---
+
 ## [PR #23] 2026-11-04: Paneles minimizables, pestañas sincronizadas y borrar historial
 
 ### Corregido

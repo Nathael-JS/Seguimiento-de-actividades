@@ -1146,3 +1146,38 @@ test('borrar historial de notificaciones: solo las propias, y los avisos automá
   assert.equal(await mias('10230'), deDiego) // las de otros quedan
   assert.equal((await conCookie(app, 'DELETE', '/api/notificaciones/10230', await sesionDe(app, '10482'))).statusCode, 403)
 })
+
+test('errores: un 500 no muestra detalles y trae su código; salud revisa la base; el navegador reporta', async () => {
+  const sana = build()
+  assert.deepEqual((await sana.inject({ method: 'GET', url: '/api/salud' })).json(), { ok: true })
+  const rota = build({ salud: () => { throw new Error('detalle interno de la base') } })
+  const r = await rota.inject({ method: 'GET', url: '/api/salud' })
+  assert.equal(r.statusCode, 500)
+  assert.match(r.json().codigo, /^[0-9a-f]{8}$/)
+  assert.ok(!r.body.includes('detalle interno'))
+  // Errores del navegador: sin sesión, con límite de tamaño
+  assert.equal((await sana.inject({ method: 'POST', url: '/api/errores', payload: { mensaje: 'x is undefined', ruta: '#tablero' } })).statusCode, 204)
+  assert.equal((await sana.inject({ method: 'POST', url: '/api/errores', payload: { mensaje: 'x'.repeat(600) } })).statusCode, 400)
+})
+
+test('notificaciones: cada quien conserva sus últimas 200', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, puntos: [{ texto: 'Muchas veces' }] }))).body
+  for (let i = 0; i < 220; i++) {
+    await pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por: '10482', estado: i % 2 ? 'pending' : 'progress' })
+  }
+  const deDiego = app.estado.notificaciones.filter((n) => n.for === '10230')
+  assert.equal(deDiego.length, 200)
+  assert.equal(deDiego.at(-1).kind, 'pending') // la más nueva se conserva
+})
+
+test('CUENTAS_PRUEBA=no: las cuentas de prueba no entran, sus sesiones dejan de servir y se oculta la revisión rápida', async () => {
+  const encendidas = build()
+  assert.deepEqual((await encendidas.inject({ method: 'GET', url: '/api/config' })).json(), { cuentasPrueba: true })
+  const cookie = cookieDe(await login({ usuario: '10001', password: 'demo1234' }, encendidas))
+  const app = build({ cuentasPrueba: false, estado: encendidas.estado })
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/config' })).json(), { cuentasPrueba: false })
+  assert.equal((await login({ usuario: '10001', password: 'demo1234' }, app)).statusCode, 403)
+  assert.equal((await app.inject({ method: 'GET', url: '/api/sesion', headers: { cookie } })).statusCode, 401) // la sesión abierta ya no sirve
+  assert.equal((await app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '10482', email: 'jorge.salinas@empresa.com' } })).statusCode, 403)
+})

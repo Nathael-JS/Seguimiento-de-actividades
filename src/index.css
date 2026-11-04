@@ -851,3 +851,5 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .panel-alternar .ico{transition:transform .2s var(--ease-salida)}
 .panel-alternar[aria-expanded="true"] .ico{transform:rotate(180deg)}
 @media (prefers-reduced-motion:reduce){.panel-alternar .ico{transition:none}}
+.falla{max-width:560px;margin:48px auto;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.falla h1{font:600 22px/28px var(--font-sans)}

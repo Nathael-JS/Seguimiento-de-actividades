@@ -1,6 +1,6 @@
 # Seguimiento-de-actividades
 
-> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md). Cambios de cada versión: [CHANGELOG.md](CHANGELOG.md).
+> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md). Cambios de cada versión: [CHANGELOG.md](CHANGELOG.md). Pruebas manuales y lista para el deploy: [PRUEBAS.md](PRUEBAS.md).
 apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
@@ -102,6 +102,8 @@ Las rutas de login, registro, recuperar contraseña, `/api/encargados` y `/api/d
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render
+
+**Cuentas de prueba:** con usuarios reales, en Render agregar `CUENTAS_PRUEBA` = `no` (las de `demo1234` dejan de entrar y se oculta la revisión rápida). Ver la lista completa en [PRUEBAS.md](PRUEBAS.md).
 
 **Super administradores:** en el servicio de Render, *Environment* → agregar `SUPERADMINS` con un JSON (no se sube al repositorio; en local, en un `.env` que git ignora):
 

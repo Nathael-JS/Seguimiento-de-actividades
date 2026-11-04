@@ -297,6 +297,9 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/registro` | Público | Crea una cuenta de técnico / Ing. Jr |
 | POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña (número, correo y código de la app; límite de intentos) |
 | GET | `/api/encargados`, `/api/deptos` | Público | Encargados (para el registro) y departamentos |
+| GET | `/api/config` | Público | `{ cuentasPrueba }`: si la pantalla de acceso muestra la revisión rápida |
+| GET | `/api/salud` | Público | `{ ok: true }` si el servidor y la base responden. Render la usa como health check |
+| POST | `/api/errores` | Público | Error del navegador (`mensaje`, `pila`, `ruta`) → log de Render. Hasta 10 por IP cada 15 min |
 | GET | `/api/departamentos` | Encargado | Plantilla de sus departamentos con rate |
 | POST | `/api/departamentos` | Gerente | Crear departamento |
 | POST | `/api/departamentos/:clave/plantilla` | Gerente | Cargar o actualizar la plantilla (todo o nada) |
@@ -450,6 +453,7 @@ Código en `server/db.js`.
 |---|---|---|
 | `DATABASE_URL` | Render y secreto de GitHub | Conexión a Neon (`?sslmode=verify-full`) |
 | `SUPERADMINS` | Render | JSON `[{ "name", "email", "password", "no"? }]` de los super administradores |
+| `CUENTAS_PRUEBA` | Render | `no` con usuarios reales: las cuentas de prueba (`demo1234`, sin MFA) no entran, sus sesiones dejan de servir y se oculta la revisión rápida |
 | `PORT` | Render (automática) | Puerto del servidor |
 | `BACKUP_PASSWORD` | Secreto de GitHub | Contraseña del cifrado de los respaldos |
 | `TEST_DATABASE_URL` | Local | Base para `db.test.js` (se borra) |
@@ -465,6 +469,13 @@ Código en `server/db.js`.
 
 **Scripts:** `dev` (Vite), `build`, `preview`, `start`, `restaurar`, `test`, `lint`.
 
+### Errores, salud y rendimiento
+- **Errores del servidor:** un error no previsto (500) se registra en el log con el número de la petición (8 caracteres) y el navegador recibe "Ocurrió un error en el servidor. Si se repite, comparte este código: …". Con ese código se busca la línea en Render → Logs. Los 4xx (validación) siguen como los da Fastify.
+- **Errores del navegador:** `SiFalla` (`ui.jsx`) envuelve la app y cada página. Si una pantalla falla al dibujarse, muestra "Algo falló en esta pantalla" con Recargar en vez de quedar en blanco, y manda el error a `/api/errores`. `main.jsx` también reporta los errores fuera de React (`error`, `unhandledrejection`). En Render aparecen como `error en el navegador`, con el empleado, la pantalla y el navegador.
+- **Salud:** `render.yaml` tiene `healthCheckPath: /api/salud`, así que Render no manda tráfico a una versión que no responde o no llega a la base.
+- **Carga diferida:** en `Shell.jsx` las páginas, salvo Inicio, se descargan al abrirlas (`React.lazy`). El JS inicial bajó de 409 a 262 kB (81 kB con gzip).
+- **Precomprimido:** `npm run build` corre `scripts/comprimir.js`, que guarda `.br` y `.gz` de cada archivo. `@fastify/static` (`preCompressed`) entrega la versión que acepta el navegador: el JS principal viaja en unos 70 kB. Los archivos con hash se guardan en caché un año.
+
 ## 16. Límites conocidos
 
 Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propósito, con su límite y cuándo cambiarlas):
@@ -473,6 +484,7 @@ Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propó
 - **Consultas `GET`:** no guardan. Lo que generan (avisos, copias recurrentes) se guarda con la siguiente escritura o se vuelve a generar.
 - **IP real:** se toma del segundo salto de `X-Forwarded-For`. Si Render cambia su proxy, hay que revisarlo.
 - **Registros:** se conservan los últimos 5000.
+- **Notificaciones:** cada persona conserva sus últimas 200.
 - **Checador simulado:** las entradas y salidas de `checador.json` son de prueba (lunes a viernes, oct–dic 2026). Hay que conectarlo al checador real.
 - **Cuentas de prueba sin MFA:** entran sin el código de la app para revisiones rápidas. Hay que quitarlas al pasar a usuarios reales.
 - **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.

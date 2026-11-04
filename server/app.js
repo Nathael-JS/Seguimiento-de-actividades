@@ -317,8 +317,18 @@ const zonaValida = (zona) => {
 // superadmins: [{ name, email, password, no? }] (de la variable de entorno SUPERADMINS; ver server/index.js)
 // estado: los datos cargados de PostgreSQL (server/db.js); sin él, los de prueba (JSON) en memoria.
 // guardar(estado): se llama después de cada petición a la API, antes de responder, para escribir lo que cambió
-export function build({ superadmins = [], estado: cargado, guardar, ...opts } = {}) {
-  const app = Fastify(opts)
+// salud(): revisa la base para /api/salud (Render no manda tráfico a una versión que no responde)
+// cuentasPrueba: false (CUENTAS_PRUEBA=no en Render) apaga las cuentas de prueba: no entran ni sus sesiones sirven
+export function build({ superadmins = [], estado: cargado, guardar, salud, cuentasPrueba = true, ...opts } = {}) {
+  // Número corto por petición: va en el log y en el mensaje de error, para encontrar el caso en Render
+  const app = Fastify({ genReqId: () => randomBytes(4).toString('hex'), ...opts })
+  // Errores no previstos (500): se registran con su número y el navegador recibe un mensaje sin detalles internos.
+  // Los 4xx (validación, ruta inexistente) siguen como los da Fastify
+  app.setErrorHandler((err, req, reply) => {
+    if (err.statusCode >= 400 && err.statusCode < 500) return reply.send(err)
+    req.log.error({ err }, 'error no controlado')
+    return reply.code(500).send({ error: 'Ocurrió un error en el servidor. Si se repite, comparte este código: {codigo}', codigo: req.id })
+  })
   // Con base de datos se guarda lo que cambió antes de responder. Las consultas (GET) no se guardan: lo poco que
   // generan (avisos automáticos) se vuelve a generar o se guarda con la siguiente escritura
   if (guardar) {
@@ -456,7 +466,13 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   const urgenteAbierta = (a) => a.prioridad === 'urgente' && !a.cerrada && a.status !== 'done'
   const delTurno = (acts, desde) =>
     desde ? acts.filter((a) => a.status !== 'done' || Date.parse(a.doneAt ?? a.at) >= Date.parse(desde)) : acts
-  const notificar = (n) => notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
+  // Cada quien conserva sus últimas 200: el Buzón no muestra más y así la lista no crece para siempre
+  const MAX_NOTIFICACIONES = 200
+  const notificar = (n) => {
+    notificaciones.push({ id: siguienteId(notificaciones), at: ahora(), read: false, ...n })
+    const suyas = notificaciones.filter((x) => x.for === n.for)
+    if (suyas.length > MAX_NOTIFICACIONES) notificaciones.splice(notificaciones.indexOf(suyas[0]), 1)
+  }
   // A quién se avisa de una actividad: quien la asignó, o el encargado del empleado si la registró él mismo
   const responsable = (a) => (a.propia ? empleado(a.to).boss : a.by)
   // Validación de fin de turno: una urgente que llegó a su cierre queda fija en su estado (sin cambios ni herencia);
@@ -493,9 +509,11 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   const tokenDe = (req) => req.headers.cookie?.match(/(?:^|;\s*)sesion=([^;]+)/)?.[1]
   const cookie = (req, valor, extra = '') =>
     `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
+  const apagada = (u) => u.prueba && !cuentasPrueba
   const PUBLICAS = new Set([
+    '/api/config',
     '/api/login', '/api/login/verificar', '/api/logout',
-    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados', '/api/deptos',
+    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados', '/api/deptos', '/api/salud', '/api/errores',
   ])
   const abrirSesion = (req, reply, u) => {
     limpiarVencidos(sesiones)
@@ -507,7 +525,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   app.addHook('preHandler', async (req, reply) => {
     if (!req.url.startsWith('/api/') || PUBLICAS.has(req.routeOptions.url)) return
     const s = sesiones.get(tokenDe(req))
-    if (!s || s.vence < Date.now() || !empleado(s.no)) {
+    if (!s || s.vence < Date.now() || !empleado(s.no) || apagada(empleado(s.no))) {
       return reply.code(401).send({ error: 'Tu sesión terminó. Vuelve a iniciar sesión.', sesion: false })
     }
     // Se renueva a lo más cada 5 min: así una consulta no reescribe la sesión en la base cada vez
@@ -545,7 +563,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       fallar(clave)
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
-    if (u.activo === false) {
+    if (u.activo === false || apagada(u)) {
       registrar(req, 'login-bloqueado', { no: u.no, ok: false })
       return reply.code(403).send({ error: 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.' })
     }
@@ -555,8 +573,8 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     if (tipo && (tipo === 'gerencia') !== gerencia) {
       return reply.code(403).send({ error: gerencia ? 'Esta cuenta es de Gerencia: entra por ese acceso.' : 'Esta cuenta es de Jr / Técnico: entra por ese acceso.' })
     }
-    // shortcut: las cuentas de prueba (datos de los mockups) entran sin el código de la app para revisiones rápidas;
-    // quitar "prueba" de usuarios.json cuando haya usuarios reales
+    // Las cuentas de prueba (datos de los mockups) entran sin el código de la app para revisiones rápidas;
+    // con usuarios reales se apagan con CUENTAS_PRUEBA=no (ver apagada)
     if (u.prueba) {
       registrar(req, 'login', { no: u.no, detalle: 'cuenta de prueba, sin código de la app' })
       fallosLogin.delete(clave)
@@ -646,6 +664,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       fallar(clave)
       return reply.code(400).send({ error: 'Número de empleado y correo no coinciden con un registro.' })
     }
+    if (apagada(u)) return reply.code(403).send({ error: 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.' })
     if (!u.prueba) {
       if (!u.totp) return reply.code(403).send({ error: 'Tu cuenta aún no tiene la app autenticadora: pide a un super administrador que restablezca tu contraseña.' })
       const paso = req.body.codigo && pasoDelCodigo(u.totp, req.body.codigo, u.totpPaso)
@@ -690,6 +709,26 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   })
 
   // Registro (sin sesión): a quién se puede elegir como encargado
+  // Lo que la pantalla de acceso necesita saber antes de entrar: si muestra el botón de revisión rápida
+  app.get('/api/config', async () => ({ cuentasPrueba }))
+
+  app.get('/api/salud', async () => {
+    await salud?.()
+    return { ok: true }
+  })
+
+  // Errores del navegador (pantalla rota, promesa sin atender): quedan en el log de Render con quién y dónde.
+  // Público (puede fallar antes de entrar); hasta 10 por IP cada 15 min para que nadie llene el log
+  const errorSchema = { body: objeto(['mensaje'], { mensaje: texto(500), pila: { type: 'string', maxLength: 4000 }, ruta: { type: 'string', maxLength: 200 } }) }
+  app.post('/api/errores', { schema: errorSchema }, async (req, reply) => {
+    const clave = claveFallos(req, 'errores-navegador')
+    if (!bloqueado(clave)) {
+      fallar(clave)
+      req.log.warn({ navegador: req.body, no: sesiones.get(tokenDe(req))?.no, agente: req.headers['user-agent'] }, 'error en el navegador')
+    }
+    return reply.code(204).send()
+  })
+
   app.get('/api/encargados', async () =>
     usuarios.filter(esEncargado).sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role }) => ({ no, name, role, depts: deptosDe(no) })))
@@ -1426,6 +1465,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   if (existsSync(dist)) {
     app.register(fastifyStatic, {
       root: dist,
+      preCompressed: true, // .br / .gz de scripts/comprimir.js (npm run build)
       // Los archivos de /assets llevan un hash en el nombre: nunca cambian, el navegador puede guardarlos para siempre
       setHeaders: (reply, ruta) => {
         if (ruta.includes('/assets/')) reply.header('cache-control', 'public, max-age=31536000, immutable')

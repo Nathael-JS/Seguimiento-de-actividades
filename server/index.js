@@ -18,7 +18,10 @@ const db = pool && guardador(pool, instancia)
 
 // trustProxy: Render atiende HTTPS y pasa la petición por un proxy; así req.protocol es 'https' (cookie Secure)
 // y req.ip es la IP real del equipo (para el registro de accesos)
-const app = build({ logger: true, trustProxy: true, superadmins, estado, guardar: db?.guardar })
+const app = build({ logger: true, trustProxy: true, superadmins, estado, guardar: db?.guardar, salud: pool && (() => pool.query('select 1')),
+  // CUENTAS_PRUEBA=no con usuarios reales: las cuentas de prueba (demo1234, sin MFA) dejan de entrar
+  cuentasPrueba: process.env.CUENTAS_PRUEBA !== 'no',
+})
 if (db) {
   if (estado) db.yaGuardado(estado)
   await db.guardar(app.estado) // primer arranque: escribe los datos de prueba; después, solo lo que cambió al arrancar

@@ -730,4 +730,9 @@ export default {
   'Mostrar {panel}': 'Show {panel}',
   'Minimizar': 'Minimize',
   'Mostrar': 'Show',
+  // Errores
+  'Algo falló en esta pantalla': 'Something went wrong on this screen',
+  'Ya se avisó al sistema. Recarga la página; si se repite, avísale a tu administrador.': 'The system has been notified. Reload the page; if it happens again, tell your administrator.',
+  'Recargar': 'Reload',
+  'Ocurrió un error en el servidor. Si se repite, comparte este código: {codigo}': 'A server error occurred. If it happens again, share this code: {codigo}',
 }
