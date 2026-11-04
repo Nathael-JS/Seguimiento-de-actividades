@@ -5,7 +5,7 @@ import Ajustes from './Ajustes.jsx'
 import Buzon from './Buzon.jsx'
 import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
-import { BotonIdioma, BotonTema } from './ui.jsx'
+import { BotonIdioma, BotonTema, Logo } from './ui.jsx'
 import { t } from './i18n.js'
 import Herencias from './Herencias.jsx'
 import Inicio from './Inicio.jsx'
@@ -97,7 +97,7 @@ export default function Shell({ user, onLogout }) {
     <div className={`shell${menuAbierto ? ' nav-open' : ''}${plegado ? ' plegado' : ''}`}>
       <aside className="side" aria-label={t('Menú')}>
         <div className="side-cabeza">
-          <div className="brandname"><i /><span className="etq">{t('Seguimiento de Actividades')}</span></div>
+          <div className="brandname"><Logo /><span className="etq">{t('Seguimiento de Actividades')}</span></div>
           <button type="button" className="plegar" onClick={plegar} aria-expanded={!plegado} aria-label={t(plegado ? 'Desplegar menú' : 'Plegar menú')}
             title={t(plegado ? 'Desplegar menú' : 'Plegar menú')}>
             <Icono nombre="panel" />

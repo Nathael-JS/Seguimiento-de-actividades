@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { readSheet } from 'read-excel-file/browser'
 import { api, depto, registrarDeptos, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { filasDePlantilla } from './plantilla.js'
@@ -96,6 +95,7 @@ function Plantilla({ user, deptos, alCargar, avisar }) {
     setArchivo(file.name)
     let hoja
     try {
+      const { readSheet } = await import('read-excel-file/browser') // solo al subir un Excel
       hoja = await readSheet(file)
     } catch {
       return setError(t('No se pudo leer el archivo. ¿Es un Excel (.xlsx)?'))

@@ -50,7 +50,7 @@ export default function MisActividades({ user, recargar, avisar }) {
     <>
       <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
-          <h1>{t('Tareas asignadas')}</h1>
+          <h1>{t('Actividades asignadas')}</h1>
           <p>{t('Marca el estado y comenta tus actividades.')}</p>
         </div>
         <div className="row" style={{ flexWrap: 'wrap' }}>

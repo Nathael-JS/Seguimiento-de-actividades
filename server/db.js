@@ -2,8 +2,10 @@ import pg from 'pg'
 
 // PostgreSQL (Neon en producción). La app trabaja con los datos en memoria y aquí se guardan: al arrancar se
 // cargan todos y, después de cada petición, se escribe solo lo que cambió (en una transacción) antes de responder.
-// shortcut: una sola instancia del servidor; con varias, cada una tendría su copia en memoria. Al escalar, pasar
-// las consultas a SQL por petición
+// Una sola instancia trabaja a la vez: al arrancar, cada servidor toma la base (fila "instancia" de ids) en la
+// misma transacción en que la carga. Una instancia anterior (un redeploy de Render las tiene juntas unos segundos)
+// ve que ya no es la dueña, deja de guardar y responde 503 para que el navegador recargue contra la nueva.
+// shortcut: varias instancias a la vez no se reparten el trabajo; para escalar, pasar las consultas a SQL por petición
 
 // Fechas AAAA-MM-DD y marcas de tiempo tal como las usa la app (texto e ISO), no objetos Date
 pg.types.setTypeParser(1082, (v) => v)
@@ -104,25 +106,84 @@ export async function conectar(url) {
   return pool
 }
 
-// Carga todo; la primera vez (sin usuarios) devuelve null para que la app arranque con los datos de prueba
+// En una transacción: toma la base para esta instancia y carga todo. datos es null la primera vez (sin usuarios):
+// la app arranca con los datos de prueba
 export async function cargar(pool) {
+  const instancia = Math.floor(Math.random() * 2 ** 31)
   const datos = {}
-  for (const t of Object.keys(TABLAS)) {
-    datos[t] = (await pool.query(`select * from ${t} order by ${TABLAS[t].pk.join(', ')}`)).rows.map((f) => deFila(t, f))
-  }
-  if (!datos.usuarios.length) return null
+  await enTransaccion(pool, async (cliente) => {
+    await tomar(cliente, instancia)
+    for (const t of Object.keys(TABLAS)) {
+      datos[t] = (await cliente.query(`select * from ${t} order by ${TABLAS[t].pk.join(', ')}`)).rows.map((f) => deFila(t, f))
+    }
+  })
+  if (!datos.usuarios.length) return { datos: null, instancia }
   const estado = { ...datos, sesiones: new Map(datos.sesiones.map(({ token, ...s }) => [token, s])) }
-  estado.ultimosIds = new Map(datos.ids.map(({ lista, ultimo }) => [estado[lista], ultimo]))
+  estado.ultimosIds = new Map(datos.ids.filter((f) => f.lista !== 'instancia').map(({ lista, ultimo }) => [estado[lista], ultimo]))
   delete estado.ids
-  return estado
+  return { datos: estado, instancia }
 }
 
-// Guarda lo que cambió desde el último guardado. Las escrituras van en fila (una a la vez) para no cruzarse
-export function guardador(pool, log = console) {
+async function enTransaccion(pool, trabajo) {
+  const cliente = await pool.connect()
+  try {
+    await cliente.query('begin')
+    await trabajo(cliente)
+    await cliente.query('commit')
+  } catch (e) {
+    await cliente.query('rollback').catch(() => {})
+    throw e
+  } finally {
+    cliente.release()
+  }
+}
+
+// La fila queda bloqueada hasta el commit: si una instancia anterior está guardando, esta carga espera a que termine
+const tomar = (cliente, instancia) =>
+  cliente.query("insert into ids (lista, ultimo) values ('instancia', $1) on conflict (lista) do update set ultimo = excluded.ultimo", [instancia])
+
+export class InstanciaReemplazada extends Error {}
+
+// Inserta (o actualiza) filas de una tabla, de 200 en 200 por consulta: la primera carga son miles
+async function insertar(cliente, t, objs) {
+  const { pk, cols } = TABLAS[t]
+  const nombres = [...cols.map(([c]) => c), 'extra']
+  const actualizar = nombres.filter((c) => !pk.includes(c)).map((c) => `${c} = excluded.${c}`).join(', ')
+  for (let i = 0; i < objs.length; i += 200) {
+    const lote = objs.slice(i, i + 200)
+    const marcas = lote.map((_, j) => `(${nombres.map((__, k) => `$${j * nombres.length + k + 1}`).join(', ')})`).join(', ')
+    await cliente.query(`insert into ${t} (${nombres.join(', ')}) values ${marcas} on conflict (${pk.join(', ')}) do update set ${actualizar}`, lote.flatMap((o) => aFila(t, o)))
+  }
+}
+
+// Respaldo para descargar: todas las tablas menos las sesiones (no sirven en otra base y dan acceso)
+export function respaldo(estado) {
+  const { sesiones: _, ...tablas } = filasDe(estado)
+  return { version: 1, creado: new Date().toISOString(), tablas }
+}
+
+// Reemplaza todo el contenido con un respaldo y toma la base: el servidor en marcha deja de guardar y hay que
+// reiniciarlo para que cargue lo restaurado
+export async function restaurar(pool, { tablas } = {}) {
+  if (!tablas?.usuarios?.length) throw new Error('El respaldo no trae usuarios.')
+  await enTransaccion(pool, async (cliente) => {
+    await tomar(cliente, 0)
+    for (const t of Object.keys(TABLAS)) {
+      await cliente.query(`delete from ${t}${t === 'ids' ? " where lista <> 'instancia'" : ''}`)
+      if (tablas[t] && t !== 'sesiones') await insertar(cliente, t, tablas[t])
+    }
+  })
+}
+
+// Guarda lo que cambió desde el último guardado. Las escrituras van en fila (una a la vez) para no cruzarse.
+// Si falla la base se registra y se reintenta en la siguiente; si otra instancia tomó la base, lanza InstanciaReemplazada
+export function guardador(pool, instancia, log = console) {
   const guardado = {} // tabla → llave → JSON de la fila ya escrita
   let cola = Promise.resolve()
+  let reemplazada = false
 
   async function escribir(estado) {
+    if (reemplazada) throw new InstanciaReemplazada()
     const actual = filasDe(estado)
     const cambios = []
     for (const [t, filas] of Object.entries(actual)) {
@@ -136,17 +197,14 @@ export function guardador(pool, log = console) {
     const cliente = await pool.connect()
     try {
       await cliente.query('begin')
+      const duena = (await cliente.query("select ultimo from ids where lista = 'instancia' for update")).rows[0]?.ultimo
+      if (duena !== instancia) {
+        reemplazada = true
+        throw new InstanciaReemplazada()
+      }
       for (const { t, nuevas, borradas } of cambios) {
-        const { pk, cols } = TABLAS[t]
-        const nombres = [...cols.map(([c]) => c), 'extra']
-        // De 200 en 200 filas por consulta: la primera carga son miles
-        for (let i = 0; i < nuevas.length; i += 200) {
-          const lote = nuevas.slice(i, i + 200)
-          const valores = lote.flatMap(([, o]) => aFila(t, o))
-          const marcas = lote.map((_, j) => `(${nombres.map((__, k) => `$${j * nombres.length + k + 1}`).join(', ')})`).join(', ')
-          const actualizar = nombres.filter((c) => !pk.includes(c)).map((c) => `${c} = excluded.${c}`).join(', ')
-          await cliente.query(`insert into ${t} (${nombres.join(', ')}) values ${marcas} on conflict (${pk.join(', ')}) do update set ${actualizar}`, valores)
-        }
+        const { pk } = TABLAS[t]
+        await insertar(cliente, t, nuevas.map(([, o]) => o))
         for (const k of borradas) {
           const partes = k.split('|')
           await cliente.query(`delete from ${t} where ${pk.map((c, i) => `${c} = $${i + 1}`).join(' and ')}`, partes)
@@ -157,6 +215,10 @@ export function guardador(pool, log = console) {
       for (const { t, ahora } of cambios) guardado[t] = new Map([...ahora].map(([k, o]) => [k, JSON.stringify(o)]))
     } catch (e) {
       await cliente.query('rollback').catch(() => {})
+      if (e instanceof InstanciaReemplazada) {
+        log.error('otra instancia tomó la base de datos: esta deja de guardar')
+        throw e
+      }
       log.error({ err: e }, 'no se pudo guardar en PostgreSQL; se reintenta en la siguiente petición')
     } finally {
       cliente.release()
@@ -169,8 +231,9 @@ export function guardador(pool, log = console) {
       for (const [t, filas] of Object.entries(filasDe(estado))) guardado[t] = new Map(filas.map((o) => [llave(t, o), JSON.stringify(o)]))
     },
     guardar(estado) {
-      cola = cola.then(() => escribir(estado))
-      return cola
+      const vuelta = cola.then(() => escribir(estado))
+      cola = vuelta.catch(() => {}) // un rechazo no detiene a los que esperan en la fila
+      return vuelta
     },
   }
 }

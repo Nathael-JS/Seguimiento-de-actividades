@@ -26,6 +26,8 @@
   --focus: #0a58ca;
   --shadow-card: 0 1px 2px rgba(22,32,42,0.06), 0 4px 12px rgba(22,32,42,0.06);
   --shadow-pop: 0 12px 32px rgba(22,32,42,0.18);
+  --shadow-raise: 0 2px 4px rgba(22,32,42,0.08), 0 8px 20px rgba(22,32,42,0.10);
+  --shadow-btn: 0 1px 2px rgba(8,88,90,0.30), 0 3px 8px rgba(8,88,90,0.18);
 }
 /* data-theme lo pone index.html (preferencia guardada o la del sistema). Solo en pantalla:
    al imprimir (Exportar PDF) siempre se usan los colores claros */
@@ -56,6 +58,8 @@
   --focus: #8ab8ff;
   --shadow-card: 0 1px 2px rgba(0,0,0,0.4);
   --shadow-pop: 0 12px 32px rgba(0,0,0,0.6);
+  --shadow-raise: 0 2px 4px rgba(0,0,0,0.45), 0 8px 20px rgba(0,0,0,0.35);
+  --shadow-btn: 0 1px 2px rgba(0,0,0,0.5), 0 3px 10px rgba(60,194,184,0.18);
 } }
 :root {
   --space-1: 4px;
@@ -76,10 +80,11 @@
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:40px;padding:0 var(--space-4);border-radius:var(--radius-md);border:1px solid transparent;font:500 14px/18px var(--font-sans);cursor:pointer;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:40px;padding:0 var(--space-4);border-radius:var(--radius-md);border:1px solid transparent;font:500 14px/18px var(--font-sans);cursor:pointer;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s,color .15s,transform .15s var(--ease-salida),box-shadow .15s}
 .btn:focus-visible,.field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.btn-primary{background:var(--brand);color:var(--on-brand)}
-.btn-primary:hover{background:var(--brand-strong)}
+.btn-primary{background:var(--brand);color:var(--on-brand);box-shadow:var(--shadow-btn)}
+.btn-primary:hover{background:var(--brand-strong);transform:translateY(-1px)}
+.btn-primary:active,.btn-secondary:active{transform:translateY(0);box-shadow:none}
 .btn-ghost{background:transparent;color:var(--brand)}
 .btn-ghost:hover{background:var(--brand-soft);color:var(--brand-strong)}
 .btn-danger{background:var(--status-incomplete);color:var(--surface-100)}
@@ -114,7 +119,7 @@ button{font-family:inherit}
 .auth-art{background:var(--ink-deep);color:var(--on-ink-deep);padding:40px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
 .auth-copy{position:relative}
 .brandname{font:600 18px/24px var(--font-sans);display:flex;align-items:center;gap:10px}
-.brandname i{width:28px;height:28px;border-radius:var(--radius-md);background:var(--brand);display:inline-block}
+.brandname .logo{width:30px;height:30px;flex:none;border-radius:var(--radius-md);box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .auth-art h2{font:600 40px/44px var(--font-sans);max-width:340px}
 .auth-art p{opacity:.8;max-width:340px;margin-top:12px}
 .auth-main{display:flex;flex-direction:column;padding:24px 32px}
@@ -137,7 +142,7 @@ button{font-family:inherit}
 .shell{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
 .side{background:var(--ink-deep);color:var(--on-ink-deep);padding:20px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
 .side .brandname{font-size:16px;line-height:22px;padding:4px 10px;min-width:0}
-.side .brandname i{width:26px;height:26px}
+.side .brandname .logo{width:28px;height:28px}
 .nav{display:flex;flex-direction:column;gap:4px}
 .nav a,.nav button{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-md);color:var(--on-ink-deep);text-decoration:none;font:500 14px/20px var(--font-sans);opacity:.85;background:none;border:0;cursor:pointer;text-align:left}
 .nav a:hover,.nav button:hover{background:rgba(255,255,255,.08);opacity:1}
@@ -191,7 +196,7 @@ dialog.modal::backdrop{background:rgba(10,20,28,.55)}
 @media (max-width:560px){.kpis{grid-template-columns:1fr}}
 
 .btn-secondary{background:var(--surface-100);color:var(--ink);border-color:var(--line-strong)}
-.btn-secondary:hover{background:var(--surface-200)}
+.btn-secondary:hover{background:var(--surface-200);border-color:var(--brand);color:var(--brand-strong)}
 .btn-sm{min-height:32px;padding:0 var(--space-3);font-size:13px}
 .field textarea{padding:var(--space-2) var(--space-3);min-height:72px;resize:vertical}
 fieldset.field{border:0;padding:0;margin:0}
@@ -796,3 +801,17 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 /* El tablero necesita todo el ancho: seis columnas no caben en el ancho máximo de las demás páginas */
 .page:has(.tablero){max-width:none}
 .tarjeta-pie .meta{white-space:nowrap}
+
+/* Carriles del tablero con un tinte de su criticidad: se distinguen de un vistazo */
+.columna.col-normal{background:color-mix(in srgb,var(--brand) 7%,var(--surface-200))}
+.columna.col-alta{background:color-mix(in srgb,var(--status-pending) 9%,var(--surface-200))}
+.columna.col-critica{background:color-mix(in srgb,var(--status-incomplete) 8%,var(--surface-200))}
+.columna.col-urgente{background:color-mix(in srgb,var(--status-incomplete) 13%,var(--surface-200))}
+.tarjeta{transition:box-shadow .15s,border-color .15s,transform .15s var(--ease-salida)}
+.tarjeta:hover{box-shadow:var(--shadow-raise);transform:translateY(-1px)}
+/* Solicitud de cambio del técnico / Ing. Jr: la tarjeta se marca hasta que su encargado decida */
+.tarjeta.con-solicitud{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow-card)}
+.solicitud{display:flex;flex-direction:column;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--status-pending-soft);color:var(--status-pending);font-size:13px;line-height:18px}
+.solicitud>span:first-child{display:flex;align-items:center;gap:6px}
+.solicitud b{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.btn,.tarjeta{transition:none}.btn-primary:hover,.tarjeta:hover{transform:none}}

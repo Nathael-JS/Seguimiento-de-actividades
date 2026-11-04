@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
 import { RANGOS, TURNOS, api, horaActual, rol, turnoDe } from './comun.js'
 import Dial from './Dial.jsx'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
 import Registro from './Registro.jsx'
-import { BotonIdioma, BotonTema, Campo } from './ui.jsx'
+import { BotonIdioma, BotonTema, Campo, Logo } from './ui.jsx'
 import { t } from './i18n.js'
 
 // Portada (slides → elegir acceso) y luego el login de ese acceso: 'login' → 'codigo' (2 pasos), o 'registro' /
@@ -28,7 +27,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
   return (
     <div className="auth">
       <aside className="auth-art">
-        <div className="brandname"><i />{t('Seguimiento de Actividades')}</div>
+        <div className="brandname"><Logo />{t('Seguimiento de Actividades')}</div>
         <Dial hora={ahora} activo={turnoDe(ahora)} className="dial-lateral" />
         <div className="auth-copy">
           <h2>{t(acceso === 'gerencia' ? 'Acceso Gerencia' : 'Acceso Jr / Técnico')}</h2>
@@ -85,7 +84,7 @@ function Portada({ aviso, saltar, onElegir }) {
   return (
     <div className={`portada${final ? ' final' : ''}`}>
       <header className="portada-top">
-        <div className="brandname"><i />{t('Seguimiento de Actividades')}</div>
+        <div className="brandname"><Logo />{t('Seguimiento de Actividades')}</div>
         <span className="spacer" />
         <BotonIdioma /><BotonTema />
       </header>
@@ -255,7 +254,8 @@ function Alta({ secreto, uri }) {
   const [copiada, setCopiada] = useState(false)
   // Siempre oscuro sobre blanco, también en tema oscuro: así lo leen todas las cámaras
   useEffect(() => {
-    QRCode.toString(uri, { type: 'svg', margin: 1, color: { dark: '#16202a', light: '#ffffff' } }).then(setQr)
+    // El generador de QR se descarga solo al vincular la app (casi nadie lo necesita al entrar)
+    import('qrcode').then(({ default: QRCode }) => QRCode.toString(uri, { type: 'svg', margin: 1, color: { dark: '#16202a', light: '#ffffff' } })).then(setQr)
   }, [uri])
 
   async function copiar() {

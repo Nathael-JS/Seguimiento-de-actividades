@@ -1,7 +1,22 @@
 import { useState } from 'react'
-import { CRITICIDADES, api, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
+import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
+
+// Logo: el reloj de turnos de la portada (A, B y C) con una palomita al centro. Es el mismo dibujo que public/favicon.svg
+export function Logo() {
+  return (
+    <svg className="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <rect width="32" height="32" rx="8" fill="#14303f" />
+      <g fill="none" strokeWidth="3.2" strokeLinecap="round">
+        <path d="M25.38 17.49A9.5 9.5 0 0 1 12.6 24.87" stroke="#3cc2b8" />
+        <path d="M10.02 23.38A9.5 9.5 0 0 1 10.02 8.62" stroke="#f5b25c" />
+        <path d="M12.6 7.13A9.5 9.5 0 0 1 25.38 14.51" stroke="#a9c3d6" />
+        <path d="M12 16.3l2.9 2.9 5.4-5.9" stroke="#fff" strokeWidth="2.6" strokeLinejoin="round" />
+      </g>
+    </svg>
+  )
+}
 
 export function Notificacion({ n }) {
   const quien = <b>{n.who}</b>
@@ -19,6 +34,11 @@ export function Notificacion({ n }) {
     return n.who ? <>{quien} {t('tiene atrasada')} “{n.actividad}”</> : <>{t('Tu actividad')} “{n.actividad}” {t('está atrasada')}</>
   }
   if (n.kind === 'urgente') return <>{quien} {t('marcó como urgente')} “{n.actividad}”</>
+  if (n.kind.startsWith('solicitud')) {
+    const datos = { actividad: n.actividad, columna: columnaTablero(n.columna) }
+    const texto = { solicitud: 'pide mover “{actividad}” a {columna}: valídalo en el Tablero', 'solicitud-ok': 'aprobó mover “{actividad}” a {columna}', 'solicitud-no': 'no aprobó mover “{actividad}” a {columna}' }[n.kind]
+    return <>{quien} {t(texto, datos)}</>
+  }
   if (n.kind === 'herencia-pendiente') return <>{quien} {t('propone heredar')} “{n.actividad}” {t('a alguien de tu equipo: valídala')}</>
   if (n.kind === 'herencia-aceptada') return <>{quien} {t('aceptó tu herencia de')} “{n.actividad}”</>
   if (n.kind === 'herencia-rechazada') return <>{quien} {t('rechazó tu herencia de')} “{n.actividad}”</>
@@ -131,6 +151,7 @@ export function BotonIdioma() {
 function destinoDe(n, user) {
   if (n.kind === 'password') return 'perfil'
   if (n.kind.startsWith('herencia-')) return 'herencias'
+  if (n.kind.startsWith('solicitud')) return 'tablero'
   return (n.activityTo ?? user.no) === user.no ? 'mis-actividades' : 'monitoreo'
 }
 

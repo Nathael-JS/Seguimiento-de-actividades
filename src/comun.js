@@ -18,6 +18,8 @@ export const clavesDeptos = () => [...Object.keys(DEPARTAMENTOS), ...Object.keys
 export const ACCESOS = { gerencia: ['gte', 'sr', 'full'], operativo: ['jr', 'tec'] }
 export const estado = (k) => t(ESTADOS[k])
 export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
+// Columnas del tablero: la criticidad, Urgente o Por clasificar (las recién creadas)
+export const columnaTablero = (c) => (c === 'urgente' ? t('Urgente') : c === 'nueva' ? t('Por clasificar') : criticidad(c))
 export const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critica: 3 }
 
 // `solo` limita el módulo a encargados (Ing. Full, Senior, Gerente); `excepto` lo oculta a un puesto
@@ -25,8 +27,8 @@ export const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critic
 // cuando hay muchos, como en Gerencia)
 export const MODULOS = [
   { ruta: 'inicio', titulo: 'Inicio', icono: 'home', grupo: 'Día a día' },
-  { ruta: 'mis-actividades', titulo: 'Mis actividades', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte', grupo: 'Día a día' },
-  { ruta: 'tablero', titulo: 'Tablero', icono: 'board', desc: 'Actividades por criticidad, semana a semana.', solo: 'encargado', grupo: 'Día a día' },
+  { ruta: 'tablero', titulo: 'Tablero', icono: 'board', desc: 'Actividades por criticidad, semana a semana.', grupo: 'Día a día' },
+  { ruta: 'mis-actividades', titulo: 'Actividades asignadas', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte', grupo: 'Día a día' },
   { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.', grupo: 'Día a día' },
   { ruta: 'monitoreo', titulo: 'Monitoreo', icono: 'chart', desc: 'Avance de tu equipo en tiempo real.', solo: 'encargado', grupo: 'Seguimiento' },
@@ -35,7 +37,7 @@ export const MODULOS = [
   { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado', grupo: 'Seguimiento' },
   { ruta: 'usuarios', titulo: 'Usuarios', icono: 'users', desc: 'Cuentas, puestos, turnos y acceso al sistema.', solo: 'sa', grupo: 'Organización' },
   { ruta: 'registros', titulo: 'Registros', icono: 'log', desc: 'Quién entra, cuándo y desde dónde.', solo: 'sa', grupo: 'Organización' },
-  { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.', grupo: 'Organización' },
+  { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.', solo: 'encargado', grupo: 'Organización' },
   { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte', grupo: 'Organización' },
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.', grupo: 'Organización' },
 ]
@@ -145,7 +147,11 @@ const celdaCsv = (v) => {
 export function descargarCsv(columnas, filas, nombre) {
   const csv = [columnas.map((c) => t(c)), ...filas].map((fila) => fila.map(celdaCsv).join(',')).join('\r\n')
   // El BOM hace que Excel lea los acentos como UTF-8
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  descargar(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), nombre)
+}
+
+export function descargar(blob, nombre) {
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = nombre

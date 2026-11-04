@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "start": "node server/index.js",
+    "restaurar": "node server/restaurar.js",
     "test": "node --test server/*.test.js src/*.test.js"
   },
   "dependencies": {

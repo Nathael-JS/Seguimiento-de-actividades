@@ -1,15 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from './app.js'
-import { cargar, conectar, guardador } from './db.js'
+import { cargar, conectar, guardador, respaldo, restaurar } from './db.js'
 
 // Contra un PostgreSQL de pruebas (BORRA sus tablas): TEST_DATABASE_URL=postgresql://… npm test
 const url = process.env.TEST_DATABASE_URL
 
 // Arranca como server/index.js: carga lo guardado (o los datos de prueba) y guarda después de cada petición
 async function arrancar(pool) {
-  const estado = await cargar(pool)
-  const db = guardador(pool, { error: (e) => { throw e.err } })
+  const { datos: estado, instancia } = await cargar(pool)
+  const db = guardador(pool, instancia, { error: (e) => { if (e?.err) throw e.err } })
   const app = build({ estado, guardar: db.guardar, superadmins: [{ name: 'Admin Prueba', email: 'admin@empresa.com', password: 'Admin#Prueba2026' }] })
   if (estado) db.yaGuardado(estado)
   await db.guardar(app.estado)
@@ -22,7 +22,7 @@ test('PostgreSQL: primera carga con los datos de prueba; lo que cambia sobrevive
     await pool.query('drop table if exists departamentos, usuarios, actividades, notificaciones, herencias, sesiones, registros, checador, ids')
     const limpio = await conectar(url)
     await limpio.end()
-    assert.equal(await cargar(pool), null) // vacía
+    assert.equal((await cargar(pool)).datos, null) // vacía
 
     const { app } = await arrancar(pool)
     const cuenta = async (t) => Number((await pool.query(`select count(*) from ${t}`)).rows[0].count)
@@ -51,6 +51,25 @@ test('PostgreSQL: primera carga con los datos de prueba; lo que cambia sobrevive
     assert.equal(c.id, b.id + 1)
     // El super administrador no se duplica al reiniciar
     assert.equal(await cuenta('usuarios'), 16)
+
+    // La instancia anterior (app) ya no es la dueña: no guarda y responde 503 para que el navegador recargue
+    const viejo = await app.inject({ method: 'POST', url: '/api/actividades', headers: { cookie }, payload: { por: '10230', para: '10482', fecha: '2026-11-04', turno: 'A', puntos: [{ texto: 'Perdida' }] } })
+    assert.equal(viejo.statusCode, 503)
+    assert.equal(Number((await pool.query("select count(*) from actividades where texto = 'Perdida'")).rows[0].count), 0)
+
+    // Respaldo y restauración: lo de después del respaldo desaparece; las sesiones no se respaldan
+    const copia = JSON.parse(JSON.stringify(respaldo(otra.estado)))
+    assert.ok(!('sesiones' in copia.tablas))
+    await pedir2('POST', '/api/actividades', { por: '10230', para: '10482', fecha: '2026-11-04', turno: 'A', puntos: [{ texto: 'Después del respaldo' }] })
+    await restaurar(pool, copia)
+    assert.equal((await otra.inject({ method: 'POST', url: '/api/logout', headers: { cookie } })).statusCode, 503) // tomó la base
+    const { app: tercera } = await arrancar(pool)
+    const textos = tercera.estado.actividades.map((x) => x.text)
+    assert.ok(textos.includes('Otra') && !textos.includes('Después del respaldo'))
+    assert.equal(tercera.estado.sesiones.size, 0)
+    const [d] = (await tercera.inject({ method: 'POST', url: '/api/login', payload: { usuario: '10230', password: 'demo1234' } }).then(async (l) =>
+      tercera.inject({ method: 'POST', url: '/api/actividades', headers: { cookie: l.headers['set-cookie'].split(';')[0] }, payload: { por: '10230', para: '10482', fecha: '2026-11-04', turno: 'A', puntos: [{ texto: 'Tras restaurar' }] } }))).json()
+    assert.equal(d.id, c.id + 1) // el contador de números también se restauró
   } finally {
     await pool.end()
   }
