@@ -1,0 +1,40 @@
+# Respaldo diario de la base (Neon) con pg_dump, cifrado con BACKUP_PASSWORD: el repositorio es público y
+# cualquiera con cuenta de GitHub puede descargar los artefactos. Se guarda 30 días en Actions → Respaldo.
+# Secretos (Settings → Secrets and variables → Actions): DATABASE_URL y BACKUP_PASSWORD.
+# Restaurar: ver "Copias de seguridad" en el README.
+name: Respaldo
+on:
+  schedule:
+    - cron: '17 9 * * *' # diario, 9:17 UTC (3:17 en Ciudad de México)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: pg_dump cifrado
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSWORD" ]; then
+            echo "::error::Faltan los secretos DATABASE_URL y/o BACKUP_PASSWORD"; exit 1
+          fi
+          # pg_dump de una versión igual o más nueva que la de Neon. sslmode=verify-full (como en Render) necesita
+          # certificados raíz: se usan los del sistema del runner
+          docker run --rm -e DATABASE_URL -e PGSSLROOTCERT=system -v /etc/ssl/certs:/etc/ssl/certs:ro postgres:18 \
+            sh -c 'pg_dump --no-owner --no-privileges "$DATABASE_URL"' \
+            | gzip -9 | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSWORD -out respaldo.sql.gz.enc
+          echo "Tamaño cifrado: $(stat -c %s respaldo.sql.gz.enc) bytes"
+          test "$(stat -c %s respaldo.sql.gz.enc)" -gt 1000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ github.run_number }}
+          path: respaldo.sql.gz.enc
+          retention-days: 30
+          if-no-files-found: error

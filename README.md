@@ -3,11 +3,13 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
 
-- `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Tablero (crear y clasificar actividades), Herencias, Mis actividades, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
+- `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Tablero (crear y clasificar actividades), Herencias, Actividades asignadas, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
 - `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, guardada con hash), actividades, notificaciones y el checador simulado.
 
-**Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, guarda solo lo que cambió (en una transacción) antes de responder. La primera vez, con la base vacía, se llena con los datos de prueba de `server/*.json`. Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar. Una sola instancia del servidor: con varias, cada una tendría su propia copia (ver `server/db.js`).
+**Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, después de cada petición que cambia algo (no las consultas `GET`) guarda solo lo que cambió, en una transacción, antes de responder. La primera vez, con la base vacía, se llena con los datos de prueba de `server/*.json`. Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar.
+
+**Una sola instancia:** al arrancar, cada servidor toma la base en la misma transacción en que la carga. Durante un redeploy de Render la instancia anterior sigue viva unos segundos: si recibe un cambio, ve que ya no es la dueña, no lo guarda y responde 503 ("El sistema se actualizó. Recarga la página"), así nada se pisa. Varias instancias a la vez no se reparten el trabajo (ver `server/db.js`).
 
 **Sesión:** al terminar los 2 pasos el servidor guarda la sesión en una cookie `HttpOnly` y `SameSite=Strict` (en Render, también `Secure`). Al recargar la página se sigue dentro; se cierra con "Cerrar sesión", al cerrar el navegador o tras 12 h sin uso. El servidor toma de la sesión quién pide: nadie puede ver ni cambiar datos como otro empleado. Cambiar la contraseña cierra las demás sesiones de esa persona (recuperarla, todas). Con base de datos las sesiones sobreviven a un reinicio o redeploy; sin ella hay que volver a entrar.
 
@@ -31,7 +33,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Herencias** (Ing. Full o superior): se propone heredar una actividad pendiente o incompleta del equipo, con motivo, a cualquier departamento. El servidor verifica dos condiciones sí/no: mismo nivel de puesto (técnico ↔ Ing. Jr, Ing. Full ↔ Senior) y turno siguiente (o el mismo empleado al día siguiente). La valida el encargado directo de quien la recibe: acepta, rechaza o redirige a alguien de su equipo, con comentario. Si quien propone ya es ese encargado, entra directo. Límites por día: 2 por turno y 2 a otro departamento para quien propone; 2 redirecciones para quien valida.
 
-**Tablero** (encargados; reemplaza a "Registrar actividad"): las actividades se crean en el panel **Por clasificar** (una por renglón, para alguien del equipo, con fecha, turno y comentario) y se arrastran a Simple, Normal, Alta, Crítica o Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). El cambio de columna se anima (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla.
+**Tablero** (reemplaza a "Registrar actividad"). Encargados: las actividades se crean en el panel **Por clasificar** (una por renglón, para alguien del equipo, con fecha, turno y comentario) y se arrastran a Simple, Normal, Alta, Crítica o Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). El cambio de columna se anima (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla. Técnico / Ing. Jr: ve solo sus actividades y agrega en Por clasificar (para hoy, en su turno); al arrastrar una tarjeta (o "Pedir mover a") no se mueve: queda marcada con la solicitud y su encargado la **aprueba** o **rechaza** en su tarjeta (aviso en el Buzón de ambos; si el encargado la mueve a mano, también queda resuelta). Su menú es Inicio, Tablero, Actividades asignadas, Buzón y Perfil (Departamentos es solo de encargados).
 
 **Sin porcentaje de avance:** el avance lo da el estado (Realizada = hecha); los anillos muestran el % de realizadas. **Monitoreo** abre en lista (actividad, prioridad, estado, asignada a, fecha, creada, creada por) con el % de realizadas desplegable por persona; las tarjetas quedan como segunda vista. **Mis actividades** también abre en lista, con el estado editable en la fila.
 
@@ -75,11 +77,12 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
 | `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
 | `POST` | `/api/actividades` | Crear actividades por puntos (criticidad, `nueva` = por clasificar, o urgentes con el cierre del turno) y notificar al empleado |
-| `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una tarea suya, diaria o urgente (con su fin de turno); se avisa a su encargado |
+| `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una o varias tareas suyas (`textos`, hasta 20), diarias o urgentes (con su fin de turno); su encargado recibe un solo aviso |
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `GET` | `/api/actividades/:id/receptores` | Quiénes pueden recibir esa actividad (cualquier departamento) y quién la validaría |
-| `PATCH` | `/api/actividades/:id/tablero` | Tablero: mover a otra columna (criticidad o urgente, con `cierre`) o fijar |
+| `PATCH` | `/api/actividades/:id/tablero` | Tablero: mover a otra columna (criticidad o urgente, con `cierre`) o fijar. Si lo pide el técnico / Ing. Jr asignado, crea la solicitud (202) |
+| `POST` | `/api/actividades/:id/solicitud` | El encargado aprueba (`aprobar: true`, se mueve) o rechaza la solicitud de cambio |
 | `DELETE` | `/api/actividades/:id` | Tablero: eliminar una actividad del equipo |
 | `POST` | `/api/actividades/:id/heredar` | Proponer la herencia con motivo; entra directo si es crítica o si quien propone es el encargado de quien la recibe |
 | `GET` | `/api/herencias/:no?hoy=` | Por validar, enviadas y lo usado hoy de cada límite |
@@ -112,6 +115,18 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 2. En **Connect** copia la *connection string* (`postgresql://…?sslmode=require`).
 3. En Render: servicio → **Environment** → agregar `DATABASE_URL` con esa cadena y guardar (Render vuelve a desplegar).
 4. El primer arranque crea las tablas y carga los datos de prueba (en el log: `PostgreSQL vacío: se cargaron los datos de prueba`); los siguientes, `datos cargados de PostgreSQL`.
+
+**Copias de seguridad:**
+
+- **Diario automático** (`.github/workflows/respaldo.yml`): `pg_dump` cifrado con contraseña (el repositorio es público), guardado 30 días en *Actions → Respaldo → Artifacts*. En GitHub: *Settings → Secrets and variables → Actions* → agregar `DATABASE_URL` (la misma de Render) y `BACKUP_PASSWORD` (una contraseña larga que guardes aparte). Se puede correr a mano con *Run workflow*. Restaurar:
+  ```bash
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | psql "$DATABASE_URL"
+  ```
+  (en una base vacía; Neon permite crear una rama nueva para restaurar sin tocar la principal). Después, apuntar `DATABASE_URL` a esa base y reiniciar el servicio.
+- **Manual** (super administrador → Usuarios → **Descargar respaldo**, pide su contraseña y queda en Registros): un JSON con toda la base menos las sesiones. Trae contraseñas cifradas y secretos del MFA: guárdalo en un lugar seguro. Restaurar (reemplaza todo y el servidor en marcha deja de guardar; luego reiniciar en Render):
+  ```bash
+  DATABASE_URL=postgresql://… npm run restaurar -- respaldo_2026-11-04.json
+  ```
 
 ## Scripts
 

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { TURNOS, api, cierreTurno, criticidad, dia, hoy, iniciales, rol } from './comun.js'
+import { TURNOS, api, cierreTurno, columnaTablero as nombreColumna, dia, hoy, iniciales, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { Estado } from './ui.jsx'
 import { t } from './i18n.js'
 
-// Tablero del encargado: aquí se crean las actividades de su equipo (panel Por clasificar) y se mueven a su
-// criticidad (o a Urgente), semana a semana. Se arrastran o se usa el menú de cada tarjeta (teclado y táctil)
+// Tablero por criticidad, semana a semana. Se arrastran las tarjetas o se usa el menú de cada una (teclado y táctil).
+// - Encargado: crea las actividades de su equipo en Por clasificar, las mueve, fija y elimina, y valida las
+//   solicitudes de cambio de su equipo.
+// - Técnico / Ing. Jr: ve solo las suyas y agrega en Por clasificar; al moverlas pide el cambio a su encargado
 const COLUMNAS = ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente']
 const columnaDe = (a) => (a.prioridad === 'urgente' ? 'urgente' : a.criticidad ?? 'normal')
-const nombreColumna = (c) => (c === 'urgente' ? t('Urgente') : c === 'nueva' ? t('Por clasificar') : criticidad(c))
 
 // Semanas de lunes a domingo, como AAAA-MM-DD locales
 const local = (d) => d.toLocaleDateString('en-CA')
@@ -46,14 +47,16 @@ export default function Tablero({ user, recargar, avisar }) {
   const [semana, setSemana] = useState(() => (semanas.includes(lunesDe(hoy())) ? lunesDe(hoy()) : semanas[0]))
   const [nuevaSemana, setNuevaSemana] = useState('')
   const [encima, setEncima] = useState(null) // columna sobre la que se arrastra
+  const encargado = user.encargado
 
   // animar: las tarjetas recién creadas entran con la misma transición que al moverse
-  const cargar = useCallback((animar) => api(`/api/equipo/${user.no}`).then((e) => {
-    setEquipo(e)
-    const lista = e.flatMap((p) => p.actividades.map((a) => ({ ...a, persona: p })))
+  const cargar = useCallback((animar) => (encargado
+    ? api(`/api/equipo/${user.no}`).then((e) => { setEquipo(e); return e.flatMap((p) => p.actividades.map((a) => ({ ...a, persona: p }))) })
+    : api(`/api/actividades/${user.no}`).then((l) => l.map((a) => ({ ...a, persona: user })))
+  ).then((lista) => {
     if (animar) conTransicion(() => setActs(lista))
     else setActs(lista)
-  }).catch((e) => setError(e.message)), [user.no])
+  }).catch((e) => setError(e.message)), [user, encargado])
   useEffect(() => { cargar(false) }, [cargar])
 
   function cambiarSemanas(lista, elegir) {
@@ -90,8 +93,21 @@ export default function Tablero({ user, recargar, avisar }) {
     if (columnaDe(a) === columna) return
     const urgente = columna === 'urgente'
     const cierre = urgente ? cierreTurno(a.date, a.shift).toISOString() : undefined
+    const cuerpo = { columna, ...(urgente && { cierre }) }
+    // Técnico / Ing. Jr: la tarjeta se queda y muestra la solicitud hasta que su encargado decida
+    if (!encargado) return aplicar(a, { solicitud: { columna } }, cuerpo, t('Solicitud enviada a tu encargado: mover a {columna}.', { columna: nombreColumna(columna) }))
     const cambios = urgente ? { prioridad: 'urgente', criticidad: undefined } : { prioridad: undefined, criticidad: columna }
-    aplicar(a, cambios, { columna, ...(urgente && { cierre }) }, t('Movida a {columna}.', { columna: nombreColumna(columna) }))
+    aplicar(a, { ...cambios, solicitud: undefined }, cuerpo, t('Movida a {columna}.', { columna: nombreColumna(columna) }))
+  }
+  async function responder(a, aprobar) {
+    try {
+      const r = await api(`/api/actividades/${a.id}/solicitud`, { method: 'POST', body: { por: user.no, aprobar } })
+      conTransicion(() => setActs((l) => l.map((x) => (x.id === a.id ? { ...r, persona: a.persona } : x))))
+      avisar(t(aprobar ? 'Aprobada: se movió a {columna}.' : 'Solicitud rechazada; se avisó a {nombre}.', { columna: nombreColumna(a.solicitud.columna), nombre: a.persona.name.split(' ')[0] }))
+      recargar()
+    } catch (e) {
+      avisar(e.message)
+    }
   }
   const fijar = (a) => aplicar(a, { fijada: !a.fijada }, { fijada: !a.fijada })
   async function eliminar(a) {
@@ -112,13 +128,25 @@ export default function Tablero({ user, recargar, avisar }) {
   const deLaSemana = acts.filter((a) => a.date >= semana && a.date <= domingo)
   // Fijadas arriba; luego las abiertas y al final las realizadas, por fecha
   const orden = (x, y) => (y.fijada === true) - (x.fijada === true) || (x.status === 'done') - (y.status === 'done') || x.date.localeCompare(y.date) || x.id - y.id
+  const porValidar = acts.filter((a) => a.solicitud)
 
   return (
     <>
       <div className="page-head">
         <h1>{t('Tablero')}</h1>
-        <p>{t('Crea las actividades de tu equipo en Por clasificar y arrástralas a su criticidad. Urgente se cierra al terminar su turno.')}</p>
+        <p>{encargado
+          ? t('Crea las actividades de tu equipo en Por clasificar y arrástralas a su criticidad. Urgente se cierra al terminar su turno.')
+          : t('Tus actividades por criticidad. Agrega en Por clasificar; al moverlas, tu encargado valida el cambio.')}</p>
       </div>
+
+      {porValidar.length > 0 && (
+        <p className={`notice${encargado ? ' warn' : ''}`} role="status" style={{ marginBottom: 16 }}>
+          <Icono nombre="swap" />
+          {encargado
+            ? t(porValidar.length === 1 ? '{n} solicitud de cambio por validar: apruébala o recházala en su tarjeta.' : '{n} solicitudes de cambio por validar: apruébalas o recházalas en su tarjeta.', { n: porValidar.length })
+            : t(porValidar.length === 1 ? '{n} solicitud esperando a tu encargado.' : '{n} solicitudes esperando a tu encargado.', { n: porValidar.length })}
+        </p>
+      )}
 
       <div className="semanas" role="tablist" aria-label={t('Semanas')}>
         {semanas.map((l) => (
@@ -155,11 +183,17 @@ export default function Tablero({ user, recargar, avisar }) {
                 <h2 id={`col-${c}`}>{nombreColumna(c)} <span className="mono">{tarjetas.length}</span></h2>
                 {c === 'nueva' && (
                   <NuevasActividades equipo={equipo} semana={semana} user={user}
-                    alCrear={(n) => { cargar(true); recargar(); avisar(t(n === 1 ? 'Actividad creada. Se notificó a quien la recibe.' : '{n} actividades creadas. Se notificó a quien las recibe.', { n })) }} />
+                    alCrear={(n) => {
+                      cargar(true)
+                      recargar()
+                      avisar(encargado
+                        ? t(n === 1 ? 'Actividad creada. Se notificó a quien la recibe.' : '{n} actividades creadas. Se notificó a quien las recibe.', { n })
+                        : t(n === 1 ? 'Actividad agregada. Se avisó a tu encargado.' : '{n} actividades agregadas. Se avisó a tu encargado.', { n }))
+                    }} />
                 )}
               </header>
               <ul>
-                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} columna={c} mover={mover} fijar={fijar} eliminar={eliminar} />)}
+                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} columna={c} encargado={encargado} mover={mover} fijar={fijar} eliminar={eliminar} responder={responder} />)}
               </ul>
               {!tarjetas.length && <p className="vacia">{t(c === 'nueva' ? 'Crea actividades con +; luego arrástralas a su criticidad.' : 'Arrastra una tarjeta aquí.')}</p>}
             </section>
@@ -170,12 +204,12 @@ export default function Tablero({ user, recargar, avisar }) {
   )
 }
 
-function Tarjeta({ a, columna, mover, fijar, eliminar }) {
+function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder }) {
   const [confirmar, setConfirmar] = useState(false)
   const [arrastrando, setArrastrando] = useState(false)
   const cerrada = a.cerrada
   return (
-    <li className={`tarjeta${a.status === 'done' ? ' hecha' : ''}${arrastrando ? ' arrastrando' : ''}`} style={{ viewTransitionName: `tarjeta-${a.id}` }}
+    <li className={`tarjeta${a.status === 'done' ? ' hecha' : ''}${arrastrando ? ' arrastrando' : ''}${a.solicitud ? ' con-solicitud' : ''}`} style={{ viewTransitionName: `tarjeta-${a.id}` }}
       draggable={!cerrada} onDragEnd={() => setArrastrando(false)}
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(a.id)); e.dataTransfer.effectAllowed = 'move'; setArrastrando(true) }}>
       <div className="tarjeta-cabeza">
@@ -184,19 +218,19 @@ function Tarjeta({ a, columna, mover, fijar, eliminar }) {
           <summary aria-label={t('Opciones de “{actividad}”', { actividad: a.text })}><Icono nombre="dots" /></summary>
           <div className="menu-cuerpo">
             {!cerrada && <>
-              <span className="meta">{t('Mover a')}</span>
+              <span className="meta">{t(encargado ? 'Mover a' : 'Pedir mover a')}</span>
               <div className="mover-a">
                 {COLUMNAS.filter((c) => c !== columna).map((c) => (
                   <button key={c} type="button" className="chip-col" onClick={() => mover(a, c)}>{nombreColumna(c)}</button>
                 ))}
               </div>
             </>}
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {encargado && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => fijar(a)}>{t(a.fijada ? 'Desfijar' : 'Fijar arriba')}</button>
               {confirmar
                 ? <button type="button" className="btn btn-danger btn-sm" onClick={() => eliminar(a)}>{t('Sí, eliminar')}</button>
                 : <button type="button" className="btn btn-ghost btn-sm peligro" onClick={() => setConfirmar(true)}>{t('Eliminar')}</button>}
-            </div>
+            </div>}
           </div>
         </details>
       </div>
@@ -209,13 +243,26 @@ function Tarjeta({ a, columna, mover, fijar, eliminar }) {
         {cerrada && <span className="tag suave">{t('Cerrada con el turno')}</span>}
         {a.inh && <span className="tag">{t('Heredada')}</span>}
       </div>
+      {a.solicitud && (
+        <div className="solicitud">
+          <span><Icono nombre="swap" /> {t(encargado ? 'Pide mover a' : 'Pediste mover a')} <b>{nombreColumna(a.solicitud.columna)}</b></span>
+          {encargado && (
+            <span className="row" style={{ gap: 6 }}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => responder(a, true)}>{t('Aprobar')}</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => responder(a, false)}>{t('Rechazar')}</button>
+            </span>
+          )}
+        </div>
+      )}
     </li>
   )
 }
 
-// Panel Por clasificar: crea una o varias actividades (una por renglón) para alguien del equipo; nacen sin
-// criticidad y después se arrastran a la que les toca. Reemplaza al antiguo "Registrar actividad"
+// Panel Por clasificar: crea una o varias actividades (una por renglón); nacen sin criticidad y después se
+// arrastran a la que les toca. El encargado elige para quién, fecha y turno; el técnico / Ing. Jr las agrega
+// como tareas propias (hoy, su turno) y su encargado las clasifica
 function NuevasActividades({ equipo, semana, user, alCrear }) {
+  const encargado = user.encargado
   const [abierta, setAbierta] = useState(false)
   const [para, setPara] = useState('')
   const [texto, setTexto] = useState('')
@@ -239,14 +286,19 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
   }
   async function crear(e) {
     e.preventDefault()
-    if (!para || !puntos.length) return setError(t('Elige a quién y escribe al menos una actividad.'))
+    if ((encargado && !para) || !puntos.length) return setError(t(encargado ? 'Elige a quién y escribe al menos una actividad.' : 'Escribe al menos una actividad.'))
     if (puntos.length > 20) return setError(t('Máximo 20 actividades a la vez.'))
+    if (!encargado && puntos.some((p) => p.length > 200)) return setError(t('Cada actividad, máximo 200 caracteres.'))
     setEnviando(true)
     try {
-      await api('/api/actividades', {
-        method: 'POST',
-        body: { por: user.no, para, fecha, turno, comentario: comentario.trim(), prioridad: 'diaria', criticidad: 'nueva', puntos: puntos.map((p) => ({ texto: p })) },
-      })
+      if (encargado) {
+        await api('/api/actividades', {
+          method: 'POST',
+          body: { por: user.no, para, fecha, turno, comentario: comentario.trim(), prioridad: 'diaria', criticidad: 'nueva', puntos: puntos.map((p) => ({ texto: p })) },
+        })
+      } else {
+        await api('/api/actividades/propia', { method: 'POST', body: { por: user.no, textos: puntos, prioridad: 'diaria', criticidad: 'nueva', hoy: hoy() } })
+      }
       setAbierta(false)
       setTexto('')
       setComentario('')
@@ -261,19 +313,22 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
   if (!abierta) return <button type="button" className="iconbtn mas-col" aria-label={t('Crear actividades')} title={t('Crear actividades')} onClick={abrir}>+</button>
   return (
     <form className="nueva-col" onSubmit={crear} noValidate>
-      <select aria-label={t('Empleado')} value={para} onChange={(e) => elegir(e.target.value)} autoFocus>
-        <option value="">{t('Selecciona un empleado')}</option>
-        {equipo.map((p) => <option key={p.no} value={p.no}>{p.name} — {rol(p.role)}</option>)}
-      </select>
+      {encargado && (
+        <select aria-label={t('Empleado')} value={para} onChange={(e) => elegir(e.target.value)} autoFocus>
+          <option value="">{t('Selecciona un empleado')}</option>
+          {equipo.map((p) => <option key={p.no} value={p.no}>{p.name} — {rol(p.role)}</option>)}
+        </select>
+      )}
       <textarea aria-label={t('Actividades, una por renglón')} placeholder={t('Una actividad por renglón')} rows={4} maxLength={4000}
-        value={texto} onChange={(e) => setTexto(e.target.value)} />
-      <div className="dos">
+        value={texto} onChange={(e) => setTexto(e.target.value)} autoFocus={!encargado} />
+      {!encargado && <p className="meta">{t('Para hoy, en tu turno. Tu encargado las clasifica.')}</p>}
+      {encargado && <><div className="dos">
         <input type="date" aria-label={t('Fecha')} value={fecha} onChange={(e) => setFecha(e.target.value)} />
         <select aria-label={t('Turno')} value={turno} onChange={(e) => setTurno(e.target.value)} disabled={!para} title={TURNOS[turno]}>
           {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{t('Turno')} {k}</option>)}
         </select>
       </div>
-      <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+      <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} /></>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row end" style={{ gap: 6 }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierta(false)}>{t('Cancelar')}</button>

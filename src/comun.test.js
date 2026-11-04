@@ -4,9 +4,9 @@ import { modulosDe } from './comun.js'
 
 const rutas = (role, encargado) => modulosDe({ role, encargado }).map((m) => m.ruta)
 
-test('Mis actividades para todos menos el Gerente; Registrar, Monitoreo, Reportes, Herencias, Matriz y Jerarquía solo encargados', () => {
-  assert.deepEqual(rutas('tec', false), ['inicio', 'mis-actividades', 'buzon', 'departamentos', 'perfil'])
-  assert.deepEqual(rutas('full', true), ['inicio', 'mis-actividades', 'tablero', 'herencias', 'buzon', 'monitoreo', 'reportes', 'matriz', 'jerarquia', 'departamentos', 'perfil'])
+test('Tablero para todos; Actividades asignadas para todos menos el Gerente; Departamentos, Registrar, Monitoreo, Reportes, Herencias, Matriz y Jerarquía solo encargados', () => {
+  assert.deepEqual(rutas('tec', false), ['inicio', 'tablero', 'mis-actividades', 'buzon', 'perfil'])
+  assert.deepEqual(rutas('full', true), ['inicio', 'tablero', 'mis-actividades', 'herencias', 'buzon', 'monitoreo', 'reportes', 'matriz', 'jerarquia', 'departamentos', 'perfil'])
   assert.ok(rutas('sr', true).includes('mis-actividades'))
   assert.ok(!rutas('gte', true).includes('mis-actividades'))
   assert.ok(rutas('gte', true).includes('ajustes') && !rutas('sr', true).includes('ajustes')) // Ajustes: solo el gerente

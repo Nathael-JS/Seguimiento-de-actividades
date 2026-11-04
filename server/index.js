@@ -13,8 +13,8 @@ try {
 // PostgreSQL (Neon): DATABASE_URL en Render. La primera vez la base está vacía y se llena con los datos de
 // prueba; después cada arranque carga lo guardado. Sin DATABASE_URL todo vive en memoria (desarrollo, pruebas)
 const pool = process.env.DATABASE_URL && await conectar(process.env.DATABASE_URL)
-const estado = pool ? await cargar(pool) : null
-const db = pool && guardador(pool)
+const { datos: estado = null, instancia } = pool ? await cargar(pool) : {}
+const db = pool && guardador(pool, instancia)
 
 // trustProxy: Render atiende HTTPS y pasa la petición por un proxy; así req.protocol es 'https' (cookie Secure)
 // y req.ip es la IP real del equipo (para el registro de accesos)

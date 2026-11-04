@@ -3,6 +3,7 @@ import fastifyStatic from '@fastify/static'
 import { existsSync, readFileSync } from 'node:fs'
 import { createHmac, randomBytes, randomInt, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
+import { respaldo } from './db.js'
 
 const leer = (archivo) => JSON.parse(readFileSync(new URL(archivo, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
@@ -157,9 +158,10 @@ const actualizarSchema = {
 
 // Tarea que registra el propio técnico / Ing. Jr. cierre: fin de su turno (instante UTC calculado en su navegador)
 const propiaSchema = {
-  body: objeto(['por', 'texto', 'prioridad', 'hoy'], {
+  body: objeto(['por', 'textos', 'prioridad', 'hoy'], {
     por: noEmpleado,
-    texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+    // Una o varias (Tablero: una por renglón); el encargado recibe un solo aviso
+    textos: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' } },
     prioridad: { enum: ['diaria', 'urgente'] },
     criticidad,
     hoy: { type: 'string', format: 'date' },
@@ -274,7 +276,21 @@ const zonaValida = (zona) => {
 // guardar(estado): se llama después de cada petición a la API, antes de responder, para escribir lo que cambió
 export function build({ superadmins = [], estado: cargado, guardar, ...opts } = {}) {
   const app = Fastify(opts)
-  if (guardar) app.addHook('onSend', async (req) => { if (req.url.startsWith('/api/')) await guardar(app.estado) })
+  // Con base de datos se guarda lo que cambió antes de responder. Las consultas (GET) no se guardan: lo poco que
+  // generan (avisos automáticos) se vuelve a generar o se guarda con la siguiente escritura
+  if (guardar) {
+    app.addHook('onSend', async (req, reply, payload) => {
+      if (req.method === 'GET' || !req.url.startsWith('/api/')) return payload
+      try {
+        await guardar(app.estado)
+        return payload
+      } catch {
+        // Otra instancia más nueva tomó la base (un redeploy): esta ya no guarda y el navegador debe recargar
+        reply.code(503).header('content-type', 'application/json; charset=utf-8')
+        return JSON.stringify({ error: 'El sistema se actualizó. Recarga la página e intenta de nuevo.' })
+      }
+    })
+  }
 
   const usuarios = cargado?.usuarios ?? leer('./usuarios.json')
   // Super administradores: se agregan o actualizan por correo y conservan su MFA; los que ya no están en la
@@ -431,7 +447,8 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     if (!s || s.vence < Date.now() || !empleado(s.no)) {
       return reply.code(401).send({ error: 'Tu sesión terminó. Vuelve a iniciar sesión.', sesion: false })
     }
-    s.vence = Date.now() + DURACION_SESION
+    // Se renueva a lo más cada 5 min: así una consulta no reescribe la sesión en la base cada vez
+    if (s.vence - Date.now() < DURACION_SESION - 5 * 60_000) s.vence = Date.now() + DURACION_SESION
     req.sesion = s
     // El número que manda el navegador (en la dirección o en "por") tiene que ser el de la sesión
     const quien = req.params?.no ?? req.body?.por
@@ -595,7 +612,8 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   app.get('/api/deptos', async () => departamentos.map(({ clave, nombre, gerente }) => ({ clave, nombre, gerente })))
 
   // La plantilla de los departamentos de quien consulta (el suyo y los que dirige): ningún departamento ve a otro
-  app.get('/api/departamentos', { schema: conRate }, async (req) => {
+  app.get('/api/departamentos', { schema: conRate }, async (req, reply) => {
+    if (!esEncargado(empleado(req.sesion.no))) return reply.code(403).send({ error: 'Solo los encargados ven la plantilla.' })
     const rate = conRateDe(req.query)
     const depts = deptosDe(req.sesion.no)
     return usuarios
@@ -710,6 +728,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
             activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
             urgente: a?.prioridad === 'urgente',
             count: n.count,
+            columna: n.columna, // solicitudes de cambio en el tablero
             at: n.at,
             read: n.read,
           }
@@ -772,7 +791,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
 
   // El técnico / Ing. Jr agrega una tarea suya: se toman sus datos tal cual (él mismo, su turno, la fecha de hoy)
   app.post('/api/actividades/propia', { schema: propiaSchema }, async (req, reply) => {
-    const { por, texto, prioridad, hoy, cierre, criticidad = 'normal' } = req.body
+    const { por, textos, prioridad, hoy, cierre, criticidad = 'normal' } = req.body
     const u = empleado(por)
     if (!u || esEncargado(u)) return reply.code(403).send({ error: 'Solo técnicos e Ing. Jr agregan tareas propias.' })
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
@@ -782,14 +801,17 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       return reply.code(400).send({ error: 'No se pudo calcular el fin de tu turno.' })
     }
     const at = ahora()
-    const a = {
-      id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
-      pct: 0, status: 'pending', mgr: '', note: '',
-      propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }),
-    }
-    actividades.push(a)
-    if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: a.id })
-    return reply.code(201).send(a)
+    const nuevas = textos.map((texto) => {
+      const a = {
+        id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
+        pct: 0, status: 'pending', mgr: '', note: '',
+        propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }),
+      }
+      actividades.push(a)
+      return a
+    })
+    if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: nuevas[0].id, count: nuevas.length })
+    return reply.code(201).send(nuevas)
   })
 
   app.get('/api/actividades/:no', { schema: porEmpleado }, conEmpleado((u) =>
@@ -831,30 +853,56 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     params: heredarSchema.params,
     body: objeto(['por'], { por: noEmpleado, columna: { enum: ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente'] }, fijada: { type: 'boolean' }, cierre: { type: 'string', format: 'date-time' } }),
   }
+  // Cambia la columna (la criticidad, o Urgente). Devuelve [código, error] si no se puede
+  function aColumna(a, columna, cierre, por) {
+    if (a.cerrada) return [409, 'Esta tarea urgente se cerró al terminar el turno.']
+    if (columna === 'urgente') {
+      // Igual que al asignar una urgente: se cierra al terminar su turno, dentro de las próximas 24 h
+      const espera = Date.parse(cierre) - Date.now()
+      if (a.status === 'done') return [409, 'Una actividad realizada no se marca como urgente.']
+      if (!(espera > 0 && espera <= DIA)) return [400, 'Una urgente es para el turno en curso o el siguiente: revisa la fecha y el turno.']
+      if (a.prioridad !== 'urgente' && a.to !== por) notificar({ for: a.to, kind: 'urgente', who: por, ref: a.id })
+      Object.assign(a, { prioridad: 'urgente', cierreTurno: cierre })
+      delete a.criticidad
+    } else {
+      delete a.prioridad
+      delete a.cierreTurno
+      a.criticidad = columna
+    }
+    delete a.solicitud // el encargado ya decidió dónde va
+  }
   app.patch('/api/actividades/:id/tablero', { schema: tableroSchema }, async (req, reply) => {
     const a = vigentes().find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
     const { por, columna, fijada, cierre } = req.body
+    // El técnico / Ing. Jr no mueve sus tarjetas: pide el cambio y lo valida su encargado
+    if (a.to === por && !delEquipo(por, a)) {
+      if (!columna || fijada !== undefined) return reply.code(403).send({ error: 'Solo tu encargado fija o elimina actividades.' })
+      if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
+      a.solicitud = { columna, ...(columna === 'urgente' && { cierre }), at: ahora() }
+      notificar({ for: responsable(a), kind: 'solicitud', who: por, ref: a.id, columna })
+      return reply.code(202).send(a)
+    }
     if (!delEquipo(por, a)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
     if (columna) {
-      if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
-      if (columna === 'urgente') {
-        // Igual que al asignar una urgente: se cierra al terminar su turno, dentro de las próximas 24 h
-        const espera = Date.parse(cierre) - Date.now()
-        if (a.status === 'done') return reply.code(409).send({ error: 'Una actividad realizada no se marca como urgente.' })
-        if (!(espera > 0 && espera <= DIA)) {
-          return reply.code(400).send({ error: 'Una urgente es para el turno en curso o el siguiente: revisa la fecha y el turno.' })
-        }
-        if (a.prioridad !== 'urgente') notificar({ for: a.to, kind: 'urgente', who: por, ref: a.id })
-        Object.assign(a, { prioridad: 'urgente', cierreTurno: cierre })
-        delete a.criticidad
-      } else {
-        delete a.prioridad
-        delete a.cierreTurno
-        a.criticidad = columna
-      }
+      const fallo = aColumna(a, columna, cierre, por)
+      if (fallo) return reply.code(fallo[0]).send({ error: fallo[1] })
     }
     if (fijada !== undefined) a.fijada = fijada
+    return a
+  })
+  // El encargado aprueba (se mueve a donde se pidió) o rechaza la solicitud; se avisa a quien la pidió
+  app.post('/api/actividades/:id/solicitud', { schema: { params: heredarSchema.params, body: objeto(['por', 'aprobar'], { por: noEmpleado, aprobar: { type: 'boolean' } }) } }, async (req, reply) => {
+    const a = vigentes().find((x) => x.id === req.params.id)
+    const { por, aprobar } = req.body
+    if (!a?.solicitud) return reply.code(404).send({ error: 'Esa solicitud ya no está pendiente.' })
+    if (!delEquipo(por, a)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    const { columna, cierre } = a.solicitud
+    if (aprobar) {
+      const fallo = aColumna(a, columna, cierre, por)
+      if (fallo) return reply.code(fallo[0]).send({ error: fallo[1] })
+    } else delete a.solicitud
+    notificar({ for: a.to, kind: aprobar ? 'solicitud-ok' : 'solicitud-no', who: por, ref: a.id, columna })
     return a
   })
   app.delete('/api/actividades/:id', { schema: { params: heredarSchema.params, body: objeto(['por'], { por: noEmpleado }) } }, async (req, reply) => {
@@ -1181,6 +1229,14 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     cerrarSesionesDe(u.no)
     registrar(req, 'admin-mfa', { no: u.no, por: req.sesion.no })
     return vistaUsuario(u)
+  })
+
+  // Respaldo descargable de toda la base (sin sesiones). Trae contraseñas cifradas y secretos del MFA: pide confirmar
+  // y queda registrado. Se restaura con npm run restaurar -- archivo.json
+  app.post('/api/admin/respaldo', async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    registrar(req, 'admin-respaldo', { por: req.sesion.no })
+    return respaldo(app.estado)
   })
 
   // Registros: solo lectura, del más nuevo al más viejo. q busca en número, nombre, usuario escrito, IP y detalle

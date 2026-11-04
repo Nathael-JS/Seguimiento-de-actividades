@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TURNOS, api, depto, descargarCsv, dispositivo, fecha, fechaHora, hoy, iniciales, rol } from './comun.js'
+import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, iniciales, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { t } from './i18n.js'
 
@@ -84,11 +84,25 @@ export function Usuarios({ user, avisar }) {
     (!texto || [u.name, u.no, u.email].some((v) => v.toLowerCase().includes(texto))))
   const actual = lista.find((u) => u.no === elegido)
 
+  // Toda la base en un archivo (para restaurar con npm run restaurar). Trae datos sensibles: pide la contraseña
+  async function respaldar() {
+    try {
+      const r = await conConfirmacion(() => api('/api/admin/respaldo', { method: 'POST', body: { por: user.no } }))
+      descargar(new Blob([JSON.stringify(r)], { type: 'application/json' }), `respaldo_${hoy()}.json`)
+      avisar(t('Respaldo descargado. Guárdalo en un lugar seguro: trae contraseñas cifradas y secretos del MFA.'))
+    } catch (e) {
+      if (!e.cancelado) avisar(e.message)
+    }
+  }
+
   return (
     <>
-      <div className="page-head">
-        <h1>{t('Usuarios')}</h1>
-        <p>{t('Todas las cuentas del sistema. Elige una para ver sus datos y cambiar su puesto, turno o acceso.')}</p>
+      <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div>
+          <h1>{t('Usuarios')}</h1>
+          <p>{t('Todas las cuentas del sistema. Elige una para ver sus datos y cambiar su puesto, turno o acceso.')}</p>
+        </div>
+        <button className="btn btn-secondary" onClick={respaldar}><Icono nombre="file" />{t('Descargar respaldo')}</button>
       </div>
       <div className="admin">
         <section className="card admin-lista" aria-label={t('Usuarios')}>
@@ -239,7 +253,7 @@ const EVENTOS = {
   'mfa-fallido': 'Código de la app incorrecto', logout: 'Cierre de sesión', registro: 'Cuenta creada',
   'password-cambiada': 'Cambió su contraseña', 'password-recuperada': 'Recuperó su contraseña',
   'admin-confirmacion': 'Confirmó su contraseña', 'admin-confirmacion-fallida': 'Confirmación fallida',
-  'admin-usuario': 'Cambio de cuenta', 'admin-password': 'Contraseña restablecida', 'admin-mfa': 'MFA reiniciado',
+  'admin-usuario': 'Cambio de cuenta', 'admin-password': 'Contraseña restablecida', 'admin-mfa': 'MFA reiniciado', 'admin-respaldo': 'Respaldo descargado',
   'registros-purgados': 'Registros borrados',
 }
 const CAMPOS = { shift: 'Turno', role: 'Puesto', activo: 'Acceso' }
