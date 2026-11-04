@@ -238,6 +238,10 @@ const APP_MFA = 'Seguimiento de Actividades'
 const scryptAsync = promisify(scrypt)
 const formato = (sal, hash) => `scrypt$${sal.toString('base64')}$${hash.toString('base64')}`
 export const hashSync = (password) => { const sal = randomBytes(16); return formato(sal, scryptSync(password, sal, 64)) }
+const coincideSync = (guardada, intento) => {
+  const [tipo, sal, hash] = String(guardada).split('$')
+  return tipo === 'scrypt' && timingSafeEqual(scryptSync(intento, Buffer.from(sal, 'base64'), 64), Buffer.from(hash, 'base64'))
+}
 const hashPassword = async (password) => { const sal = randomBytes(16); return formato(sal, await scryptAsync(password, sal, 64)) }
 // Con un usuario que no existe se compara contra un hash cualquiera: tarda lo mismo y no delata qué usuarios hay
 const HASH_FALSO = hashSync(randomUUID())
@@ -266,18 +270,34 @@ const zonaValida = (zona) => {
 }
 
 // superadmins: [{ name, email, password, no? }] (de la variable de entorno SUPERADMINS; ver server/index.js)
-export function build({ superadmins = [], ...opts } = {}) {
+// estado: los datos cargados de PostgreSQL (server/db.js); sin él, los de prueba (JSON) en memoria.
+// guardar(estado): se llama después de cada petición a la API, antes de responder, para escribir lo que cambió
+export function build({ superadmins = [], estado: cargado, guardar, ...opts } = {}) {
   const app = Fastify(opts)
+  if (guardar) app.addHook('onSend', async (req) => { if (req.url.startsWith('/api/')) await guardar(app.estado) })
 
-  // shortcut: datos de prueba en memoria (cada arranque vuelve a los JSON); pasar a PostgreSQL al retomar la base de datos
-  const usuarios = leer('./usuarios.json')
-  superadmins.forEach((sa, i) => usuarios.push({
-    no: String(sa.no ?? 90001 + i), name: sa.name, email: sa.email.trim().toLowerCase(), role: 'sa', dept: null, boss: null,
-    shift: 'A', area: 'Administración', pwdChanged: ahora(), password: hashSync(sa.password),
-  }))
+  const usuarios = cargado?.usuarios ?? leer('./usuarios.json')
+  // Super administradores: se agregan o actualizan por correo y conservan su MFA; los que ya no están en la
+  // variable pierden el acceso
+  const correosSA = superadmins.map((sa) => sa.email.trim().toLowerCase())
+  superadmins.forEach((sa, i) => {
+    const u = usuarios.find((x) => x.email === correosSA[i])
+    if (u) {
+      Object.assign(u, { name: sa.name, role: 'sa', activo: true })
+      if (!coincideSync(u.password, sa.password)) Object.assign(u, { password: hashSync(sa.password), pwdChanged: ahora() })
+      return
+    }
+    let no = Number(sa.no ?? 90001 + i)
+    while (usuarios.some((x) => x.no === String(no))) no++
+    usuarios.push({
+      no: String(no), name: sa.name, email: correosSA[i], role: 'sa', dept: null, boss: null,
+      shift: 'A', area: 'Administración', pwdChanged: ahora(), password: hashSync(sa.password),
+    })
+  })
+  usuarios.forEach((u) => { if (u.role === 'sa' && !correosSA.includes(u.email)) u.activo = false })
   // Registro de auditoría: quién entra, desde dónde y qué cambia un super administrador.
-  // shortcut: en memoria, los últimos 5000 (también van al log del servidor, que Render guarda); pasar a la base de datos
-  const registros = []
+  // Se guardan los últimos 5000 (también van al log del servidor, que Render guarda)
+  const registros = cargado?.registros ?? []
   // IP del equipo: la última que agregó el proxy de Render a X-Forwarded-For (las anteriores las puede inventar
   // quien hace la petición). shortcut: si Render agrega otro salto de proxy, revisar en sus registros cuál es la real
   const ipDe = (req) => req.ips?.[1] ?? req.ip
@@ -290,23 +310,23 @@ export function build({ superadmins = [], ...opts } = {}) {
     if (registros.length > 5000) registros.shift()
     req.log.info({ registro: r }, evento)
   }
-  const actividades = leer('./actividades.json')
-  const notificaciones = leer('./notificaciones.json')
-  const herencias = [] // propuestas de herencia: pendientes de validar y su historial
+  const actividades = cargado?.actividades ?? leer('./actividades.json')
+  const notificaciones = cargado?.notificaciones ?? leer('./notificaciones.json')
+  const herencias = cargado?.herencias ?? [] // propuestas de herencia: pendientes de validar y su historial
   // Los de los mockups y los que crea un gerente, que queda como quien lo dirige
-  const departamentos = [
+  const departamentos = cargado?.departamentos ?? [
     { clave: 'lc', nombre: 'Liquid Cooling', gerente: '10001' },
     { clave: 'pf', nombre: 'Pruebas Funcionales', gerente: '10700' },
     { clave: 'smt', nombre: 'SMT', gerente: null },
   ]
   // shortcut: checador simulado (entrada/salida en hora de planta, lunes a viernes, oct–dic 2026); cambiar por el real
-  const checador = leer('./checador.json')
+  const checador = cargado?.checador ?? leer('./checador.json')
   // Códigos de verificación y permisos de recuperación pendientes, por token
   const verificaciones = new Map()
   const recuperaciones = new Map()
   const limpiarVencidos = (mapa) => mapa.forEach((v, k) => v.vence < Date.now() && mapa.delete(k))
   // Nunca se repite un número aunque se borre el último (los avisos y herencias guardan el número)
-  const ultimosIds = new Map()
+  const ultimosIds = cargado?.ultimosIds ?? new Map()
   const siguienteId = (lista) => {
     const n = Math.max(ultimosIds.get(lista) ?? 0, ...lista.map((x) => x.id)) + 1
     ultimosIds.set(lista, n)
@@ -388,8 +408,8 @@ export function build({ superadmins = [], ...opts } = {}) {
 
   // Sesiones: token aleatorio en una cookie HttpOnly (el JavaScript de la página no la puede leer) y SameSite=Strict
   // (otros sitios no la mandan). Sin Max-Age: se borra al cerrar el navegador, útil en equipos compartidos de planta.
-  // shortcut: viven en memoria y se pierden al reiniciar el servidor; pasarlas a la base de datos cuando se retome
-  const sesiones = new Map()
+  // Con DATABASE_URL se guardan en PostgreSQL y sobreviven a un reinicio; sin ella viven en memoria
+  const sesiones = cargado?.sesiones ?? new Map()
   const DURACION_SESION = 12 * 3_600_000 // sin actividad; se renueva con cada uso
   const tokenDe = (req) => req.headers.cookie?.match(/(?:^|;\s*)sesion=([^;]+)/)?.[1]
   const cookie = (req, valor, extra = '') =>
@@ -1183,6 +1203,9 @@ export function build({ superadmins = [], ...opts } = {}) {
     registrar(req, 'registros-purgados', { no: req.sesion.no, por: req.sesion.no, detalle: `${borrados} anteriores a ${req.body.antes}` })
     return { borrados }
   })
+
+  // Lo que se guarda en PostgreSQL (server/db.js)
+  app.decorate('estado', { usuarios, actividades, notificaciones, herencias, departamentos, checador, registros, sesiones, ultimosIds })
 
   if (existsSync(dist)) {
     app.register(fastifyStatic, {
