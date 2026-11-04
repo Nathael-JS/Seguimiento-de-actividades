@@ -1042,6 +1042,7 @@ test('siguiente fecha de una recurrente: día hábil, +7 días y mismo día del 
   assert.equal(siguienteFecha('2026-01-31', 'mensual', 31), '2026-02-28')
   assert.equal(siguienteFecha('2026-02-28', 'mensual', 31), '2026-03-31') // vuelve al 31
   assert.equal(siguienteFecha('2026-12-15', 'mensual', 15), '2027-01-15')
+  assert.equal(siguienteFecha('2026-03-20', 'mensual'), '2026-04-20') // sin diaMes: el de la fecha
 })
 
 test('recurrente: al llegar su periodo se crea una copia nueva y la recurrencia pasa a ella', async () => {
@@ -1056,6 +1057,12 @@ test('recurrente: al llegar su periodo se crea una copia nueva y la recurrencia 
   const [nueva, vieja] = await copias()
   assert.deepEqual([nueva.date, nueva.status, nueva.recurrencia, nueva.criticidad], [HOY_REAL, 'pending', 'semanal', 'normal']) // salta la semana sin entrar
   assert.deepEqual([vieja.id, vieja.recurrencia], [a.id, undefined])
+  // Al moverla a Urgente deja de repetirse (es para un solo turno)
+  const u = (await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/tablero`, { por: '10230', columna: 'urgente', cierre: enUnaHora() })).body
+  assert.deepEqual([u.prioridad, u.recurrencia], ['urgente', undefined])
+  await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/editar`, { por: '10230', recurrencia: 'semanal' }) // 400: urgente
+  await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/tablero`, { por: '10230', columna: 'normal' })
+  assert.equal((await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/editar`, { por: '10230', recurrencia: 'semanal' })).body.recurrencia, 'semanal')
   // Se deja de repetir desde Editar
   assert.equal((await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/editar`, { por: '10230', recurrencia: 'no' })).body.recurrencia, undefined)
 })

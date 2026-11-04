@@ -303,7 +303,7 @@ export function siguienteFecha(fecha, periodo, diaMes) {
   if (periodo === 'mensual') {
     const [a, m] = fecha.split('-').map(Number) // m es el mes actual en 1..12 = el siguiente en 0..11
     const ultimo = new Date(Date.UTC(a, m + 1, 0)).getUTCDate()
-    return new Date(Date.UTC(a, m, Math.min(diaMes, ultimo))).toISOString().slice(0, 10)
+    return new Date(Date.UTC(a, m, Math.min(diaMes ?? Number(fecha.slice(8)), ultimo))).toISOString().slice(0, 10)
   }
   let f = diaSiguiente(fecha)
   while (!diaHabil(f)) f = diaSiguiente(f)
@@ -927,6 +927,9 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       if (a.prioridad !== 'urgente' && a.to !== por) notificar({ for: a.to, kind: 'urgente', who: por, ref: a.id })
       Object.assign(a, { prioridad: 'urgente', cierreTurno: cierre })
       delete a.criticidad
+      // Una urgente es para un solo turno: deja de repetirse (su copia nacería sin cierre)
+      delete a.recurrencia
+      delete a.diaMes
     } else {
       delete a.prioridad
       delete a.cierreTurno
