@@ -3,10 +3,11 @@ import { api, iniciales, passwordValida } from './comun.js'
 import { Campo, PasswordNueva } from './ui.jsx'
 import { t } from './i18n.js'
 
-// Paso 1: validar número de empleado y correo. Paso 2: contraseña nueva
+// Paso 1: validar número de empleado, correo y el código de la app autenticadora. Paso 2: contraseña nueva
 export default function Recuperar({ volver }) {
   const [no, setNo] = useState('')
   const [email, setEmail] = useState('')
+  const [codigo, setCodigo] = useState('')
   const [permiso, setPermiso] = useState(null)
   const [p, setP] = useState(['', ''])
   const [error, setError] = useState('')
@@ -27,7 +28,8 @@ export default function Recuperar({ volver }) {
   function validar(e) {
     e.preventDefault()
     if (!no.trim() || !email.trim()) return setError(t('Escribe tu número de empleado y tu correo.'))
-    enviar(async () => setPermiso(await api('/api/recuperar', { method: 'POST', body: { no: no.trim(), email } })))
+    if (codigo && !/^\d{6}$/.test(codigo)) return setError(t('Escribe el código de 6 dígitos de tu app autenticadora.'))
+    enviar(async () => setPermiso(await api('/api/recuperar', { method: 'POST', body: { no: no.trim(), email, ...(codigo && { codigo }) } })))
   }
 
   function guardar(e) {
@@ -43,9 +45,11 @@ export default function Recuperar({ volver }) {
     return (
       <form className="auth-form" onSubmit={validar} noValidate>
         <h1>{t('Recuperar cuenta')}</h1>
-        <p className="lead">{t('Valida tus datos para cambiar tu contraseña.')}</p>
+        <p className="lead">{t('Valida tus datos y el código de tu app autenticadora para cambiar tu contraseña.')}</p>
         <Campo label={t('Número de empleado')} id="no" inputMode="numeric" placeholder="10482" value={no} onChange={(e) => setNo(e.target.value)} />
         <Campo label={t('Correo registrado')} id="email" type="email" placeholder="jorge.salinas@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Campo label={t('Código de tu app autenticadora')} id="codigo" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="123456"
+          value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))} />
         <p className="error" role="alert">{error}</p>
         <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{t('Validar datos')}</button>
         <button type="button" className="btn btn-ghost" onClick={() => volver()}>← {t('Volver')}</button>

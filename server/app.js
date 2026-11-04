@@ -94,7 +94,7 @@ const registroSchema = {
     password: passwordNueva,
   }),
 }
-const recuperarSchema = { body: objeto(['no', 'email'], { no: noEmpleado, email: { type: 'string', maxLength: 100 } }) }
+const recuperarSchema = { body: objeto(['no', 'email'], { no: noEmpleado, email: { type: 'string', maxLength: 100 }, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
 const cambiarSchema = { body: objeto(['token', 'password'], { token, password: passwordNueva }) }
 const cambiarPropiaSchema = { ...porEmpleado, body: objeto(['actual', 'nueva'], { actual: texto(100), nueva: passwordNueva }) }
 
@@ -529,18 +529,21 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   // 10 contraseñas incorrectas seguidas desde la misma IP para el mismo usuario bloquean 15 minutos
   const fallosLogin = new Map()
   const BLOQUEO = 15 * 60_000
+  // Intentos fallidos por IP y cuenta: contraseña, código de la app y recuperar comparten el mismo bloqueo
+  const claveFallos = (req, cuenta) => `${ipDe(req)}|${cuenta}`
+  const bloqueado = (clave) => { limpiarVencidos(fallosLogin); return fallosLogin.get(clave)?.n >= 10 }
+  const fallar = (clave) => fallosLogin.set(clave, { n: (fallosLogin.get(clave)?.n ?? 0) + 1, vence: Date.now() + BLOQUEO })
   app.post('/api/login', { schema: loginSchema }, async (req, reply) => {
     const usuario = req.body.usuario.trim().toLowerCase()
-    const clave = `${ipDe(req)}|${usuario}`
-    limpiarVencidos(fallosLogin)
-    if (fallosLogin.get(clave)?.n >= 10) return reply.code(429).send({ error: 'Demasiados intentos. Espera 15 minutos.' })
     const u = buscar(usuario)
+    // Por la cuenta encontrada, no por lo escrito: número, correo y usuario del correo son la misma cuenta
+    const clave = claveFallos(req, u?.no ?? usuario)
+    if (bloqueado(clave)) return reply.code(429).send({ error: 'Demasiados intentos. Espera 15 minutos.' })
     if (!(await passwordCorrecta(u?.password, req.body.password))) {
       registrar(req, 'login-fallido', { no: u?.no, usuario: usuario.slice(0, 100), ok: false })
-      fallosLogin.set(clave, { n: (fallosLogin.get(clave)?.n ?? 0) + 1, vence: Date.now() + BLOQUEO })
+      fallar(clave)
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
-    fallosLogin.delete(clave)
     if (u.activo === false) {
       registrar(req, 'login-bloqueado', { no: u.no, ok: false })
       return reply.code(403).send({ error: 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.' })
@@ -555,6 +558,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     // quitar "prueba" de usuarios.json cuando haya usuarios reales
     if (u.prueba) {
       registrar(req, 'login', { no: u.no, detalle: 'cuenta de prueba, sin código de la app' })
+      fallosLogin.delete(clave)
       return abrirSesion(req, reply, u) // sin token: ya es la sesión
     }
     limpiarVencidos(verificaciones)
@@ -580,6 +584,8 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     const paso = pasoDelCodigo(v.alta ?? u.totp, req.body.codigo, u.totpPaso)
     if (paso === undefined) {
       registrar(req, 'mfa-fallido', { no: u.no, ok: false })
+      // También cuenta para el bloqueo del login: así no se puede pedir otra verificación y seguir probando
+      fallar(claveFallos(req, u.no))
       if (++v.intentos >= 5) {
         verificaciones.delete(req.body.token)
         return reply.code(401).send({ error: 'Demasiados intentos. Vuelve a iniciar sesión.' })
@@ -587,6 +593,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       return reply.code(401).send({ error: 'Código incorrecto.' })
     }
     verificaciones.delete(req.body.token)
+    fallosLogin.delete(claveFallos(req, u.no)) // el contador vuelve a cero solo al entrar de verdad
     Object.assign(u, { totpPaso: paso }, v.alta && { totp: v.alta })
     registrar(req, 'login', { no: u.no, detalle: v.alta ? 'vinculó su app autenticadora' : 'con código de la app' })
     return abrirSesion(req, reply, u)
@@ -628,10 +635,25 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     return reply.code(201).send({ ok: true })
   })
 
+  // Número, correo y el código de la app autenticadora: el número y el correo los conocen los compañeros.
+  // Sin app vinculada (cuenta nueva) no se recupera sola: quien la recuperara vincularía su propia app
   app.post('/api/recuperar', { schema: recuperarSchema }, async (req, reply) => {
+    const clave = claveFallos(req, `recuperar:${req.body.no}`) // por cuenta: en planta muchos comparten la misma IP
+    if (bloqueado(clave)) return reply.code(429).send({ error: 'Demasiados intentos. Espera 15 minutos.' })
     const u = empleado(req.body.no)
     if (!u || u.email !== req.body.email.trim().toLowerCase()) {
+      fallar(clave)
       return reply.code(400).send({ error: 'Número de empleado y correo no coinciden con un registro.' })
+    }
+    if (!u.prueba) {
+      if (!u.totp) return reply.code(403).send({ error: 'Tu cuenta aún no tiene la app autenticadora: pide a un super administrador que restablezca tu contraseña.' })
+      const paso = req.body.codigo && pasoDelCodigo(u.totp, req.body.codigo, u.totpPaso)
+      if (paso === undefined) {
+        fallar(clave)
+        registrar(req, 'mfa-fallido', { no: u.no, ok: false, detalle: 'al recuperar la contraseña' })
+        return reply.code(401).send({ error: 'Escribe el código de 6 dígitos de tu app autenticadora.' })
+      }
+      u.totpPaso = paso // un código no sirve dos veces
     }
     limpiarVencidos(recuperaciones)
     const id = randomUUID()
@@ -734,15 +756,24 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     })
     const conError = resultado.filter((r) => r.error).length
     if (soloRevisar || conError) return reply.code(conError && !soloRevisar ? 400 : 200).send({ filas: resultado, conError })
+    // Las nuevas nacen con una contraseña temporal que el gerente ve una sola vez y entrega; al entrar la cambian
+    // y vinculan su app. Así nadie más puede reclamar la cuenta con solo su número y correo
+    // Los hashes van primero y en paralelo: el guardado de abajo no se interrumpe a medias por otra petición
+    const claves = new Map(filas.filter((f) => !empleado(f.no)).map((f) => [f.no, passwordTemporal()]))
+    const hashes = new Map(await Promise.all([...claves].map(async ([no, temporal]) => [no, await hashPassword(temporal)])))
+    const temporales = []
     for (const f of filas) {
       const datos = { name: f.name.trim(), email: f.email.trim().toLowerCase(), role: f.role, shift: f.shift, boss: f.boss, dept: clave }
       const actual = empleado(f.no)
       if (actual) Object.assign(actual, datos, f.area?.trim() && { area: f.area.trim() })
-      else usuarios.push({ no: f.no, ...datos, area: f.area?.trim() || '', pwdChanged: ahora(), password: null })
+      else {
+        usuarios.push({ no: f.no, ...datos, area: f.area?.trim() || '', pwdChanged: ahora(), password: hashes.get(f.no), debeCambiar: true })
+        temporales.push({ no: f.no, name: datos.name, temporal: claves.get(f.no) })
+      }
     }
     // El área vacía se hereda del encargado, ya con todos guardados
     for (const f of filas) { const u = empleado(f.no); if (!u.area) u.area = empleado(u.boss)?.area ?? '' }
-    return { filas: resultado, conError: 0, creados: resultado.filter((r) => r.accion === 'crear').length, actualizados: resultado.filter((r) => r.accion === 'actualizar').length }
+    return { filas: resultado, conError: 0, creados: temporales.length, actualizados: resultado.length - temporales.length, temporales }
   })
 
   app.get('/api/perfil/:no', { schema: { ...porEmpleado, querystring: consulta } }, conEmpleado((u, req) => {

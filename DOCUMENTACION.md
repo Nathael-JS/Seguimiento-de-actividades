@@ -123,7 +123,8 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 - **Login en 2 pasos:** primero la contraseña y después el código de 6 dígitos de la app autenticadora (TOTP). La primera vez se muestra un QR para vincular la app.
 - **Cuentas de prueba:** las que tienen `prueba: true` entran sin código, para revisiones rápidas.
 - **Registro:** de técnico o Ing. Jr; elige a su encargado del departamento y hereda su área.
-- **Recuperar contraseña:** con número de empleado y correo.
+- **Recuperar contraseña:** con número de empleado, correo y el código de la app autenticadora. Una cuenta sin app vinculada la restablece un super administrador, para que nadie más la reclame.
+- **Cuentas de la plantilla:** nacen con una contraseña temporal que el gerente ve una sola vez y entrega.
 - **Contraseñas:**
   - Vencen cada **90 días**; se avisa desde 15 días antes.
   - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
@@ -288,12 +289,12 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 
 | Método | Ruta | Quién | Qué hace |
 |---|---|---|---|
-| POST | `/api/login` | Público | Paso 1: usuario y contraseña (límite de 10 fallos por IP+usuario, bloqueo de 15 min) |
+| POST | `/api/login` | Público | Paso 1: usuario y contraseña (10 fallos por IP y cuenta, contando códigos MFA fallidos, bloquean 15 min) |
 | POST | `/api/login/verificar` | Público | Paso 2: código TOTP (o alta con QR); crea la cookie de sesión |
 | GET | `/api/sesion` | Sesión | Quién soy |
 | POST | `/api/logout` | Sesión | Cierra la sesión |
 | POST | `/api/registro` | Público | Crea una cuenta de técnico / Ing. Jr |
-| POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña |
+| POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña (número, correo y código de la app; límite de intentos) |
 | GET | `/api/encargados`, `/api/deptos` | Público | Encargados (para el registro) y departamentos |
 | GET | `/api/departamentos` | Encargado | Plantilla de sus departamentos con rate |
 | POST | `/api/departamentos` | Gerente | Crear departamento |
@@ -407,7 +408,8 @@ Código en `server/db.js`.
   - Reglas de fuerza (`reglasPassword`) y vencimiento cada 90 días.
 - **MFA:** TOTP (RFC 6238, SHA-1, 6 dígitos, 30 s), con tolerancia de ±1 paso y sin reutilizar un código. Las cuentas de prueba no lo piden.
 - **Fuerza bruta:**
-  - Login: 10 fallos por IP+usuario bloquean 15 min.
+  - Login: 10 fallos por IP y **cuenta** (número, correo o usuario del correo cuentan igual) bloquean 15 min. Los códigos MFA fallidos suman al mismo contador, y solo vuelve a cero al entrar de verdad.
+  - Recuperar contraseña: además del número y el correo pide el código de la app; 10 fallos por IP y cuenta bloquean 15 min.
   - Código MFA: 5 intentos por verificación, que vence a los 5 min.
   - Confirmación de super administrador: 5 fallos cierran la sesión.
 - **Super administradores:** se definen en la variable de entorno `SUPERADMINS` (nunca en el repositorio) y se identifican por correo. Los que se quitan de la variable quedan sin acceso.

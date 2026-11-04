@@ -25,7 +25,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Cuentas de prueba:** las de los mockups (`"prueba": true` en `server/usuarios.json`) entran sin el código de la app, para revisiones rápidas; el login de cada acceso tiene un botón para entrar con Laura (Gerente) o Jorge (Técnico). Las cuentas registradas sí piden MFA. Quitar `prueba` cuando haya usuarios reales.
 
-**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Las personas nuevas crean su contraseña con "¿Olvidaste tu contraseña?". PDF no: sus tablas no se pueden leer de forma confiable.
+**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Cada persona nueva recibe una contraseña temporal que el gerente ve una sola vez (y puede bajar en CSV) para entregarla; al entrar la cambia y vincula su app autenticadora. PDF no: sus tablas no se pueden leer de forma confiable.
 
 **Super administradores:** fuera de los departamentos; su menú es **Usuarios** (lista y ficha completa: puesto, turno, dar o quitar acceso, restablecer contraseña con una temporal que se muestra una vez y obliga a cambiarla, reiniciar el MFA) y **Registros** (inicios de sesión, intentos fallidos y cambios de los administradores, con fecha, IP y navegador/sistema; filtros, exportar CSV y borrar los anteriores a una fecha). Los cambios piden volver a escribir su contraseña (vale 5 minutos). Sus cuentas no van en el repositorio: se definen en la variable de entorno `SUPERADMINS` (ver Despliegue). La MAC del equipo no se puede obtener desde un navegador.
 
@@ -69,7 +69,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
 | `POST` | `/api/logout` | Cerrar sesión |
 | `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
-| `POST` | `/api/recuperar` | Validar número de empleado y correo; da un permiso de un solo uso |
+| `POST` | `/api/recuperar` | Validar número de empleado, correo y el código de la app autenticadora (sin app vinculada: la restablece un super administrador); da un permiso de un solo uso. 10 fallos por IP y cuenta bloquean 15 min |
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
 | `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña; con `?hoy=&zona=`, su rate de aprobación |
 | `POST` | `/api/perfil/:no/password` | Cambiar la contraseña propia (pide la actual) |

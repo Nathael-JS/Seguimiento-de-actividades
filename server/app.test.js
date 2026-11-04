@@ -106,6 +106,36 @@ test('MFA: alta en el primer login, luego solo el código de la app; incorrecto,
   assert.notEqual((await login({ usuario: '20002', password: clave }, app)).json().secreto, alta.secreto)
 })
 
+test('bloqueos: por cuenta (no por lo escrito), los códigos fallidos cuentan y recuperar pide el código de la app', async () => {
+  const app = build()
+  // Número y correo son la misma cuenta: 5 + 5 intentos la bloquean
+  for (let i = 0; i < 5; i++) await login({ usuario: '10490', password: 'mala' }, app)
+  for (let i = 0; i < 5; i++) await login({ usuario: 'maria.lopez@empresa.com', password: 'mala' }, app)
+  assert.equal((await login({ usuario: 'maria.lopez', password: 'demo1234' }, app)).statusCode, 429)
+
+  // Cuenta real con la app vinculada
+  const ana = { name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE }
+  await app.inject({ method: 'POST', url: '/api/registro', payload: ana })
+  await app.inject({ method: 'POST', url: '/api/registro', payload: { ...ana, no: '20002', email: 'sin.app@empresa.com' } })
+  const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
+  const alta = (await login({ usuario: '20001', password: CLAVE }, app)).json()
+  const paso = Math.floor(Date.now() / 30_000)
+  assert.equal((await verificar(alta.token, totp(alta.secreto, paso - 1))).statusCode, 200)
+  const recuperar = (cuerpo) => app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '20001', email: 'ana.prueba@empresa.com', ...cuerpo } })
+  assert.equal((await recuperar()).statusCode, 401) // sin código
+  assert.equal((await recuperar({ codigo: totp(alta.secreto, paso - 1) })).statusCode, 401) // ya usado
+  assert.equal((await recuperar({ codigo: totp(alta.secreto, paso) })).statusCode, 200)
+  // Sin la app vinculada no se recupera sola
+  assert.match((await app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '20002', email: 'sin.app@empresa.com' } })).json().error, /super administrador/)
+
+  // Los códigos fallidos suman al bloqueo del login: no se puede pedir otra verificación y seguir probando
+  for (let vuelta = 0; vuelta < 2; vuelta++) {
+    const { token } = (await login({ usuario: '20001', password: CLAVE }, app)).json()
+    for (let i = 0; i < 5; i++) await verificar(token, '000000')
+  }
+  assert.equal((await login({ usuario: '20001', password: CLAVE }, app)).statusCode, 429)
+})
+
 test('contraseña o usuario incorrecto da 401', async () => {
   assert.equal((await login({ usuario: '10482', password: 'mala' })).statusCode, 401)
   assert.equal((await login({ usuario: 'nadie', password: 'demo1234' })).statusCode, 401)
@@ -847,9 +877,11 @@ test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actua
   // Guardar: crea las nuevas (sin contraseña: la crean con "¿Olvidaste tu contraseña?") y actualiza a Jorge
   const ok = (await plantilla(app, 'lc', [...nuevas, fila({ no: '10482', name: 'Jorge Salinas', email: 'jorge.salinas@empresa.com', shift: 'B' })])).body
   assert.deepEqual([ok.creados, ok.actualizados], [3, 1])
-  assert.equal((await login({ usuario: '30001', password: 'null' }, app)).statusCode, 401) // aún sin contraseña
-  const { token } = (await pedir(app, 'POST', '/api/recuperar', { no: '30001', email: 'rosa.vega@empresa.com' })).body
-  assert.equal((await pedir(app, 'POST', '/api/recuperar/cambiar', { token, password: 'Nueva#Clave2026' })).code, 200)
+  // Las nuevas reciben una contraseña temporal (se muestra una vez); con ella entran y vinculan su app
+  assert.deepEqual(ok.temporales.map((x) => x.no), nuevas.map((f) => f.no))
+  const rosa = ok.temporales.find((x) => x.no === '30001')
+  assert.equal((await login({ usuario: '30001', password: 'null' }, app)).statusCode, 401)
+  assert.match((await login({ usuario: '30001', password: rosa.temporal }, app)).json().secreto, /^[A-Z2-7]{32}$/)
   const plantel = (await conCookie(app, 'GET', '/api/departamentos', await sesionDe(app, '10001'))).json()
   assert.equal(plantel.find((e) => e.no === '30002').area, 'Línea 9') // heredó el área de su encargada
   assert.equal((await pedir(app, 'GET', '/api/perfil/10482')).body.shift, 'B')
