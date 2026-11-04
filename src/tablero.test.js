@@ -16,7 +16,7 @@ test('resumen del área: por líder con toda su rama, por turno y alertas', () =
   const [sara, fer] = r.lideres
   assert.deepEqual([sara.personas, sara.actividades, sara.realizadas, sara.incompletas, sara.avance], [3, 4, 1, 1, 25]) // avance: % realizadas
   assert.deepEqual([fer.personas, fer.actividades, fer.avance], [1, 3, 33])
-  assert.deepEqual(r.turnos.map((x) => [x.turno, x.personas, x.actividades]), [['A', 2, 1], ['B', 2, 2], ['C', 0, 1]])
+  assert.deepEqual(r.turnos.map((x) => [x.turno, x.personas, x.actividades]), [['A', 2, 1], ['B', 2, 2], ['C', 0, 1], ['D', 0, 0]])
   assert.deepEqual(r.incompletas.map((a) => [a.id, a.persona]), [[3, 'Tomás']])
   assert.deepEqual(r.atrasadas.map((a) => a.id), [4]) // la incompleta no se repite aquí
   assert.deepEqual(r.sinActividades.map((e) => e.no), ['T2']) // los líderes sin actividades no cuentan

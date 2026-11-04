@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, consultaRate, depto, iniciales, rol } from './comun.js'
+import { TURNOS, api, consultaRate, depto, iniciales, nombreTurno, rol } from './comun.js'
 import { t } from './i18n.js'
 import { Rate } from './ui.jsx'
 
@@ -43,7 +43,7 @@ export default function Departamentos({ user }) {
                 <td><span className="chip">{rol(e.role)}</span></td>
                 <td><div className="row" style={{ gap: 10 }}><span className="avatar" style={{ width: 30, height: 30, fontSize: 11 }}>{iniciales(e.name)}</span>{e.name}</div></td>
                 <td className="mono">{e.no}</td>
-                <td className="nowrap">{e.shift} <span className="muted mono" style={{ fontSize: 12 }}>{TURNOS[e.shift]}</span></td>
+                <td className="nowrap">{nombreTurno(e.shift)} <span className="muted mono" style={{ fontSize: 12 }}>{TURNOS[e.shift]}</span></td>
                 <td>{e.area}</td>
                 <td><Rate valor={e.rate} /></td>
               </tr>

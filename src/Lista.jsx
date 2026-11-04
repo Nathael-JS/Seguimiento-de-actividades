@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ESTADOS, PESO_CRITICIDAD, criticidad, dia, estado as nombreEstado, hace, iniciales, pctRealizadas } from './comun.js'
+import { ESTADOS, PESO_CRITICIDAD, criticidad, dia, estado as nombreEstado, hace, iniciales, nombreTurno, pctRealizadas } from './comun.js'
 import { t } from './i18n.js'
 import { Anillo, Estado } from './ui.jsx'
 
@@ -34,7 +34,7 @@ export function ListaActividades({ filas, nombres, conPersona = false, cambiarEs
               {conPersona && (
                 <td><span className="persona"><span className="avatar">{iniciales(a.persona)}</span>{a.persona}</span></td>
               )}
-              <td className="nowrap"><span className="mono">{dia(a.date)}</span> · {t('Turno')} {a.shift}</td>
+              <td className="nowrap"><span className="mono">{dia(a.date)}</span> · {nombreTurno(a.shift)}</td>
               <td className="nowrap meta" title={new Date(a.at).toLocaleString()}>{hace(a.at)}</td>
               <td className="nowrap">{a.propia ? t('Registrada por sí mismo') : nombres[a.by] ?? a.byName ?? '—'}</td>
             </tr>

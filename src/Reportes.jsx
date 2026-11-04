@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { TURNOS, api, depto, descargar, descargarCsv, estado, fechaHora, hora, hoy, pctRealizadas, rol } from './comun.js'
+import { TURNOS, api, depto, descargar, descargarCsv, estado, fechaHora, hora, hoy, nombreTurno, pctRealizadas, rol, turnoLargo } from './comun.js'
 import { t } from './i18n.js'
 import { comparar } from './reporte.js'
 import Icono from './Icono.jsx'
@@ -81,7 +81,7 @@ export default function Reportes({ user }) {
       const realizadas = pctRealizadas(filas.filter((f) => !f.heredadaA))
       const blob = await reportePdf({
         titulo: t('Reporte de actividades'),
-        detalle: [`${desde} – ${hasta}`, turno ? `${t('Turno')} ${turno}` : t('Todos los turnos'), nombres],
+        detalle: [`${desde} – ${hasta}`, turno ? `${nombreTurno(turno)}` : t('Todos los turnos'), nombres],
         resumen: [
           [t('Registros'), filas.length],
           [t('Realizadas'), `${realizadas}%`],
@@ -140,7 +140,7 @@ export default function Reportes({ user }) {
           <span>{t('Turno')}</span>
           <select value={turno} onChange={(e) => setTurno(e.target.value)}>
             <option value="">{t('Todos los turnos')}</option>
-            {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{k} · {v}</option>)}
+            {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{turnoLargo(k)} · {v}</option>)}
           </select>
         </label>
         <button className="btn btn-primary" type="submit" disabled={generando || !equipo}>
@@ -159,7 +159,7 @@ export default function Reportes({ user }) {
           <div className="row between" style={{ flexWrap: 'wrap' }}>
             <p className="muted">
               <b className="mono" style={{ color: 'var(--ink)' }}>{filas.length}</b> {t('registros')} · {t('Realizadas')}: <b className="mono" style={{ color: 'var(--ink)' }}>{pctRealizadas(filas.filter((f) => !f.heredadaA))}%</b>
-              <span className="solo-impresion"> · {desde} – {hasta}{turno && ` · ${t('Turno')} ${turno}`}</span>
+              <span className="solo-impresion"> · {desde} – {hasta}{turno && ` · ${nombreTurno(turno)}`}</span>
             </p>
             <div className="row no-imprimir">
               <button className="btn btn-secondary btn-sm" onClick={exportarPdf} disabled={!filas.length || creandoPdf}>

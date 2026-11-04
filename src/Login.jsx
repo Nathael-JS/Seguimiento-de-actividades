@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { RANGOS, TURNOS, api, horaActual, rol, turnoDe } from './comun.js'
+import { RANGOS, TURNOS, api, horaActual, rol, turnoDe, turnoLargo } from './comun.js'
 import Dial from './Dial.jsx'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
@@ -95,7 +95,7 @@ function Portada({ aviso, saltar, onElegir }) {
         {final ? (
           <section className="portada-texto entra" key="final" aria-labelledby="portada-titulo">
             <p className="ahora">
-              <span className={`punto t-${activo}`} />{t('Ahora: turno {turno} · {horas}', { turno: activo, horas: TURNOS[activo] })}
+              <span className={`punto t-${activo}`} />{t('Ahora: {turno} · {horas}', { turno: turnoLargo(activo), horas: TURNOS[activo] })}
             </p>
             <h1 id="portada-titulo">{t('¿Cómo entras hoy?')}</h1>
             {aviso && <div className="notice warn" role="status"><Icono nombre="alert" /><span>{aviso}</span></div>}
@@ -117,7 +117,7 @@ function Portada({ aviso, saltar, onElegir }) {
           </section>
         ) : (
           <section className="portada-texto entra" key={i} aria-live={pausa ? 'polite' : 'off'}>
-            <p className="ahora"><span className={`punto t-${activo}`} />{t('Turno {turno} · {horas}', { turno: activo, horas: TURNOS[activo] })}</p>
+            <p className="ahora"><span className={`punto t-${activo}`} />{turnoLargo(activo)} · {TURNOS[activo]}</p>
             <h1>{t(SLIDES[i][1])}</h1>
             <p className="bajada">{t(SLIDES[i][2])}</p>
           </section>
@@ -128,7 +128,7 @@ function Portada({ aviso, saltar, onElegir }) {
         <footer className="portada-pie">
           <div className="pasos-slide" role="group" aria-label={t('Presentación')}>
             {SLIDES.map(([turno], k) => (
-              <button key={turno} type="button" aria-current={k === i ? 'step' : undefined} aria-label={t('Turno {turno}', { turno })}
+              <button key={turno} type="button" aria-current={k === i ? 'step' : undefined} aria-label={turnoLargo(turno)}
                 onClick={() => setI(k)}>
                 {/* La barra se llena en lo que dura el slide: muestra cuánto falta para el siguiente */}
                 <i className={k === i && !pausa ? 'llenando' : k < i ? 'lleno' : ''} style={{ animationDuration: `${PAUSA}ms` }} />

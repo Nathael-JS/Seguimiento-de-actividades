@@ -28,21 +28,67 @@ export default function Ajustes({ user, avisar }) {
         <section className="card">
           <h2 className="card-title">{t('Tus departamentos')}</h2>
           <ul className="list deptos-lista">
-            {deptos.map((d) => {
-              const n = personas.filter((p) => p.dept === d.clave).length
-              return (
-                <li key={d.clave}>
-                  <b style={{ flex: 1 }}>{depto(d.clave)}</b>
-                  <span className="muted">{t(n === 1 ? '{n} persona' : '{n} personas', { n })}</span>
-                </li>
-              )
-            })}
+            {deptos.map((d) => (
+              <FilaDepto key={d.clave} d={d} user={user} n={personas.filter((p) => p.dept === d.clave).length} avisar={avisar} alCambiar={cargar} />
+            ))}
           </ul>
           <NuevoDepto user={user} alCrear={(d) => { avisar(t('Departamento {nombre} creado. Ya lo diriges.', { nombre: d.nombre })); cargar() }} />
         </section>
         <Plantilla user={user} deptos={deptos} alCargar={cargar} avisar={avisar} />
       </div>
     </>
+  )
+}
+
+// Un departamento de la lista: el gerente que lo dirige le cambia el nombre o lo borra (vacío y que no sea el suyo)
+function FilaDepto({ d, user, n, avisar, alCambiar }) {
+  const [editando, setEditando] = useState(false)
+  const [nombre, setNombre] = useState(depto(d.clave))
+  const [borrar, setBorrar] = useState(false)
+  const propio = d.gerente === user.no
+  async function hacer(peticion, mensaje) {
+    try {
+      await peticion
+      avisar(mensaje)
+      setEditando(false)
+      setBorrar(false)
+      alCambiar()
+    } catch (e) {
+      avisar(e.message)
+    }
+  }
+  const guardar = (e) => {
+    e.preventDefault()
+    hacer(api(`/api/departamentos/${d.clave}`, { method: 'PATCH', body: { por: user.no, nombre: nombre.trim() } }), t('Departamento renombrado.'))
+  }
+  if (editando) {
+    return (
+      <li>
+        <form className="row" style={{ flex: 1, gap: 8, flexWrap: 'wrap' }} onSubmit={guardar}>
+          <input className="input-linea" aria-label={t('Nombre del departamento')} minLength={3} maxLength={60} value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
+          <button className="btn btn-primary btn-sm" type="submit" disabled={nombre.trim().length < 3}>{t('Guardar')}</button>
+          <button className="btn btn-ghost btn-sm" type="button" onClick={() => setEditando(false)}>{t('Cancelar')}</button>
+        </form>
+      </li>
+    )
+  }
+  return (
+    <li>
+      <b style={{ flex: 1 }}>{depto(d.clave)}</b>
+      <span className="muted">{t(n === 1 ? '{n} persona' : '{n} personas', { n })}</span>
+      {propio && (borrar ? (
+        <span className="row" style={{ gap: 6 }}>
+          <button className="btn btn-danger btn-sm" onClick={() => hacer(api(`/api/departamentos/${d.clave}`, { method: 'DELETE', body: { por: user.no } }), t('Departamento borrado.'))}>{t('Sí, borrar')}</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setBorrar(false)}>{t('Cancelar')}</button>
+        </span>
+      ) : (
+        <span className="row" style={{ gap: 4 }}>
+          <button className="iconbtn" aria-label={t('Editar {nombre}', { nombre: depto(d.clave) })} title={t('Editar')} onClick={() => setEditando(true)}><Icono nombre="edit" /></button>
+          {/* Con personas no se puede borrar: el servidor lo explica, pero aquí ya se ve */}
+          <button className="iconbtn" aria-label={t('Borrar {nombre}', { nombre: depto(d.clave) })} title={n ? t('Tiene personas: no se puede borrar') : t('Borrar')} disabled={n > 0} onClick={() => setBorrar(true)}><Icono nombre="trash" /></button>
+        </span>
+      ))}
+    </li>
   )
 }
 

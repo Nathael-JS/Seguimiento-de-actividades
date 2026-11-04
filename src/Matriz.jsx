@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
-import { api, hoy, iniciales, rol } from './comun.js'
+import { api, hoy, iniciales, nombreTurno, rol } from './comun.js'
 import { t } from './i18n.js'
 
 const haceDias = (n) => new Date(Date.now() - n * 86_400_000).toLocaleDateString('en-CA')
 const pct = ([hechas, total]) => (total ? Math.round((hechas / total) * 100) : null)
 // Umbral de color: el mismo 85 % que marca en rojo el rate de aprobación
 const nivel = (v) => (v == null ? 'nulo' : v >= 85 ? 'alto' : v >= 70 ? 'medio' : 'bajo')
-const horas = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`
 const sumar = (filas, campo) => filas.reduce(([h, tt], f) => [h + f[campo][0], tt + f[campo][1]], [0, 0])
 
 export default function Matriz({ user }) {
@@ -26,15 +25,13 @@ export default function Matriz({ user }) {
 
   const total = filas && {
     diarias: sumar(filas, 'diarias'), urgentes: sumar(filas, 'urgentes'), asistencia: sumar(filas, 'asistencia'),
-    extra: filas.reduce((s, f) => s + f.extra, 0),
   }
-  const maxExtra = Math.max(1, ...(filas ?? []).map((f) => f.extra))
 
   return (
     <>
       <div className="page-head">
         <h1>{t('Matriz de seguimiento')}</h1>
-        <p>{t('Yield de actividades diarias y urgentes, tiempo extra y asistencia de tu equipo en el periodo.')}</p>
+        <p>{t('Yield de actividades diarias y urgentes y asistencia de tu equipo en el periodo.')}</p>
       </div>
 
       <div className="card filters periodo">
@@ -44,7 +41,7 @@ export default function Matriz({ user }) {
           <li><i data-nivel="alto" />{t('85 % o más')}</li>
           <li><i data-nivel="medio" />{t('70 a 84 %')}</li>
           <li><i data-nivel="bajo" />{t('Menos de 70 %')}</li>
-          <li className="muted">{t('Yield: realizadas ÷ asignadas (las de hoy abiertas aún no cuentan). Tiempo extra y asistencia (días hábiles con entrada en el checador): hasta ayer.')}</li>
+          <li className="muted">{t('Yield: realizadas ÷ asignadas (las de hoy abiertas aún no cuentan). Asistencia (días hábiles con entrada en el checador): hasta ayer.')}</li>
         </ul>
       </div>
 
@@ -59,7 +56,6 @@ export default function Matriz({ user }) {
                   <th scope="col">{t('Empleado')}</th>
                   <th scope="col">{t('Yield diarias')}</th>
                   <th scope="col">{t('Yield urgentes')}</th>
-                  <th scope="col">{t('Tiempo extra')}</th>
                   <th scope="col">{t('Asistencia')}</th>
                 </tr>
               </thead>
@@ -69,12 +65,11 @@ export default function Matriz({ user }) {
                     <th scope="row">
                       <span className="quien">
                         <span className="avatar">{iniciales(f.name)}</span>
-                        <span>{f.name}<small>{rol(f.role)} · {t('Turno')} {f.shift}</small></span>
+                        <span>{f.name}<small>{rol(f.role)} · {nombreTurno(f.shift)}</small></span>
                       </span>
                     </th>
                     <Celda par={f.diarias} />
                     <Celda par={f.urgentes} />
-                    <Extra min={f.extra} max={maxExtra} />
                     <Celda par={f.asistencia} dias />
                   </tr>
                 ))}
@@ -84,7 +79,6 @@ export default function Matriz({ user }) {
                   <th scope="row">{t('Equipo')} <small>{t('{n} personas', { n: filas.length })}</small></th>
                   <Celda par={total.diarias} />
                   <Celda par={total.urgentes} />
-                  <td className="num">{horas(total.extra)} <small>h</small></td>
                   <Celda par={total.asistencia} dias />
                 </tr>
               </tfoot>
@@ -101,15 +95,6 @@ function Celda({ par, dias }) {
     <td className="num" data-nivel={nivel(v)}>
       {v == null ? '—' : `${v}%`}
       {par[1] > 0 && <small>{t(dias ? '{a} de {b} días' : '{a} de {b}', { a: par[0], b: par[1] })}</small>}
-    </td>
-  )
-}
-
-// Más tiempo extra, más intenso el fondo: no es bueno ni malo, señala dónde se está cargando el turno
-function Extra({ min, max }) {
-  return (
-    <td className="num extra" style={{ '--carga': `${Math.round((min / max) * 45)}%` }}>
-      {horas(min)} <small>h</small>
     </td>
   )
 }

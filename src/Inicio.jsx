@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, depto } from './comun.js'
+import { TURNOS, api, depto, nombreTurno, turnoLargo } from './comun.js'
 import TableroGerente from './TableroGerente.jsx'
 import { t } from './i18n.js'
 import { Anillo, AvisoPassword, Criticidad, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
@@ -9,7 +9,7 @@ export default function Inicio({ user, datos, error, recargar }) {
     <>
       <div className="page-head">
         <h1>{t('Hola, {nombre}', { nombre: user.name.split(' ')[0] })}</h1>
-        <p>{t('Turno de hoy')}: {user.shift} · {TURNOS[user.shift]} · {depto(user.dept)}</p>
+        <p>{t('Turno de hoy')}: {turnoLargo(user.shift)} · {TURNOS[user.shift]} · {depto(user.dept)}</p>
       </div>
       <AvisoPassword dias={datos?.diasPassword} enlace />
 
@@ -65,7 +65,7 @@ function TareasAbiertas({ user }) {
                 <a href="#mis-actividades">
                   <span className="quien">
                     <b>{a.text}</b>
-                    <span className="meta">{a.date} · {t('Turno')} {a.shift}</span>
+                    <span className="meta">{a.date} · {nombreTurno(a.shift)}</span>
                   </span>
                   <span className="row" style={{ gap: 6, flex: 'none' }}>
                     {a.prioridad === 'urgente' && <span className="tag urgente">{t('Urgente')}</span>}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, hoy, iniciales, rol } from './comun.js'
+import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, hoy, iniciales, nombreTurno, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { Estado } from './ui.jsx'
 import { t } from './i18n.js'
@@ -290,7 +290,7 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, edi
       </div>
       <div className="tarjeta-pie">
         <span className="persona"><span className="avatar">{iniciales(a.persona.name)}</span>{a.persona.name.split(' ')[0]}</span>
-        <span className="meta mono">{dia(a.date)} · {a.shift}</span>
+        <span className="meta mono">{dia(a.date)} · {nombreTurno(a.shift)}</span>
       </div>
       <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
         <Estado estado={a.status} />
@@ -359,7 +359,7 @@ function EditarTarjeta({ a, encargado, guardar, cancelar }) {
       <input type="date" aria-label={t('Fecha')} value={fecha} onChange={(e) => setFecha(e.target.value)} />
       {encargado && (
         <select aria-label={t('Turno')} value={turno} onChange={(e) => setTurno(e.target.value)} title={TURNOS[turno]}>
-          {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{t('Turno')} {k}</option>)}
+          {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{nombreTurno(k)}</option>)}
         </select>
       )}
       {encargado && <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} />}
@@ -489,7 +489,7 @@ function NuevasActividades({ equipo, semana, user, guardadas, inicial, alCrear }
       {encargado && <><div className="dos">
         <input type="date" aria-label={t('Fecha')} value={fecha} onChange={(e) => setFecha(e.target.value)} />
         <select aria-label={t('Turno')} value={turno} onChange={(e) => setTurno(e.target.value)} disabled={!para} title={TURNOS[turno]}>
-          {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{t('Turno')} {k}</option>)}
+          {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{nombreTurno(k)}</option>)}
         </select>
       </div>
       <select aria-label={t('Criticidad')} value={nivel} onChange={(e) => setNivel(e.target.value)}>

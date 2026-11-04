@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, esEncargado, iniciales, rol } from './comun.js'
+import { api, esEncargado, iniciales, nombreTurno, rol } from './comun.js'
 import { t } from './i18n.js'
 
 // Árbol de la rama de quien consulta, armado con el campo boss de su equipo
@@ -52,7 +52,7 @@ function Nodo({ p, yo, directos, total }) {
       <span className="avatar">{iniciales(p.name)}</span>
       <span className="nodo-txt">
         {yo ? <b>{p.name} <span className="muted">({t('tú')})</span></b> : <a href={destino}><b>{p.name}</b></a>}
-        <small>{rol(p.role)} · <span className="mono">{p.no}</span> · {t('Turno')} {p.shift}</small>
+        <small>{rol(p.role)} · <span className="mono">{p.no}</span> · {nombreTurno(p.shift)}</small>
       </span>
       {directos > 0 && (
         <span className="chip" title={t('{n} en total', { n: total })}>

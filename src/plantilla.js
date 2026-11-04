@@ -33,14 +33,15 @@ export function filasDePlantilla(hoja) {
       const fila = {
         no: valor('no'), name: valor('name'), email: valor('email'),
         role: Object.keys(PUESTOS).find((k) => PUESTOS[k].includes(puesto)) ?? '',
-        shift: valor('shift').toUpperCase(), area: valor('area'), boss: valor('boss'),
+        // Turno 1 a 4 (o A a D): se guarda con su clave interna
+        shift: { 1: 'A', 2: 'B', 3: 'C', 4: 'D' }[valor('shift')] ?? valor('shift').toUpperCase(), area: valor('area'), boss: valor('boss'),
       }
       const error =
         !/^\d{4,10}$/.test(fila.no) ? 'Número de empleado inválido (4 a 10 dígitos).'
           : fila.name.length < 3 ? 'Falta el nombre.'
           : !/^\S+@\S+\.\S+$/.test(fila.email) ? 'Correo inválido.'
           : !fila.role ? 'Puesto desconocido: usa Técnico, Ing. Jr, Ing. Full o Senior.'
-          : !['A', 'B', 'C'].includes(fila.shift) ? 'Turno inválido: A, B o C.'
+          : !['A', 'B', 'C', 'D'].includes(fila.shift) ? 'Turno inválido: 1, 2, 3 o 4.'
           : !/^\d{1,10}$/.test(fila.boss) ? 'Falta el número del encargado.'
           : null
       return { renglon, fila, error }

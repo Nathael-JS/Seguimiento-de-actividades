@@ -1,22 +1,25 @@
-import { RANGOS, TURNOS } from './comun.js'
+import { RANGOS, TURNOS, turnoLargo } from './comun.js'
 import { t } from './i18n.js'
 
-// Reloj de 24 h con los tres turnos como arcos. La aguja gira a `hora` (0–24) y el turno `activo` se ensancha
+// Reloj de 24 h con los tres turnos rotativos como arcos y el administrativo (4) por dentro, porque se cruza con ellos.
+// La aguja gira a `hora` (0–24) y el turno `activo` se ensancha
 const C = 200
 const R = 150
 const punto = (h, r = R) => {
   const a = ((h / 24) * 360 - 90) * (Math.PI / 180)
   return [C + r * Math.cos(a), C + r * Math.sin(a)]
 }
-const arco = (h1, h2) => {
-  const [x1, y1] = punto(h1)
-  const [x2, y2] = punto(h2)
-  return `M${x1} ${y1} A${R} ${R} 0 ${h2 - h1 > 12 ? 1 : 0} 1 ${x2} ${y2}`
+const arco = (h1, h2, r = R) => {
+  const [x1, y1] = punto(h1, r)
+  const [x2, y2] = punto(h2, r)
+  return `M${x1} ${y1} A${r} ${r} 0 ${h2 - h1 > 12 ? 1 : 0} 1 ${x2} ${y2}`
 }
+const horas = (txt) => { const [h, m] = txt.split(':').map(Number); return h + m / 60 }
+const ADMIN = TURNOS.D.split('–').map(horas)
 export default function Dial({ hora, activo, giros = 0, className = '' }) {
   return (
     <svg className={`dial ${className}`} viewBox="0 0 400 400" role="img"
-      aria-label={t('Reloj de 24 horas: turno {turno}, {horas}', { turno: activo, horas: TURNOS[activo] })}>
+      aria-label={t('Reloj de 24 horas: {turno}, {horas}', { turno: turnoLargo(activo), horas: TURNOS[activo] })}>
       <circle className="dial-base" cx={C} cy={C} r={R} />
       {Array.from({ length: 24 }, (_, h) => {
         const [x1, y1] = punto(h, R + 22)
@@ -30,6 +33,7 @@ export default function Dial({ hora, activo, giros = 0, className = '' }) {
       {Object.entries(RANGOS).map(([k, [a, b]]) => (
         <path key={k} className={`dial-turno t-${k}${k === activo ? ' activo' : ''}`} d={arco(a + 0.12, b - 0.12)} />
       ))}
+      <path className="dial-turno t-D" d={arco(ADMIN[0] + 0.12, ADMIN[1] - 0.12, R - 24)} />
       {/* giros: vueltas completas extra para que la aguja siempre avance en el sentido del reloj */}
       <g className="dial-aguja" style={{ transform: `rotate(${(hora / 24) * 360 + giros * 360}deg)` }}>
         <line x1={C} y1={C} x2={C} y2={C - R + 18} />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, iniciales, rol } from './comun.js'
+import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, iniciales, rol, turnoLargo } from './comun.js'
 import Icono from './Icono.jsx'
 import { t } from './i18n.js'
 
@@ -191,7 +191,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
         <div><dt>{t('Correo electrónico')}</dt><dd>{u.email}</dd></div>
         <div><dt>{t('Departamento')}</dt><dd>{u.dept ? `${depto(u.dept)} · ${u.area}` : u.area}</dd></div>
         <div><dt>{t('Encargado')}</dt><dd>{u.bossName ?? '—'}</dd></div>
-        <div><dt>{t('Turno')}</dt><dd>{u.shift} <span className="mono muted">{TURNOS[u.shift]}</span></dd></div>
+        <div><dt>{t('Turno')}</dt><dd>{turnoLargo(u.shift)} <span className="mono muted">{TURNOS[u.shift]}</span></dd></div>
         <div><dt>{t('Verificación en dos pasos')}</dt><dd>{t(u.prueba ? 'Cuenta de prueba: entra sin código' : u.mfa ? 'App vinculada' : 'Sin vincular')}</dd></div>
         <div>
           <dt>{t('Contraseña')}</dt>
@@ -211,7 +211,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
           <label className="field">
             <span>{t('Turno')}</span>
             <select value={shift} onChange={(e) => setShift(e.target.value)}>
-              {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{k} · {v}</option>)}
+              {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{turnoLargo(k)} · {v}</option>)}
             </select>
           </label>
           <button className="btn btn-primary" disabled={enviando || (shift === u.shift && role === u.role)}
