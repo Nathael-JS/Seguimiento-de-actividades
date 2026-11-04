@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { TURNOS, api, depto } from './comun.js'
 import TableroGerente from './TableroGerente.jsx'
 import { t } from './i18n.js'
-import { Anillo, AvisoPassword, Criticidad, Estado, NotificacionesRecientes } from './ui.jsx'
+import { Anillo, AvisoPassword, Criticidad, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
 
 export default function Inicio({ user, datos, error, recargar }) {
   return (
@@ -53,11 +53,8 @@ function TareasAbiertas({ user }) {
   }, [user.no])
 
   return (
-    <section className="card">
-      <div className="row between" style={{ marginBottom: 12 }}>
-        <h2 className="card-title" style={{ margin: 0 }}>{t('Tus tareas abiertas')}</h2>
-        {tareas?.length > 0 && <a href="#mis-actividades" style={{ fontSize: 13 }}>{t('Actualizar estado')}</a>}
-      </div>
+    <Panel id="tareas-abiertas" titulo={t('Tus tareas abiertas')}
+      acciones={tareas?.length > 0 && <a href="#mis-actividades" style={{ fontSize: 13 }}>{t('Actualizar estado')}</a>}>
       {error ? <p className="error" role="alert">{error}</p>
         : !tareas ? <p className="muted">{t('Cargando…')}</p>
         : !tareas.length ? <p className="empty">{t('No tienes tareas abiertas. Cuando te asignen una, llega aquí y a tu buzón.')}</p>
@@ -81,6 +78,6 @@ function TareasAbiertas({ user }) {
           </ul>
         )}
       {tareas?.length > VISIBLES && <a href="#mis-actividades" className="mas">{t('Ver las {n} tareas', { n: tareas.length })}</a>}
-    </section>
+    </Panel>
   )
 }

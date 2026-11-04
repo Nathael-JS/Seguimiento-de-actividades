@@ -1135,3 +1135,14 @@ test('tareas guardadas: personales, mismo texto actualiza, solo el dueño elimin
   assert.equal((await pedir(app, 'DELETE', `/api/guardadas/${g.id}`, { por: '10230' })).code, 200)
   assert.equal((await pedir(app, 'GET', '/api/guardadas/10230')).body.length, 1)
 })
+
+test('borrar historial de notificaciones: solo las propias, y los avisos automáticos no vuelven', async () => {
+  const app = build()
+  const mias = async (no) => (await pedir(app, 'GET', `/api/inicio/${no}?hoy=${HOY_REAL}`)).body.notificaciones.length
+  const deDiego = await mias('10230')
+  assert.ok((await mias('10482')) > 0)
+  assert.ok((await pedir(app, 'DELETE', '/api/notificaciones/10482')).body.borradas > 0)
+  assert.equal(await mias('10482'), 0) // con hoy: no se vuelven a generar los de atraso ni el de contraseña
+  assert.equal(await mias('10230'), deDiego) // las de otros quedan
+  assert.equal((await conCookie(app, 'DELETE', '/api/notificaciones/10230', await sesionDe(app, '10482'))).statusCode, 403)
+})

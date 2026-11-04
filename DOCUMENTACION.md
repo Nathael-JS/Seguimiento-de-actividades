@@ -20,6 +20,7 @@ Documento técnico de todo el sistema: para qué sirve, cómo está construido, 
 14. [Pruebas](#14-pruebas)
 15. [Despliegue, variables de entorno y respaldos](#15-despliegue-variables-de-entorno-y-respaldos)
 16. [Límites conocidos](#16-límites-conocidos)
+17. [Problemas resueltos y guía rápida](#17-problemas-resueltos-y-guía-rápida)
 
 ---
 
@@ -235,7 +236,7 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | Archivo | Contenido principal |
 |---|---|
 | `comun.js` | **Constantes:** `ROLES`, `TURNOS`, `DEPARTAMENTOS`, `ESTADOS`, `CRITICIDADES`, `PERIODOS`, `PESO_CRITICIDAD`, `ACCESOS`, `MODULOS`, `RANGOS`. **Funciones:** `modulosDe`, `api()` (fetch con JSON; traduce errores y dispara `sesion-terminada`), fechas y horas (`hoy`, `dia`, `fecha`, `hora`, `fechaHora`, `hace`, `grupoDia`, `inicioDeHoy`), turnos (`finTurno`, `cierreTurno`, `turnoDe`, `horaActual`), `pctRealizadas`, `reglasPassword` y `passwordValida`, `descargar` y `descargarCsv`, `dispositivo` (navegador · sistema), `columnaTablero`, `criticidad`, `rol`, `depto`, `registrarDeptos` |
-| `ui.jsx` | Componentes compartidos: `Logo`, `Notificacion`, `ItemNotificacion`, `NotificacionesRecientes`, `Anillo`, `Estado`, `Campo`, `PasswordNueva`, `AvisoPassword`, `BotonTema`, `BotonIdioma`, `Rate`, `Criticidad`, `SelectorCriticidad` |
+| `ui.jsx` | Componentes compartidos: `Panel` (tarjeta con título que se minimiza y se recuerda), `Logo`, `Notificacion`, `ItemNotificacion`, `NotificacionesRecientes`, `Anillo`, `Estado`, `Campo`, `PasswordNueva`, `AvisoPassword`, `BotonTema`, `BotonIdioma`, `Rate`, `Criticidad`, `SelectorCriticidad` |
 | `Icono.jsx` | Iconos SVG en línea (`ICONOS`), mismo trazo |
 | `Dial.jsx` | Reloj de 24 h con los tres turnos como arcos |
 | `i18n.js` | `t(texto, datos)`, `idiomaActual`, `cambiarIdioma`, `useIdioma` (con `useSyncExternalStore`) |
@@ -302,6 +303,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET | `/api/perfil/:no` · POST `/api/perfil/:no/password` | Propio | Perfil y cambio de contraseña |
 | GET | `/api/inicio/:no?desde&hoy` | Propio | Indicadores y notificaciones; con `hoy` genera avisos y renueva recurrentes |
 | POST | `/api/notificaciones/:no/leidas` · `/:no/:id/leida` | Propio | Marcar como leídas |
+| DELETE | `/api/notificaciones/:no` | Propio | Borrar el historial de notificaciones (los avisos automáticos no vuelven) |
 | GET | `/api/equipo/:no` | Encargado | Su equipo con sus actividades vigentes |
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
@@ -401,7 +403,8 @@ Código en `server/db.js`.
 ## 12. Seguridad
 
 - **Sesión:** cookie `HttpOnly`, `SameSite=Strict` y `Secure` en Render, con un token aleatorio. Vence tras 12 h sin uso. Cambiar la contraseña cierra las demás sesiones.
-- **Identidad:** el servidor toma de la sesión quién pide; `:no` y `por` deben coincidir (403).
+- **Identidad:** el servidor toma de la sesión quién pide; `:no` y `por` deben coincidir (403, con `otraCuenta: true`).
+- **Pestañas:** todas las pestañas de un navegador comparten la sesión (la cookie). Al entrar o salir en una, las demás se enteran al momento (evento `storage` de `localStorage`) y pasan a esa cuenta o al login con un aviso. Para usar dos cuentas a la vez: ventana de incógnito u otro navegador.
 - **Contraseñas:**
   - Se guardan con **scrypt** (sal de 16 bytes y clave de 64) y se comparan con `timingSafeEqual`.
   - Con un usuario inexistente se calcula igual un hash falso, para no revelar por el tiempo de respuesta qué cuentas existen.
@@ -474,3 +477,48 @@ Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propó
 - **Cuentas de prueba sin MFA:** entran sin el código de la app para revisiones rápidas. Hay que quitarlas al pasar a usuarios reales.
 - **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.
 - **MAC:** la MAC del equipo no se puede obtener desde un navegador.
+
+## 17. Problemas resueltos y guía rápida
+
+Casos reales que ya pasaron, qué los causaba y cómo se resolvieron, para no repetirlos.
+
+### Paneles encimados en el Inicio del gerente
+- **Síntoma:** en el Inicio del gerente, "Notificaciones recientes" quedaba encima de "Avance por turno".
+- **Causa:** el Inicio del gerente usaba la clase CSS `.tablero`. Esa misma clase la usa el Tablero kanban, con una rejilla de 6 columnas, y por eso su estilo se aplicaba también al Inicio.
+- **Solución:** el Inicio usa su propia clase `.inicio-gerente`.
+- **Regla:** cada pantalla usa nombres de clase propios. Antes de crear una clase nueva, buscar si ya existe (`grep -n "\.nombre" src/index.css`).
+
+### "Se desactivó la cuenta" al abrir dos cuentas en dos pestañas
+- **Síntoma:** con el gerente abierto en una pestaña, en otra se entra como Jr / Técnico, y la del gerente "se desactiva".
+- **Causa:** no es un bloqueo de seguridad. Todas las pestañas de un navegador comparten la cookie de sesión: la segunda pestaña ya abre como gerente, y al cerrar sesión para cambiar de cuenta se cierra la sesión del navegador entero.
+- **Solución:** las pestañas se sincronizan (evento `storage` de `localStorage` y la bandera `otraCuenta` en el 403). Si una pestaña sale, las demás vuelven al login con un aviso; si entra con otra cuenta, las demás pasan a esa cuenta con un aviso.
+- **Para usar dos cuentas a la vez:** una en la ventana normal y la otra en una ventana de **incógnito**, o en otro navegador.
+
+### Columnas nuevas y la base de producción
+- **Riesgo:** una tabla que ya existe en Neon no recibe columnas nuevas con `create table if not exists`, así que guardar fallaría.
+- **Solución:** `conectar()` ejecuta `alter table … add column if not exists` en cada arranque.
+- **Regla:** toda columna nueva en `TABLAS` (server/db.js) debe aceptar null, porque la tabla ya tiene filas.
+
+### Advertencia de SSL de `pg` en el log de Render
+- **Mensaje:** `SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`.
+- **Qué hacer:** solo es una advertencia. En `DATABASE_URL` cambiar `sslmode=require` por `sslmode=verify-full`. El respaldo de GitHub Actions usa `PGSSLROOTCERT=system` para ese modo.
+
+### Revisar que un respaldo diario se puede abrir
+1. Descargar el artefacto en GitHub: *Actions → Respaldo → la ejecución → Artifacts*, y descomprimir el zip.
+2. Abrir **Git Bash** en esa carpeta. Desde PowerShell no funciona: no trae `openssl` ni `gunzip` y daña los datos al pasarlos con `|`.
+3. Escribir el comando a mano o pegarlo con clic derecho / **Shift+Insert**. Con Ctrl+V la terminal agrega `^[[200~` y el comando falla.
+4. Correr:
+   ```bash
+   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | grep -c "CREATE TABLE"
+   ```
+   Debe responder el número de tablas (10 con `guardadas`). Con `| head -20` aparece "error writing output file": es normal, porque `head` se cierra antes de que termine.
+5. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.
+
+### Workflow que no se puede correr a mano
+- **Síntoma:** en GitHub no aparece **Run workflow**.
+- **Causa:** GitHub solo muestra workflows que ya están en `main`, y el botón está en la pestaña **Actions** del repositorio, no en *Settings*.
+
+### Recuperar contraseña ya no deja pasar
+- **Mensajes:** "Escribe el código de 6 dígitos de tu app autenticadora", o "Tu cuenta aún no tiene la app autenticadora".
+- **Causa:** desde que se corrigió la auditoría, recuperar pide el código de la app. Una cuenta sin app vinculada la restablece un super administrador (Usuarios → contraseña temporal).
+

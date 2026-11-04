@@ -26,7 +26,7 @@ const PAGINAS = {
 // #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)
 const rutaDe = (hash) => hash.slice(1).split('?')[0] || 'inicio'
 
-export default function Shell({ user, onLogout }) {
+export default function Shell({ user, onLogout, avisoInicial }) {
   const modulos = modulosDe(user)
   const [hash, setHash] = useState(location.hash)
   const ruta = rutaDe(hash)
@@ -41,7 +41,7 @@ export default function Shell({ user, onLogout }) {
   const conGrupos = modulos.length > 6
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState(avisoInicial ?? '')
   const salir = useRef(null)
   const temporizador = useRef(null)
 
@@ -80,6 +80,12 @@ export default function Shell({ user, onLogout }) {
     setAviso(mensaje)
     temporizador.current = setTimeout(() => setAviso(''), 3000)
   }, [])
+  // Al pasar a otra cuenta porque se entró con ella en otra pestaña: el aviso dura más, hay que leerlo
+  useEffect(() => {
+    if (!avisoInicial) return
+    const id = setTimeout(() => setAviso(''), 10_000)
+    return () => clearTimeout(id)
+  }, [avisoInicial])
 
   async function cerrarSesion() {
     // Aunque falle la red se sale de la pantalla; la cookie se borra en la siguiente salida o al cerrar el navegador

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { TURNOS, api, dia, hoy, iniciales, inicioDeHoy, rol } from './comun.js'
 import { t } from './i18n.js'
 import { resumenArea } from './tablero.js'
-import { Anillo, Estado, NotificacionesRecientes } from './ui.jsx'
+import { Anillo, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
 
 // Singular o plural según la cantidad
 const cuenta = (n, uno, varios) => t(n === 1 ? uno : varios, { n })
@@ -21,14 +21,13 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
   const pendientes = r ? r.incompletas.length + r.atrasadas.length + r.sinActividades.length : 0
 
   return (
-    // En una sola columna (móvil y tablet) "Requieren atención" va primero; ver .tablero en index.css
-    <div className="cols tablero">
+    // En una sola columna (móvil y tablet) "Requieren atención" va primero; ver .inicio-gerente en index.css
+    <div className="cols inicio-gerente">
       <div className="pila">
         {/* Si falla la carga del equipo, las notificaciones siguen visibles */}
         {error ? <p className="error" role="alert">{error}</p> : !r ? <p className="muted">{t('Cargando…')}</p> : (
           <>
-            <section className="card">
-              <h2 className="card-title">{t('Avance por líder')}</h2>
+            <Panel id="lideres" titulo={t('Avance por líder')}>
               {r.lideres.length ? (
                 <ul className="list">
                   {r.lideres.map((l) => (
@@ -49,13 +48,12 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                   ))}
                 </ul>
               ) : <p className="muted">{t('Sin líderes en tu área.')}</p>}
-            </section>
+            </Panel>
 
-            <section>
-              <h2 className="card-title" style={{ marginBottom: 12 }}>{t('Avance por turno')}</h2>
+            <Panel id="turnos" titulo={t('Avance por turno')}>
               <div className="turnos">
                 {r.turnos.map((x) => (
-                  <div key={x.turno} className="card turno">
+                  <div key={x.turno} className="turno">
                     <Anillo pct={x.avance} size={56} width={6} />
                     <div>
                       <b>{t('Turno')} {x.turno}</b>
@@ -66,15 +64,14 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                   </div>
                 ))}
               </div>
-            </section>
+            </Panel>
           </>
         )}
       </div>
 
       <div className="pila">
         {r && (
-          <section className={`card atencion${pendientes ? ' hay' : ''}`}>
-            <h2 className="card-title">{t('Requieren atención')}</h2>
+          <Panel id="atencion" className={`atencion${pendientes ? ' hay' : ''}`} titulo={t('Requieren atención')}>
             <Alerta titulo={t('Incompletas')} lista={r.incompletas} />
             <Alerta titulo={t('Atrasadas')} lista={r.atrasadas} />
             <div className="alerta">
@@ -83,7 +80,7 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                 <div className="chips-estaticos">{r.sinActividades.map((e) => <span key={e.no} className="chip">{e.name} · {t('Turno')} {e.shift}</span>)}</div>
               ) : <p className="muted">{t('Todos tienen actividades.')}</p>}
             </div>
-          </section>
+          </Panel>
         )}
         <NotificacionesRecientes user={user} notificaciones={notificaciones} recargar={recargar} />
       </div>
