@@ -1,35 +1,58 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Login from './Login.jsx'
 import CambioObligatorio from './CambioObligatorio.jsx'
 import Shell from './Shell.jsx'
 import { t, useIdioma } from './i18n.js'
 import { registrarDeptos } from './comun.js'
 
+// fetch directo: sin sesión aquí no es "sesión terminada"
+const json = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+// Las pestañas de un navegador comparten la sesión (la cookie): al entrar o salir en una, las demás se enteran
+const avisarPestanas = () => { try { localStorage.setItem('sesion-cambio', String(Date.now())) } catch { /* sin almacenamiento */ } }
+
 export default function App() {
   // undefined: todavía preguntando al servidor si hay sesión (no se muestra nada para no parpadear el login)
   const [user, setUser] = useState()
   const [aviso, setAviso] = useState('')
+  const [cambio, setCambio] = useState('') // otra pestaña entró con otra cuenta
+  const actual = useRef(user)
+  useEffect(() => { actual.current = user }, [user])
   const idioma = useIdioma()
   // El título de la pestaña también cambia de idioma (index.html trae el de español)
   useEffect(() => { document.title = t('Seguimiento de Actividades') }, [idioma])
 
   useEffect(() => {
-    // Al recargar, la cookie de sesión dice quién es. fetch directo: sin sesión aquí no es "sesión terminada"
-    const json = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    // Al recargar, la cookie de sesión dice quién es
     // Los nombres de los departamentos creados por gerentes, antes de pintar cualquier pantalla
     Promise.all([json('/api/sesion'), json('/api/deptos')]).then(([u, deptos]) => { registrarDeptos(deptos ?? []); setUser(u) })
     // api() avisa cuando el servidor ya no reconoce la sesión (venció, o se cambió la contraseña en otro equipo)
     const terminada = () => { setAviso(t('Tu sesión terminó. Vuelve a iniciar sesión.')); setUser(null) }
     addEventListener('sesion-terminada', terminada)
-    return () => removeEventListener('sesion-terminada', terminada)
+    // Otra pestaña entró o salió: esta pasa a la misma cuenta (o al login) y explica por qué
+    const revisar = async () => {
+      const u = await json('/api/sesion')
+      const antes = actual.current
+      if ((antes?.no ?? null) === (u?.no ?? null)) return
+      if (!u) setAviso(t('Se cerró la sesión en otra pestaña de este navegador.'))
+      else if (antes) setCambio(t('En otra pestaña se entró como {nombre}. Este navegador usa una sola cuenta a la vez: para usar dos, abre la otra en una ventana de incógnito o en otro navegador.', { nombre: u.name }))
+      setUser(u)
+    }
+    const deOtraPestana = (e) => e.key === 'sesion-cambio' && revisar()
+    addEventListener('storage', deOtraPestana)
+    addEventListener('sesion-cambiada', revisar)
+    return () => {
+      removeEventListener('sesion-terminada', terminada)
+      removeEventListener('storage', deOtraPestana)
+      removeEventListener('sesion-cambiada', revisar)
+    }
   }, [])
 
   if (user === undefined) return null
   if (user?.debeCambiar) {
-    const salir = () => fetch('/api/logout', { method: 'POST' }).catch(() => {}).then(() => setUser(null))
+    const salir = () => fetch('/api/logout', { method: 'POST' }).catch(() => {}).then(() => { avisarPestanas(); setUser(null) })
     return <CambioObligatorio user={user} onListo={() => setUser({ ...user, debeCambiar: false })} onSalir={salir} />
   }
   return user
-    ? <Shell user={user} onLogout={() => setUser(null)} />
-    : <Login aviso={aviso} onLogin={(u) => { setAviso(''); setUser(u) }} />
+    ? <Shell key={user.no} user={user} avisoInicial={cambio} onLogout={() => { avisarPestanas(); setUser(null) }} />
+    : <Login aviso={aviso} onLogin={(u) => { setAviso(''); setCambio(''); avisarPestanas(); setUser(u) }} />
 }

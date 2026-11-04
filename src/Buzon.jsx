@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, grupoDia } from './comun.js'
+import Icono from './Icono.jsx'
 import { ItemNotificacion } from './ui.jsx'
 import { t } from './i18n.js'
 
@@ -20,6 +21,7 @@ export default function Buzon({ user, datos, error, recargar }) {
   const [filtro, setFiltro] = useState(0)
   const [limite, setLimite] = useState(POR_PAGINA)
   const [errorAccion, setErrorAccion] = useState('')
+  const [confirmarBorrar, setConfirmarBorrar] = useState(false)
   const tipos = FILTROS[filtro][1]
   const lista = datos?.notificaciones.filter((n) => !tipos || tipos.includes(n.kind)) ?? []
 
@@ -41,6 +43,18 @@ export default function Buzon({ user, datos, error, recargar }) {
     }
   }
 
+  // Borra todas las notificaciones propias; se confirma con un segundo clic
+  async function borrarHistorial() {
+    setErrorAccion('')
+    try {
+      await api(`/api/notificaciones/${user.no}`, { method: 'DELETE' })
+      setConfirmarBorrar(false)
+      recargar()
+    } catch (e) {
+      setErrorAccion(e.message)
+    }
+  }
+
   return (
     <>
       <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -48,10 +62,22 @@ export default function Buzon({ user, datos, error, recargar }) {
           <h1>{t('Buzón')}</h1>
           <p>{t('Toca una notificación para ir a la actividad. Se actualiza sola.')}</p>
         </div>
-        <button className="btn btn-secondary" onClick={marcarLeidas}
-          disabled={!datos?.notificaciones.some((n) => !n.read)}>
-          {t('Marcar todo como leído')}
-        </button>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={marcarLeidas}
+            disabled={!datos?.notificaciones.some((n) => !n.read)}>
+            {t('Marcar todo como leído')}
+          </button>
+          {confirmarBorrar ? (
+            <>
+              <button className="btn btn-danger" onClick={borrarHistorial}>{t('Sí, borrar {n}', { n: datos.notificaciones.length })}</button>
+              <button className="btn btn-ghost" onClick={() => setConfirmarBorrar(false)}>{t('Cancelar')}</button>
+            </>
+          ) : (
+            <button className="btn btn-ghost peligro" onClick={() => setConfirmarBorrar(true)} disabled={!datos?.notificaciones.length}>
+              <Icono nombre="trash" />{t('Borrar historial')}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="chips" role="group" aria-label={t('Filtrar notificaciones')}>

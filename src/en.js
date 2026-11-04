@@ -721,4 +721,13 @@ export default {
   'Código de tu app autenticadora': 'Code from your authenticator app',
   'Tu cuenta aún no tiene la app autenticadora: pide a un super administrador que restablezca tu contraseña.': 'Your account has no authenticator app yet: ask a super administrator to reset your password.',
   'contraseñas-temporales': 'temporary-passwords',
+  // Pestañas, historial y paneles
+  'Se cerró la sesión en otra pestaña de este navegador.': 'You signed out in another tab of this browser.',
+  'En otra pestaña se entró como {nombre}. Este navegador usa una sola cuenta a la vez: para usar dos, abre la otra en una ventana de incógnito o en otro navegador.': 'Another tab signed in as {nombre}. This browser uses one account at a time: to use two, open the other in a private window or another browser.',
+  'Sí, borrar {n}': 'Yes, delete {n}',
+  'Borrar historial': 'Clear history',
+  'Minimizar {panel}': 'Minimize {panel}',
+  'Mostrar {panel}': 'Show {panel}',
+  'Minimizar': 'Minimize',
+  'Mostrar': 'Show',
 }

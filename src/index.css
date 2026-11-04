@@ -349,7 +349,7 @@ tbody tr:hover td{background:var(--surface-000)}
 /* Sin esto una columna de la rejilla no se encoge por debajo de su texto más largo y desborda en móvil */
 .cols>*{min-width:0}
 .turnos{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.turno{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px}
+.turno{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-000)}
 .list li.lider{align-items:center}
 .alerta+.alerta{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
 .alerta h3{font:600 14px/20px var(--font-sans);margin-bottom:8px;display:flex;gap:8px;align-items:baseline}
@@ -367,7 +367,7 @@ tbody tr:hover td{background:var(--surface-000)}
 .sub{font-size:12px}
 /* Lo único que resalta en el tablero: la tarjeta de pendientes cuando hay algo que atender */
 .atencion.hay{box-shadow:inset 4px 0 0 var(--status-pending),var(--shadow-card)}
-@media (max-width:1100px){.tablero .pila{display:contents}.tablero .atencion{order:-1}}
+@media (max-width:1100px){.inicio-gerente .pila{display:contents}.inicio-gerente .atencion{order:-1}}
 
 /* Notificación que se puede tocar */
 .notif{flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;color:inherit;text-decoration:none;border-radius:var(--radius-md);margin:-6px;padding:6px}
@@ -841,3 +841,13 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .guardadas li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-000)}
 .guardadas li .titulo{font:500 14px/19px var(--font-sans);flex:1 1 100%}
 @media (prefers-reduced-motion:reduce){.switch input,.switch input::after,.guardadas .flecha-abajo{transition:none}}
+
+/* Panel que se minimiza: queda su barra con el nombre */
+.panel-cabeza{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.panel-cabeza .card-title{margin:0;flex:1;min-width:0}
+.panel.minimizado{padding-block:12px}
+.panel.minimizado .panel-cabeza{margin-bottom:0}
+.panel-alternar{flex:none;width:32px;height:32px}
+.panel-alternar .ico{transition:transform .2s var(--ease-salida)}
+.panel-alternar[aria-expanded="true"] .ico{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.panel-alternar .ico{transition:none}}

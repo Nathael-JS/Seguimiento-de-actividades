@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
@@ -180,19 +180,40 @@ export function ItemNotificacion({ n, user, recargar, avatar = false }) {
   )
 }
 
+// Panel con título que se puede minimizar: queda solo su barra con el nombre (se recuerda en el navegador).
+// acciones: enlaces junto al título, solo con el panel abierto
+export function Panel({ id, titulo, acciones, className = '', children }) {
+  const clave = `panel-${id}`
+  const cuerpo = useId()
+  const [abierto, setAbierto] = useState(() => { try { return localStorage.getItem(clave) !== '0' } catch { return true } })
+  function alternar() {
+    setAbierto(!abierto)
+    try { localStorage.setItem(clave, abierto ? '0' : '1') } catch { /* solo esta vez */ }
+  }
+  return (
+    <section className={`card panel${abierto ? '' : ' minimizado'} ${className}`}>
+      <div className="panel-cabeza">
+        <h2 className="card-title">{titulo}</h2>
+        {abierto && acciones}
+        <button type="button" className="iconbtn panel-alternar" onClick={alternar} aria-expanded={abierto} aria-controls={cuerpo}
+          aria-label={t(abierto ? 'Minimizar {panel}' : 'Mostrar {panel}', { panel: titulo })} title={t(abierto ? 'Minimizar' : 'Mostrar')}>
+          <Icono nombre="abajo" />
+        </button>
+      </div>
+      <div id={cuerpo} hidden={!abierto}>{children}</div>
+    </section>
+  )
+}
+
 export function NotificacionesRecientes({ user, notificaciones, recargar }) {
   return (
-    <section className="card">
-      <div className="row between" style={{ marginBottom: 12 }}>
-        <h2 className="card-title" style={{ margin: 0 }}>{t('Notificaciones recientes')}</h2>
-        <a href="#buzon" style={{ fontSize: 13 }}>{t('Ver todas')}</a>
-      </div>
+    <Panel id="notificaciones" titulo={t('Notificaciones recientes')} acciones={<a href="#buzon" style={{ fontSize: 13 }}>{t('Ver todas')}</a>}>
       {notificaciones.length ? (
         <ul className="list">
           {notificaciones.slice(0, 5).map((n) => <ItemNotificacion key={n.id} n={n} user={user} recargar={recargar} />)}
         </ul>
       ) : <p className="muted">{t('Sin notificaciones.')}</p>}
-    </section>
+    </Panel>
   )
 }
 

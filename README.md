@@ -76,6 +76,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `GET` | `/api/departamentos` | Plantilla de los departamentos de quien consulta (el suyo y los que dirige); con `?hoy=&zona=` (fecha y zona horaria IANA del navegador), el rate de cada uno |
 | `GET` | `/api/inicio/:no` | Indicadores y notificaciones. `?desde=` (inicio del día local) cuenta solo lo abierto y lo realizado hoy; `?hoy=` (fecha local) genera los avisos automáticos |
 | `POST` | `/api/notificaciones/:no/leidas` | Marcar todas como leídas |
+| `DELETE` | `/api/notificaciones/:no` | Borrar el historial de notificaciones propio |
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
 | `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
 | `POST` | `/api/actividades` | Crear actividades por puntos (criticidad, `nueva` = por clasificar, o urgentes con el cierre del turno) y notificar al empleado |

@@ -67,6 +67,7 @@ export async function api(url, { method = 'GET', body } = {}) {
   const data = await res.json().catch(() => ({}))
   if (res.ok) return data
   if (data.sesion === false) dispatchEvent(new Event('sesion-terminada')) // App vuelve al login
+  if (data.otraCuenta) dispatchEvent(new Event('sesion-cambiada')) // App pasa a la cuenta de la cookie
   // Los errores propios de Fastify (validación del esquema, ruta inexistente) traen statusCode y un texto en inglés;
   // los de la app traen solo `error`, ya redactado para el usuario (en español: se traduce aquí)
   if (data.statusCode) throw new Error(t(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.'))

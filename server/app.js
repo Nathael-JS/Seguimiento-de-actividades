@@ -515,7 +515,8 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     req.sesion = s
     // El número que manda el navegador (en la dirección o en "por") tiene que ser el de la sesión
     const quien = req.params?.no ?? req.body?.por
-    if (quien && quien !== s.no) return reply.code(403).send({ error: 'Solo puedes actuar con tu propia cuenta.' })
+    // otraCuenta: en otra pestaña del mismo navegador se entró con otra cuenta (comparten la cookie)
+    if (quien && quien !== s.no) return reply.code(403).send({ error: 'Solo puedes actuar con tu propia cuenta.', otraCuenta: true })
     const yo = empleado(s.no)
     // Con contraseña temporal solo se puede cambiarla (o salir)
     if (yo.debeCambiar && !SIN_CAMBIO.has(req.routeOptions.url)) {
@@ -833,6 +834,13 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   app.post('/api/notificaciones/:no/leidas', { schema: porEmpleado }, conEmpleado((u) => {
     notificaciones.filter((n) => n.for === u.no).forEach((n) => (n.read = true))
     return { ok: true }
+  }))
+
+  // Borrar el historial: todas las notificaciones propias. Los avisos automáticos no vuelven (cada uno se marca al crearse)
+  app.delete('/api/notificaciones/:no', { schema: porEmpleado }, conEmpleado((u) => {
+    const antes = notificaciones.length
+    for (let i = notificaciones.length - 1; i >= 0; i--) if (notificaciones[i].for === u.no) notificaciones.splice(i, 1)
+    return { borradas: antes - notificaciones.length }
   }))
 
   app.post('/api/notificaciones/:no/:id/leida', { schema: notificacionSchema }, async (req, reply) => {

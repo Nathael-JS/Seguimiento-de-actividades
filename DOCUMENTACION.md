@@ -235,7 +235,7 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | Archivo | Contenido principal |
 |---|---|
 | `comun.js` | **Constantes:** `ROLES`, `TURNOS`, `DEPARTAMENTOS`, `ESTADOS`, `CRITICIDADES`, `PERIODOS`, `PESO_CRITICIDAD`, `ACCESOS`, `MODULOS`, `RANGOS`. **Funciones:** `modulosDe`, `api()` (fetch con JSON; traduce errores y dispara `sesion-terminada`), fechas y horas (`hoy`, `dia`, `fecha`, `hora`, `fechaHora`, `hace`, `grupoDia`, `inicioDeHoy`), turnos (`finTurno`, `cierreTurno`, `turnoDe`, `horaActual`), `pctRealizadas`, `reglasPassword` y `passwordValida`, `descargar` y `descargarCsv`, `dispositivo` (navegador · sistema), `columnaTablero`, `criticidad`, `rol`, `depto`, `registrarDeptos` |
-| `ui.jsx` | Componentes compartidos: `Logo`, `Notificacion`, `ItemNotificacion`, `NotificacionesRecientes`, `Anillo`, `Estado`, `Campo`, `PasswordNueva`, `AvisoPassword`, `BotonTema`, `BotonIdioma`, `Rate`, `Criticidad`, `SelectorCriticidad` |
+| `ui.jsx` | Componentes compartidos: `Panel` (tarjeta con título que se minimiza y se recuerda), `Logo`, `Notificacion`, `ItemNotificacion`, `NotificacionesRecientes`, `Anillo`, `Estado`, `Campo`, `PasswordNueva`, `AvisoPassword`, `BotonTema`, `BotonIdioma`, `Rate`, `Criticidad`, `SelectorCriticidad` |
 | `Icono.jsx` | Iconos SVG en línea (`ICONOS`), mismo trazo |
 | `Dial.jsx` | Reloj de 24 h con los tres turnos como arcos |
 | `i18n.js` | `t(texto, datos)`, `idiomaActual`, `cambiarIdioma`, `useIdioma` (con `useSyncExternalStore`) |
@@ -302,6 +302,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET | `/api/perfil/:no` · POST `/api/perfil/:no/password` | Propio | Perfil y cambio de contraseña |
 | GET | `/api/inicio/:no?desde&hoy` | Propio | Indicadores y notificaciones; con `hoy` genera avisos y renueva recurrentes |
 | POST | `/api/notificaciones/:no/leidas` · `/:no/:id/leida` | Propio | Marcar como leídas |
+| DELETE | `/api/notificaciones/:no` | Propio | Borrar el historial de notificaciones (los avisos automáticos no vuelven) |
 | GET | `/api/equipo/:no` | Encargado | Su equipo con sus actividades vigentes |
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
@@ -401,7 +402,8 @@ Código en `server/db.js`.
 ## 12. Seguridad
 
 - **Sesión:** cookie `HttpOnly`, `SameSite=Strict` y `Secure` en Render, con un token aleatorio. Vence tras 12 h sin uso. Cambiar la contraseña cierra las demás sesiones.
-- **Identidad:** el servidor toma de la sesión quién pide; `:no` y `por` deben coincidir (403).
+- **Identidad:** el servidor toma de la sesión quién pide; `:no` y `por` deben coincidir (403, con `otraCuenta: true`).
+- **Pestañas:** todas las pestañas de un navegador comparten la sesión (la cookie). Al entrar o salir en una, las demás se enteran al momento (evento `storage` de `localStorage`) y pasan a esa cuenta o al login con un aviso. Para usar dos cuentas a la vez: ventana de incógnito u otro navegador.
 - **Contraseñas:**
   - Se guardan con **scrypt** (sal de 16 bytes y clave de 64) y se comparan con `timingSafeEqual`.
   - Con un usuario inexistente se calcula igual un hash falso, para no revelar por el tiempo de respuesta qué cuentas existen.
