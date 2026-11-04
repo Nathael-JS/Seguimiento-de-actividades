@@ -45,7 +45,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '', pruebas }) {
             onPaso1={(v) => { setVerificacion(v); setAviso(''); setPantalla('codigo') }} />
         )}
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
-        {pantalla === 'registro' && <Registro volver={volver} acceso={acceso} />}
+        {pantalla === 'registro' && <Registro volver={volver} />}
         {pantalla === 'recuperar' && <Recuperar volver={volver} />}
       </main>
     </div>

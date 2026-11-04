@@ -76,8 +76,7 @@ test('MFA: alta en el primer login, luego solo el código de la app; incorrecto,
   const app = build()
   const clave = 'Nueva#Clave2026'
   for (const [no, email] of [['20001', 'ana.prueba@empresa.com'], ['20002', 'otra@empresa.com']]) {
-    const cuenta = { name: 'Ana Prueba', no, email, role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: clave }
-    assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: cuenta })).statusCode, 201)
+    assert.equal((await darDeAlta(app, { no, email, password: clave })).statusCode, 201)
   }
   const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
   const alta = (await login({ usuario: 'ana.prueba@empresa.com', password: clave }, app)).json()
@@ -114,9 +113,8 @@ test('bloqueos: por cuenta (no por lo escrito), los códigos fallidos cuentan y 
   assert.equal((await login({ usuario: 'maria.lopez', password: 'demo1234' }, app)).statusCode, 429)
 
   // Cuenta real con la app vinculada
-  const ana = { name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE }
-  await app.inject({ method: 'POST', url: '/api/registro', payload: ana })
-  await app.inject({ method: 'POST', url: '/api/registro', payload: { ...ana, no: '20002', email: 'sin.app@empresa.com' } })
+  await darDeAlta(app)
+  await darDeAlta(app, { no: '20002', email: 'sin.app@empresa.com' })
   const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
   const alta = (await login({ usuario: '20001', password: CLAVE }, app)).json()
   const paso = Math.floor(Date.now() / 30_000)
@@ -334,11 +332,18 @@ const CDMX = 'hoy=2026-11-02&zona=America/Mexico_City'
 const registro = (cambios = {}) => ({
   name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE, ...cambios,
 })
+// Alta como en producción: la persona viene en la plantilla (por registrar, como la deja la carga del gerente) y se
+// registra con su número y correo
+async function darDeAlta(app, cambios = {}) {
+  const { password, ...datos } = registro(cambios)
+  const area = app.estado.usuarios.find((u) => u.no === datos.boss)?.area ?? ''
+  app.estado.usuarios.push({ ...datos, area, password: null, porRegistrar: true, pwdChanged: new Date().toISOString() })
+  return app.inject({ method: 'POST', url: '/api/registro', payload: { no: datos.no, email: datos.email, password } })
+}
 
-test('registro de técnico: elige encargado del departamento, hereda su área y ya puede entrar', async () => {
+test('registro: quien viene en la plantilla se registra con su número y correo, hereda su área y ya puede entrar', async () => {
   const app = build()
-  const res = await pedir(app, 'POST', '/api/registro', registro())
-  assert.equal(res.code, 201)
+  assert.equal((await darDeAlta(app)).statusCode, 201)
   const yo = (await entrar('20001', CLAVE, app)).json()
   assert.deepEqual([yo.name, yo.area, yo.encargado], ['Ana Prueba', 'CDU y Chillers', false])
   // Aparece en el equipo de Sofía y en Departamentos
@@ -347,20 +352,20 @@ test('registro de técnico: elige encargado del departamento, hereda su área y 
   assert.equal((await conCookie(app, 'GET', `/api/departamentos?${CDMX}`, sofia)).json().find((e) => e.no === '20001').rate, null) // sin actividades
 })
 
-test('registro valida duplicados, contraseña y encargado', async () => {
+test('registro: sin coincidir con la plantilla no pasa y queda el intento para los administradores', async () => {
   const app = build()
-  const codigo = async (cambios) => (await pedir(app, 'POST', '/api/registro', registro(cambios))).code
-  assert.equal(await codigo({ no: '10482' }), 409)
-  assert.equal(await codigo({ email: 'JORGE.salinas@empresa.com' }), 409)
-  for (const password of ['Corta#1', 'sinmayuscula#2026', 'SINMINUSCULA#2026', 'SinNumero#Clave', 'SinSimbolo2026x']) {
-    assert.equal(await codigo({ password }), 400, password)
-  }
-  assert.equal(await codigo({ boss: undefined }), 400) // técnico sin encargado
-  assert.equal(await codigo({ boss: '10482' }), 400) // un técnico no es encargado
-  assert.equal(await codigo({ boss: '10700' }), 400) // encargado de otro departamento
-  assert.equal(await codigo({ role: 'full', boss: undefined }), 400) // encargado sin área
-  assert.equal(await codigo({ role: 'full', boss: undefined, area: 'Línea 4' }), 201)
-  assert.equal(await codigo({ email: 'no-es-correo', no: '20002' }), 400)
+  app.estado.usuarios.push({ ...registro(), password: null, porRegistrar: true, area: '', pwdChanged: new Date().toISOString() })
+  const registrarse = (cuerpo) => app.inject({ method: 'POST', url: '/api/registro', payload: { no: '20001', email: 'ana.prueba@empresa.com', password: CLAVE, ...cuerpo } })
+  const mal = await registrarse({ email: 'ana@otro.com' })
+  assert.deepEqual([mal.statusCode, mal.json().error], [403, 'Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla.'])
+  assert.equal((await registrarse({ no: '29999' })).statusCode, 403) // no está en ninguna plantilla
+  assert.equal((await registrarse({ password: 'debil' })).statusCode, 400)
+  const rechazados = app.estado.registros.filter((r) => r.evento === 'registro-rechazado')
+  assert.deepEqual(rechazados.map((r) => [r.usuario, r.detalle]), [['20001', 'ana@otro.com'], ['29999', 'ana.prueba@empresa.com']])
+  assert.equal((await login({ usuario: '20001', password: CLAVE }, app)).statusCode, 401) // por registrar: aún no entra
+  assert.equal((await registrarse({ email: ' Ana.Prueba@empresa.com ' })).statusCode, 201)
+  assert.equal((await registrarse()).json().error, 'Ya tienes cuenta: inicia sesión o recupera tu contraseña.')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: { no: '10482', email: 'jorge.salinas@empresa.com', password: CLAVE } })).statusCode, 409)
 })
 
 test('recuperar contraseña: valida número y correo, el permiso es de un solo uso', async () => {
@@ -400,11 +405,9 @@ test('departamentos: solo el propio y solo encargados, sin datos sensibles; el r
   assert.deepEqual((await de('10620')).map((e) => e.no), ['10700', '10620', '10604']) // Pruebas Funcionales
   assert.ok('rate' in (await de('10230', `?${CDMX}`))[0])
   assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 401)
-  // Registro, sin sesión, solo ve a los encargados
-  const encargados = (await conCookie(app, 'GET', '/api/encargados', undefined)).json()
-  assert.deepEqual(Object.keys(encargados[0]).sort(), ['depts', 'name', 'no', 'role'])
+  // Sin sesión solo se ve el catálogo de departamentos (ya no la lista de encargados)
   assert.deepEqual((await conCookie(app, 'GET', '/api/deptos', undefined)).json().map((d) => d.clave), ['lc', 'pf', 'smt'])
-  assert.ok(encargados.every((e) => ['gte', 'sr', 'full'].includes(e.role)))
+  assert.equal((await conCookie(app, 'GET', '/api/encargados', undefined)).statusCode, 401)
 })
 
 test('rate de aprobación: realizadas a tiempo en los últimos 30 días, en la hora local', async (t) => {
@@ -551,7 +554,7 @@ test('sesión: cookie HttpOnly al entrar, sin sesión no hay datos y al recargar
   }
   assert.equal((await conCookie(app, 'GET', '/api/sesion', undefined)).statusCode, 401)
   // Las públicas no la piden
-  assert.equal((await conCookie(app, 'GET', '/api/encargados', undefined)).statusCode, 200)
+  assert.equal((await conCookie(app, 'GET', '/api/deptos', undefined)).statusCode, 200)
 })
 
 test('sesión: no se puede actuar como otro empleado', async () => {
@@ -761,7 +764,7 @@ test('herencia: redirigir a alguien de su equipo, 2 al día; 2 por turno a quien
   reloj(t, '2026-11-03T15:00:00Z')
   const app = build()
   for (const [no, email] of [['20001', 'a@empresa.com'], ['20002', 'b@empresa.com']]) {
-    await pedir(app, 'POST', '/api/registro', registro({ no, email })) // técnicos del turno B a cargo de Sofía
+    await darDeAlta(app, { no, email }) // técnicos del turno B a cargo de Sofía
   }
   const [a1, a2, a3, a4] = [await pendiente(app), await pendiente(app), await pendiente(app), await pendiente(app)]
   const h1 = (await heredar(app, a1, '10001', '10511', HOY)).body
@@ -835,12 +838,10 @@ test('crear departamento: solo un gerente, nombre único; lo dirige quien lo cre
   assert.deepEqual([d.code, d.body.clave, d.body.nombre], [201, 'calidad-de-proce', 'Calidad de Proceso'])
   assert.equal((await crear('10700', 'calidad de proceso')).code, 409)
   assert.ok((await pedir(app, 'GET', '/api/deptos')).body.some((x) => x.clave === 'calidad-de-proce'))
-  // Laura puede ser encargada en Registro del departamento nuevo
-  const laura = (await pedir(app, 'GET', '/api/encargados')).body.find((e) => e.no === '10001')
-  assert.deepEqual(laura.depts, ['lc', 'calidad-de-proce'])
-  const reg = { name: 'Nuevo Técnico', no: '20010', email: 'nuevo@empresa.com', role: 'tec', dept: 'calidad-de-proce', shift: 'A', boss: '10001', password: 'Nueva#Clave2026' }
-  assert.equal((await pedir(app, 'POST', '/api/registro', reg)).code, 201)
-  assert.equal((await pedir(app, 'POST', '/api/registro', { ...reg, no: '20011', email: 'x@empresa.com', dept: 'no-existe' })).code, 400)
+  // Laura dirige el departamento nuevo: carga su plantilla y quien viene en ella se registra
+  const nuevo = { no: '20010', name: 'Nuevo Técnico', email: 'nuevo@empresa.com', role: 'tec', shift: 'A', boss: '10001', area: 'Línea 1' }
+  assert.equal((await plantilla(app, 'calidad-de-proce', [nuevo])).code, 200)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: { no: '20010', email: 'nuevo@empresa.com', password: CLAVE } })).statusCode, 201)
 })
 
 test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actualiza', async () => {
@@ -850,7 +851,7 @@ test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actua
     fila({ no: '30003', name: 'Marta Gil', email: 'marta.gil@empresa.com', role: 'full', boss: '10001', area: 'Línea 9' })]
   const rev = (await plantilla(app, 'lc', nuevas, { soloRevisar: true })).body
   assert.deepEqual([rev.conError, rev.filas.map((f) => f.accion)], [0, ['crear', 'crear', 'crear']])
-  assert.equal((await pedir(app, 'GET', '/api/encargados')).body.some((e) => e.no === '30003'), false) // no guardó
+  assert.ok(!app.estado.usuarios.some((e) => e.no === '30003')) // no guardó
 
   // Errores por fila: nada se guarda
   const malas = [
@@ -874,14 +875,14 @@ test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actua
   assert.equal((await plantilla(app, 'pf', [fila()])).code, 403) // Laura no dirige Pruebas Funcionales
   assert.equal((await pedir(app, 'POST', '/api/departamentos/lc/plantilla', { por: '10230', filas: [fila()] })).code, 403) // Ing. Full
 
-  // Guardar: crea las nuevas (sin contraseña: la crean con "¿Olvidaste tu contraseña?") y actualiza a Jorge
+  // Guardar: crea las nuevas por registrar y actualiza a Jorge
   const ok = (await plantilla(app, 'lc', [...nuevas, fila({ no: '10482', name: 'Jorge Salinas', email: 'jorge.salinas@empresa.com', shift: 'B' })])).body
   assert.deepEqual([ok.creados, ok.actualizados], [3, 1])
-  // Las nuevas reciben una contraseña temporal (se muestra una vez); con ella entran y vinculan su app
-  assert.deepEqual(ok.temporales.map((x) => x.no), nuevas.map((f) => f.no))
-  const rosa = ok.temporales.find((x) => x.no === '30001')
+  // Cada persona nueva se registra con su número y correo, y en su primer login vincula su app
   assert.equal((await login({ usuario: '30001', password: 'null' }, app)).statusCode, 401)
-  assert.match((await login({ usuario: '30001', password: rosa.temporal }, app)).json().secreto, /^[A-Z2-7]{32}$/)
+  const rosa = { no: '30001', email: 'rosa.vega@empresa.com', password: CLAVE }
+  assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: rosa })).statusCode, 201)
+  assert.match((await login({ usuario: '30001', password: CLAVE }, app)).json().secreto, /^[A-Z2-7]{32}$/)
   const plantel = (await conCookie(app, 'GET', '/api/departamentos', await sesionDe(app, '10001'))).json()
   assert.equal(plantel.find((e) => e.no === '30002').area, 'Línea 9') // heredó el área de su encargada
   assert.equal((await pedir(app, 'GET', '/api/perfil/10482')).body.shift, 'B')
@@ -962,7 +963,7 @@ test('restablecer contraseña: temporal de una vez que obliga a cambiarla; reini
   assert.equal((await conCookie(app, 'GET', '/api/sesion', cookie)).json().debeCambiar, undefined)
 
   // MFA: una cuenta registrada lo vincula; el super administrador lo reinicia y el siguiente login lo pide de nuevo
-  await app.inject({ method: 'POST', url: '/api/registro', payload: registro() })
+  await darDeAlta(app)
   await entrar('20001', CLAVE, app)
   assert.equal((await adm('GET', '/api/admin/usuarios')).body.find((u) => u.no === '20001').mfa, true)
   assert.equal((await adm('POST', '/api/admin/usuarios/20001/mfa', { por: '90001' })).body.mfa, false)
@@ -1180,4 +1181,36 @@ test('CUENTAS_PRUEBA=no: las cuentas de prueba no entran, sus sesiones dejan de 
   assert.equal((await login({ usuario: '10001', password: 'demo1234' }, app)).statusCode, 403)
   assert.equal((await app.inject({ method: 'GET', url: '/api/sesion', headers: { cookie } })).statusCode, 401) // la sesión abierta ya no sirve
   assert.equal((await app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '10482', email: 'jorge.salinas@empresa.com' } })).statusCode, 403)
+})
+
+test('plantillas (super administrador): por registrar, corregir número y correo, eliminar y ver intentos rechazados', async () => {
+  const { app, adm, confirmar } = await conSA()
+  await plantilla(app, 'lc', [fila(), fila({ no: '30002', name: 'Iker Soto', email: 'iker.soto@empresa.com' })])
+  await app.inject({ method: 'POST', url: '/api/registro', payload: { no: '30001', email: 'rosa@otro.com', password: CLAVE } }) // correo mal en la plantilla
+  const vista = (await adm('GET', '/api/admin/plantillas')).body
+  assert.deepEqual(vista.personas.filter((p) => p.porRegistrar).map((p) => p.no).sort(), ['30001', '30002'])
+  assert.deepEqual([vista.rechazados[0].usuario, vista.rechazados[0].detalle], ['30001', 'rosa@otro.com'])
+
+  const corregir = (no, cambios) => adm('PATCH', `/api/admin/plantillas/${no}`, { por: '90001', ...cambios })
+  assert.equal((await corregir('30001', { email: 'rosa@otro.com' })).body.confirmar, true) // pide la contraseña
+  await confirmar()
+  assert.equal((await corregir('30001', { email: 'rosa@otro.com' })).body.email, 'rosa@otro.com')
+  assert.equal((await corregir('30002', { no: '10482' })).code, 409) // número de otra persona
+  assert.equal((await corregir('10482', { email: 'x@empresa.com' })).code, 409) // ya registrado: se cambia en Usuarios
+  assert.equal((await corregir('30002', { no: '30022' })).body.no, '30022')
+  // Ahora sí puede registrarse con el correo corregido
+  assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: { no: '30001', email: 'rosa@otro.com', password: CLAVE } })).statusCode, 201)
+  assert.equal((await adm('DELETE', '/api/admin/plantillas/30001', { por: '90001' })).code, 409) // ya se registró
+  assert.equal((await adm('DELETE', '/api/admin/plantillas/30022', { por: '90001' })).body.ok, true)
+  assert.ok(!app.estado.usuarios.some((u) => u.no === '30022'))
+  assert.ok(app.estado.registros.some((r) => r.evento === 'admin-plantilla'))
+})
+
+test('errores en Registros: el super administrador ve los del servidor (con su código) y los del navegador', async () => {
+  const app = build({ salud: () => { throw new Error('se cayó la base') } })
+  const r = await app.inject({ method: 'GET', url: '/api/salud' })
+  await app.inject({ method: 'POST', url: '/api/errores', payload: { mensaje: 'x is undefined', ruta: '#tablero' } })
+  const [servidor, navegador] = ['error-servidor', 'error-navegador'].map((e) => app.estado.registros.find((x) => x.evento === e))
+  assert.ok(servidor.detalle.startsWith(r.json().codigo) && servidor.detalle.includes('se cayó la base'))
+  assert.equal(navegador.detalle, '#tablero · x is undefined')
 })

@@ -123,9 +123,9 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 - **Portada:** presenta la app con un reloj de 24 h de los turnos (`Dial.jsx`) y pide elegir el acceso, **Gerencia** o **Jr / Técnico**.
 - **Login en 2 pasos:** primero la contraseña y después el código de 6 dígitos de la app autenticadora (TOTP). La primera vez se muestra un QR para vincular la app.
 - **Cuentas de prueba:** las que tienen `prueba: true` entran sin código, para revisiones rápidas.
-- **Registro:** de técnico o Ing. Jr; elige a su encargado del departamento y hereda su área.
+- **Registro (validado con la plantilla):** solo se registra quien viene en la plantilla de su departamento, cargada por su gerente. Escribe su número de empleado y su correo; si coinciden con su fila, elige su contraseña y en su primer login vincula la app autenticadora. Puesto, turno, departamento, encargado y área salen de la plantilla. Si no coinciden: *"Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla."*, y el intento queda en **Plantillas** para el super administrador.
 - **Recuperar contraseña:** con número de empleado, correo y el código de la app autenticadora. Una cuenta sin app vinculada la restablece un super administrador, para que nadie más la reclame.
-- **Cuentas de la plantilla:** nacen con una contraseña temporal que el gerente ve una sola vez y entrega.
+- **Cuentas de la plantilla:** nacen **por registrar**, sin contraseña. No pueden entrar hasta que la persona se registra.
 - **Contraseñas:**
   - Vencen cada **90 días**; se avisa desde 15 días antes.
   - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
@@ -197,6 +197,7 @@ Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mi
   - poner una contraseña temporal (se muestra una sola vez);
   - reiniciar el MFA;
   - descargar el **respaldo** completo.
+- **Plantillas:** quién viene en cada plantilla y si ya se registró. Permite corregir el número o el correo de una fila por registrar, o quitarla. También lista los intentos de registro rechazados, con lo que escribió la persona y con quién coincide ("El número es de Rosa; en la plantilla su correo es…").
 - **Registros:** inicios de sesión, intentos fallidos y cambios de los administradores, con IP y navegador/sistema. Tiene filtros, exportación a CSV y borrado de los registros anteriores a una fecha.
 - Las acciones piden volver a escribir la contraseña del super administrador (la confirmación vale 5 min).
 
@@ -294,9 +295,9 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/login/verificar` | Público | Paso 2: código TOTP (o alta con QR); crea la cookie de sesión |
 | GET | `/api/sesion` | Sesión | Quién soy |
 | POST | `/api/logout` | Sesión | Cierra la sesión |
-| POST | `/api/registro` | Público | Crea una cuenta de técnico / Ing. Jr |
+| POST | `/api/registro` | Público | `{ no, email, password }`: activa una cuenta por registrar de la plantilla si número y correo coinciden (403 y registro del intento si no). 10 fallos por IP bloquean 15 min |
 | POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña (número, correo y código de la app; límite de intentos) |
-| GET | `/api/encargados`, `/api/deptos` | Público | Encargados (para el registro) y departamentos |
+| GET | `/api/deptos` | Público | Catálogo de departamentos |
 | GET | `/api/config` | Público | `{ cuentasPrueba }`: si la pantalla de acceso muestra la revisión rápida |
 | GET | `/api/salud` | Público | `{ ok: true }` si el servidor y la base responden. Render la usa como health check |
 | POST | `/api/errores` | Público | Error del navegador (`mensaje`, `pila`, `ruta`) → log de Render. Hasta 10 por IP cada 15 min |
@@ -329,6 +330,8 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET · PATCH | `/api/admin/usuarios` · `/:empleado` | Super admin | Listar y editar puesto, turno y acceso |
 | POST | `/api/admin/usuarios/:empleado/password` · `/mfa` | Super admin | Contraseña temporal y reinicio del MFA |
 | POST | `/api/admin/respaldo` | Super admin | Respaldo JSON de toda la base (sin sesiones) |
+| GET | `/api/admin/plantillas` | Super admin | Personas de las plantillas (por registrar / registradas) e intentos de registro rechazados |
+| PATCH · DELETE | `/api/admin/plantillas/:empleado` | Super admin | Corregir número o correo, o quitar, una fila por registrar (pide confirmación) |
 | GET | `/api/admin/registros` · POST `/purgar` | Super admin | Auditoría y borrar los anteriores a una fecha |
 
 ## 10. Modelo de datos
@@ -470,8 +473,8 @@ Código en `server/db.js`.
 **Scripts:** `dev` (Vite), `build`, `preview`, `start`, `restaurar`, `test`, `lint`.
 
 ### Errores, salud y rendimiento
-- **Errores del servidor:** un error no previsto (500) se registra en el log con el número de la petición (8 caracteres) y el navegador recibe "Ocurrió un error en el servidor. Si se repite, comparte este código: …". Con ese código se busca la línea en Render → Logs. Los 4xx (validación) siguen como los da Fastify.
-- **Errores del navegador:** `SiFalla` (`ui.jsx`) envuelve la app y cada página. Si una pantalla falla al dibujarse, muestra "Algo falló en esta pantalla" con Recargar en vez de quedar en blanco, y manda el error a `/api/errores`. `main.jsx` también reporta los errores fuera de React (`error`, `unhandledrejection`). En Render aparecen como `error en el navegador`, con el empleado, la pantalla y el navegador.
+- **Errores del servidor:** un error no previsto (500) se registra en el log y en **Registros** (evento "Error del servidor", con el código, la ruta y el mensaje) con el número de la petición (8 caracteres) y el navegador recibe "Ocurrió un error en el servidor. Si se repite, comparte este código: …". Con ese código se busca la línea en Render → Logs. Los 4xx (validación) siguen como los da Fastify.
+- **Errores del navegador:** `SiFalla` (`ui.jsx`) envuelve la app y cada página. Si una pantalla falla al dibujarse, muestra "Algo falló en esta pantalla" con Recargar en vez de quedar en blanco, y manda el error a `/api/errores`. `main.jsx` también reporta los errores fuera de React (`error`, `unhandledrejection`). En Render aparecen como `error en el navegador`, y en **Registros** como "Error en el navegador", con el empleado, la pantalla y el navegador.
 - **Salud:** `render.yaml` tiene `healthCheckPath: /api/salud`, así que Render no manda tráfico a una versión que no responde o no llega a la base.
 - **Carga diferida:** en `Shell.jsx` las páginas, salvo Inicio, se descargan al abrirlas (`React.lazy`). El JS inicial bajó de 409 a 262 kB (81 kB con gzip).
 - **Precomprimido:** `npm run build` corre `scripts/comprimir.js`, que guarda `.br` y `.gz` de cada archivo. `@fastify/static` (`preCompressed`) entrega la versión que acepta el navegador: el JS principal viaja en unos 70 kB. Los archivos con hash se guardan en caché un año.

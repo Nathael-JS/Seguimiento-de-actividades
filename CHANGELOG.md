@@ -12,7 +12,7 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
-## [PR #24] 2026-11-04: Errores, salud, rendimiento y preparación del deploy
+## [PR #24] 2026-11-04: Errores, salud, rendimiento, registro validado con la plantilla y preparación del deploy
 
 ### Agregado
 - **Manejo de errores del servidor:** un 500 se registra con un código de 8 caracteres y el usuario ve "Ocurrió un error en el servidor. Si se repite, comparte este código: …", sin detalles internos.
@@ -21,18 +21,29 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 - **`CUENTAS_PRUEBA=no`:** apaga las cuentas de prueba en producción. No entran, sus sesiones dejan de servir y se oculta la revisión rápida. Endpoint nuevo `GET /api/config`.
 - **`PRUEBAS.md`:** lista de pruebas manuales por rol y lista para el deploy completo.
 - **`CHANGELOG.md`, bitácora de incidentes y plantilla de PR.**
+- **Registro validado con la plantilla:** solo se registra quien viene en la plantilla de su departamento, con su número y su correo. Si no coinciden, ve "Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla." y el intento queda registrado.
+- **Panel Plantillas** (super administrador):
+  - Muestra quién está por registrar y quién ya se registró.
+  - Permite corregir el número o el correo de una fila, o quitarla.
+  - Lista los intentos rechazados y con quién coinciden.
+  - Endpoints: `GET /api/admin/plantillas`, `PATCH` y `DELETE /api/admin/plantillas/:empleado`.
+- **Errores en Registros:** el super administrador ve los errores del servidor (con su código) y los del navegador.
 
 ### Cambiado
 - **Carga diferida:** las páginas (salvo Inicio) se descargan al abrirlas. El JS inicial bajó de 409 a 262 kB.
 - **`npm run build`:** precomprime los archivos (Brotli y gzip). El JS principal viaja en unos 70 kB.
 - **Notificaciones:** cada persona conserva sus últimas 200.
+- **Plantilla:** las cuentas nuevas quedan **por registrar**. Ya no se generan contraseñas temporales, porque cada persona elige la suya al registrarse.
+- **Registro:** ya no se eligen encargado, puesto ni departamento; vienen de la plantilla. Se eliminó `GET /api/encargados`, que publicaba sin sesión la lista de encargados.
+- **Traducciones:** se quitaron 47 que ya no usaba ningún archivo.
 
 ### Advertencias
 - **Antes de abrir a usuarios reales:** poner `CUENTAS_PRUEBA=no` en Render. Mientras no se haga, `10001` / `demo1234` (publicado en el repositorio) entra sin MFA.
 - **Plan de Render:** el plan gratis se duerme tras 15 min sin uso; la primera visita tarda hasta un minuto.
+- **Cuentas con contraseña temporal:** las que se hayan cargado antes de este cambio siguen funcionando igual (al entrar, cambian la contraseña).
 
 ### Archivos
-`server/app.js`, `server/index.js`, `server/app.test.js`, `src/main.jsx`, `src/App.jsx`, `src/Shell.jsx`, `src/Login.jsx`, `src/ui.jsx`, `src/comun.js`, `src/en.js`, `src/index.css`, `scripts/comprimir.js`, `package.json`, `render.yaml`, `PRUEBAS.md`, `CHANGELOG.md`, `DOCUMENTACION.md`, `README.md`, `.github/pull_request_template.md`
+`server/app.js`, `server/index.js`, `server/app.test.js`, `src/main.jsx`, `src/App.jsx`, `src/Shell.jsx`, `src/Login.jsx`, `src/Registro.jsx`, `src/Admin.jsx`, `src/Ajustes.jsx`, `src/comun.test.js`, `src/ui.jsx`, `src/comun.js`, `src/en.js`, `src/index.css`, `scripts/comprimir.js`, `package.json`, `render.yaml`, `PRUEBAS.md`, `CHANGELOG.md`, `DOCUMENTACION.md`, `README.md`, `.github/pull_request_template.md`
 
 ---
 

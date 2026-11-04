@@ -21,6 +21,7 @@ const PAGINAS = {
   ajustes: lazy(() => import('./Ajustes.jsx')),
   usuarios: lazy(() => import('./Admin.jsx').then((m) => ({ default: m.Usuarios }))),
   registros: lazy(() => import('./Admin.jsx').then((m) => ({ default: m.Registros }))),
+  plantillas: lazy(() => import('./Admin.jsx').then((m) => ({ default: m.Plantillas }))),
   perfil: lazy(() => import('./Perfil.jsx')),
 }
 

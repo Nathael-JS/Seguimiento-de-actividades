@@ -39,6 +39,7 @@ export const MODULOS = [
   { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado', grupo: 'Seguimiento' },
   { ruta: 'usuarios', titulo: 'Usuarios', icono: 'users', desc: 'Cuentas, puestos, turnos y acceso al sistema.', solo: 'sa', grupo: 'Organización' },
   { ruta: 'registros', titulo: 'Registros', icono: 'log', desc: 'Quién entra, cuándo y desde dónde.', solo: 'sa', grupo: 'Organización' },
+  { ruta: 'plantillas', titulo: 'Plantillas', icono: 'file', desc: 'Quién se registró y quién falta; corrige la plantilla.', solo: 'sa', grupo: 'Organización' },
   { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.', solo: 'encargado', grupo: 'Organización' },
   { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte', grupo: 'Organización' },
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.', grupo: 'Organización' },

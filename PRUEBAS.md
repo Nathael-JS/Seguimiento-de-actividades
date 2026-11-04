@@ -26,6 +26,8 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | A2 | Entrar como gerente | Gerencia → `10001` / `demo1234` | Entra al Inicio del gerente | | |
 | A3 | Acceso equivocado | Gerencia → `10482` | "Esta cuenta es de Jr / Técnico: entra por ese acceso." | | |
 | A4 | Contraseña mala ×10 | 10 intentos con contraseña mala | El 11.º dice "Demasiados intentos. Espera 15 minutos." | | |
+| A9 | Registro rechazado | Jr / Técnico → Registrarse con un número de la plantilla y un correo equivocado | "Tus datos no coinciden con la plantilla… Comunícate con los administradores" | | |
+| A10 | Registro aceptado | Registrarse con el número y el correo de la plantilla → elegir contraseña → entrar | Pide vincular la app autenticadora y entra | | |
 | A5 | Recuperar sin código | ¿Olvidaste tu contraseña? con una cuenta real (no de prueba) sin el código | Pide el código de la app | | |
 | A6 | Recargar la página | Dentro de la app, F5 | Sigue dentro (no pide entrar otra vez) | | |
 | A7 | Cerrar sesión con otra pestaña abierta | Abrir 2 pestañas y cerrar sesión en una | La otra vuelve al login con "Se cerró la sesión en otra pestaña" | | |
@@ -51,7 +53,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B14 | Monitoreo | Monitoreo → lista y % de realizadas | Datos del equipo, detalle desplegable | | |
 | B15 | Reportes | Reportes → fechas → Exportar CSV / PDF | Archivo correcto | | |
 | B16 | Matriz y Jerarquía | Abrir ambas | Cargan sin error | | |
-| B17 | Ajustes (solo gerente) | Cargar plantilla de ejemplo (.xlsx) | Vista previa; al cargar, tabla de **contraseñas temporales** (una vez) | | |
+| B17 | Ajustes (solo gerente) | Cargar plantilla de ejemplo (.xlsx) | Vista previa; al cargar, las personas nuevas quedan **por registrar** (ver D7) | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |
 
 ## C. Jr / Técnico (`10482` o `10490`)
@@ -75,6 +77,10 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | D3 | Contraseña temporal | Ficha → restablecer contraseña | Se muestra una vez; al entrar, esa persona debe cambiarla | | |
 | D4 | Quitar acceso | Ficha → quitar acceso | Esa persona ya no entra y su sesión se cierra | | |
 | D5 | Registros | Registros → filtrar y exportar CSV | Aparecen los inicios de sesión de las pruebas | | |
+| D7 | Plantillas | Plantillas → Por registrar | Aparecen las personas de la plantilla que faltan; las registradas en su pestaña | | |
+| D8 | Intento rechazado | (después de A9) Plantillas → Intentos rechazados | Fila con número y correo escritos y la coincidencia ("El número es de…; en la plantilla su correo es…") | | |
+| D9 | Corregir plantilla | Corregir el correo de esa persona → Guardar (pide tu contraseña) | Ya puede registrarse con el correo corregido | | |
+| D10 | Errores en Registros | Registros → filtro "Error del servidor" / "Error en el navegador" | Si hubo errores, aparecen con su código | | |
 | D6 | Respaldo | Usuarios → Descargar respaldo | Descarga un JSON; queda en Registros | | |
 
 ## E. Producción (Render y Neon)
@@ -99,7 +105,7 @@ Hazlo en este orden cuando todas las pruebas estén en ✅:
 4. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full`, `SUPERADMINS`, `CUENTAS_PRUEBA=no`.
 5. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
 6. [ ] **Plan de Render:** el plan gratis se duerme tras 15 min sin uso (la primera visita tarda hasta un minuto). Para uso diario en planta, pasar a un plan de pago (Starter).
-7. [ ] **Registro público:** decidir si cualquiera puede crear su cuenta de técnico o si solo se crean con la plantilla.
+7. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
 8. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
 
 Los datos de prueba (actividades de ejemplo de octubre) se quedan en la base. Si los quieres borrar antes de empezar, pídemelo y preparo una limpieza que conserve usuarios y departamentos.

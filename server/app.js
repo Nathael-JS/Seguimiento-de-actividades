@@ -81,18 +81,14 @@ const fecha = { type: 'string', format: 'date' }
 const registrosSchema = { querystring: objeto([], { q: { type: 'string', maxLength: 100 }, evento: { type: 'string', maxLength: 40 }, desde: fecha, hasta: fecha }) }
 const purgarSchema = { body: objeto(['por', 'antes'], { por: noEmpleado, antes: fecha }) }
 const verificarSchema = { body: objeto(['token', 'codigo'], { token, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
+// Registro: solo quien viene en la plantilla de su departamento (cargada por su gerente), con su número y correo
 const registroSchema = {
-  body: objeto(['name', 'no', 'email', 'role', 'dept', 'shift', 'password'], {
-    name: { type: 'string', minLength: 3, maxLength: 100, pattern: '\\S' },
-    no: { type: 'string', pattern: '^\\d{4,10}$' },
-    email: { type: 'string', format: 'email', maxLength: 100 },
-    role: { enum: ['tec', 'jr', 'full', 'sr', 'gte'] },
-    dept: claveDepto,
-    shift: { enum: ['A', 'B', 'C'] },
-    boss: noEmpleado,
-    area: { type: 'string', maxLength: 100 },
-    password: passwordNueva,
-  }),
+  body: objeto(['no', 'email', 'password'], { no: noEmpleado, email: { type: 'string', maxLength: 100 }, password: passwordNueva }),
+}
+// Super administrador corrige una fila de plantilla por registrar
+const plantillaFilaSchema = {
+  params: { type: 'object', properties: { empleado: noEmpleado } },
+  body: objeto(['por'], { por: noEmpleado, no: noEmpleado, email: { type: 'string', format: 'email', maxLength: 100 } }),
 }
 const recuperarSchema = { body: objeto(['no', 'email'], { no: noEmpleado, email: { type: 'string', maxLength: 100 }, codigo: { type: 'string', pattern: '^\\d{6}$' } }) }
 const cambiarSchema = { body: objeto(['token', 'password'], { token, password: passwordNueva }) }
@@ -327,6 +323,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   app.setErrorHandler((err, req, reply) => {
     if (err.statusCode >= 400 && err.statusCode < 500) return reply.send(err)
     req.log.error({ err }, 'error no controlado')
+    // También en Registros (super administrador): se busca por el código que vio el usuario
+    registrar(req, 'error-servidor', { no: sesiones.get(tokenDe(req))?.no, ok: false, detalle: `${req.id} · ${req.method} ${req.url.split('?')[0]} · ${String(err.message).slice(0, 200)}` })
     return reply.code(500).send({ error: 'Ocurrió un error en el servidor. Si se repite, comparte este código: {codigo}', codigo: req.id })
   })
   // Con base de datos se guarda lo que cambió antes de responder. Las consultas (GET) no se guardan: lo poco que
@@ -513,7 +511,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   const PUBLICAS = new Set([
     '/api/config',
     '/api/login', '/api/login/verificar', '/api/logout',
-    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/encargados', '/api/deptos', '/api/salud', '/api/errores',
+    '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/deptos', '/api/salud', '/api/errores',
   ])
   const abrirSesion = (req, reply, u) => {
     limpiarVencidos(sesiones)
@@ -629,27 +627,22 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     return { ok: true }
   })
 
+  // La persona ya viene en la plantilla (por registrar): si su número y correo coinciden, elige su contraseña y en su
+  // primer login vincula su app. Si no coinciden, se registra el intento para que un super administrador lo revise
   app.post('/api/registro', { schema: registroSchema }, async (req, reply) => {
-    const { name, no, role, dept, shift, boss, area = '', password } = req.body
+    const clave = claveFallos(req, 'registro')
+    if (bloqueado(clave)) return reply.code(429).send({ error: 'Demasiados intentos. Espera 15 minutos.' })
+    const { no, password } = req.body
     const email = req.body.email.trim().toLowerCase()
-    if (empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
-    if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
-
-    if (!departamentos.some((d) => d.clave === dept)) return reply.code(400).send({ error: 'Ese departamento no existe.' })
-    const nuevo = { no, name: name.trim(), role, dept, shift, email, pwdChanged: ahora(), password: await hashPassword(password) }
-    if (RANGO[role] <= 2) {
-      // Encargado: indica su área; no elige jefe (como en el mockup)
-      if (!area.trim()) return reply.code(400).send({ error: 'Escribe tu área dentro del departamento.' })
-      Object.assign(nuevo, { boss: null, area: area.trim() })
-    } else {
-      // Técnico / Ing. Jr: elige a su encargado del mismo departamento y hereda su área
-      const jefe = boss && empleado(boss)
-      if (!jefe || !esEncargado(jefe) || !deptosDe(jefe.no).includes(dept)) {
-        return reply.code(400).send({ error: 'Elige a tu encargado del departamento.' })
-      }
-      Object.assign(nuevo, { boss, area: jefe.area })
+    const u = empleado(no)
+    if (!u || u.email !== email || u.role === 'sa') {
+      fallar(clave)
+      registrar(req, 'registro-rechazado', { usuario: no, detalle: email.slice(0, 100), ok: false })
+      return reply.code(403).send({ error: 'Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla.' })
     }
-    usuarios.push(nuevo)
+    if (!u.porRegistrar) return reply.code(409).send({ error: 'Ya tienes cuenta: inicia sesión o recupera tu contraseña.' })
+    Object.assign(u, { password: await hashPassword(password), pwdChanged: ahora() })
+    delete u.porRegistrar
     registrar(req, 'registro', { no })
     return reply.code(201).send({ ok: true })
   })
@@ -725,13 +718,10 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (!bloqueado(clave)) {
       fallar(clave)
       req.log.warn({ navegador: req.body, no: sesiones.get(tokenDe(req))?.no, agente: req.headers['user-agent'] }, 'error en el navegador')
+      registrar(req, 'error-navegador', { no: sesiones.get(tokenDe(req))?.no, ok: false, detalle: `${req.body.ruta ?? ''} · ${req.body.mensaje}`.slice(0, 300) })
     }
     return reply.code(204).send()
   })
-
-  app.get('/api/encargados', async () =>
-    usuarios.filter(esEncargado).sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
-      .map(({ no, name, role }) => ({ no, name, role, depts: deptosDe(no) })))
 
   // Catálogo de departamentos (Registro, sin sesión)
   app.get('/api/deptos', async () => departamentos.map(({ clave, nombre, gerente }) => ({ clave, nombre, gerente })))
@@ -796,24 +786,20 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     })
     const conError = resultado.filter((r) => r.error).length
     if (soloRevisar || conError) return reply.code(conError && !soloRevisar ? 400 : 200).send({ filas: resultado, conError })
-    // Las nuevas nacen con una contraseña temporal que el gerente ve una sola vez y entrega; al entrar la cambian
-    // y vinculan su app. Así nadie más puede reclamar la cuenta con solo su número y correo
-    // Los hashes van primero y en paralelo: el guardado de abajo no se interrumpe a medias por otra petición
-    const claves = new Map(filas.filter((f) => !empleado(f.no)).map((f) => [f.no, passwordTemporal()]))
-    const hashes = new Map(await Promise.all([...claves].map(async ([no, temporal]) => [no, await hashPassword(temporal)])))
-    const temporales = []
+    // Las nuevas quedan por registrar: cada persona se registra con su número y correo (ver /api/registro)
+    let creados = 0
     for (const f of filas) {
       const datos = { name: f.name.trim(), email: f.email.trim().toLowerCase(), role: f.role, shift: f.shift, boss: f.boss, dept: clave }
       const actual = empleado(f.no)
       if (actual) Object.assign(actual, datos, f.area?.trim() && { area: f.area.trim() })
       else {
-        usuarios.push({ no: f.no, ...datos, area: f.area?.trim() || '', pwdChanged: ahora(), password: hashes.get(f.no), debeCambiar: true })
-        temporales.push({ no: f.no, name: datos.name, temporal: claves.get(f.no) })
+        usuarios.push({ no: f.no, ...datos, area: f.area?.trim() || '', pwdChanged: ahora(), password: null, porRegistrar: true })
+        creados++
       }
     }
     // El área vacía se hereda del encargado, ya con todos guardados
     for (const f of filas) { const u = empleado(f.no); if (!u.area) u.area = empleado(u.boss)?.area ?? '' }
-    return { filas: resultado, conError: 0, creados: temporales.length, actualizados: resultado.length - temporales.length, temporales }
+    return { filas: resultado, conError: 0, creados, actualizados: resultado.length - creados }
   })
 
   app.get('/api/perfil/:no', { schema: { ...porEmpleado, querystring: consulta } }, conEmpleado((u, req) => {
@@ -1370,7 +1356,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   const vistaUsuario = (u) => ({
     no: u.no, name: u.name, email: u.email, role: u.role, dept: u.dept, shift: u.shift, area: u.area,
     boss: u.boss, bossName: empleado(u.boss)?.name, activo: u.activo !== false, prueba: !!u.prueba, mfa: !!u.totp,
-    sinPassword: !u.password, debeCambiar: !!u.debeCambiar, pwdChanged: u.pwdChanged, diasPassword: diasPassword(u),
+    sinPassword: !u.password, porRegistrar: !!u.porRegistrar, debeCambiar: !!u.debeCambiar, pwdChanged: u.pwdChanged, diasPassword: diasPassword(u),
     ultimoAcceso: ultimoAcceso(u.no),
   })
   app.get('/api/admin/usuarios', async () =>
@@ -1436,6 +1422,49 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (!confirmado(req, reply)) return
     registrar(req, 'admin-respaldo', { por: req.sesion.no })
     return respaldo(app.estado)
+  })
+
+  // Plantillas: quién viene en la plantilla de su departamento y si ya se registró, y los intentos de registro que no
+  // coincidieron (número y correo escritos) para validarlos contra el sistema
+  app.get('/api/admin/plantillas', async () => ({
+    personas: usuarios.filter((u) => u.role !== 'sa').map(vistaUsuario).sort((a, b) => b.porRegistrar - a.porRegistrar || a.name.localeCompare(b.name)),
+    rechazados: registros.filter((r) => r.evento === 'registro-rechazado').slice(-100).reverse(),
+  }))
+  // Solo filas por registrar: una cuenta ya registrada se cambia en Usuarios. Un número se corrige mientras nada lo
+  // use aún (actividades, avisos); sus subordinados en la plantilla pasan al número nuevo
+  const porRegistrar = (req, reply) => {
+    const u = empleado(req.params.empleado)
+    if (!u || u.role === 'sa') { reply.code(404).send({ error: 'Empleado no encontrado.' }); return null }
+    if (!u.porRegistrar) { reply.code(409).send({ error: 'Ya se registró: sus datos se cambian en Usuarios.' }); return null }
+    return u
+  }
+  const enUso = (no) => actividades.some((a) => a.to === no || a.by === no) || notificaciones.some((n) => n.for === no || n.who === no)
+  app.patch('/api/admin/plantillas/:empleado', { schema: plantillaFilaSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const u = porRegistrar(req, reply)
+    if (!u) return
+    const { no = u.no } = req.body
+    const email = req.body.email?.trim().toLowerCase() ?? u.email
+    if (no !== u.no && empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
+    if (no !== u.no && enUso(u.no)) return reply.code(409).send({ error: 'Ya tiene actividades o avisos con este número: corrige la plantilla y vuelve a cargarla.' })
+    if (email !== u.email && usuarios.some((x) => x.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
+    const antes = `${u.no} ${u.email}`
+    usuarios.filter((x) => x.boss === u.no).forEach((x) => (x.boss = no))
+    departamentos.filter((d) => d.gerente === u.no).forEach((d) => (d.gerente = no))
+    Object.assign(u, { no, email })
+    registrar(req, 'admin-plantilla', { no, por: req.sesion.no, detalle: `${antes} → ${no} ${email}` })
+    return vistaUsuario(u)
+  })
+  app.delete('/api/admin/plantillas/:empleado', { schema: { params: plantillaFilaSchema.params, body: objeto(['por'], { por: noEmpleado }) } }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const u = porRegistrar(req, reply)
+    if (!u) return
+    if (usuarios.some((x) => x.boss === u.no) || departamentos.some((d) => d.gerente === u.no) || enUso(u.no)) {
+      return reply.code(409).send({ error: 'Tiene personas a su cargo, un departamento o actividades: corrige la plantilla y vuelve a cargarla.' })
+    }
+    usuarios.splice(usuarios.indexOf(u), 1)
+    registrar(req, 'admin-plantilla', { no: u.no, por: req.sesion.no, detalle: `eliminada: ${u.name} ${u.email}` })
+    return { ok: true }
   })
 
   // Registros: solo lectura, del más nuevo al más viejo. q busca en número, nombre, usuario escrito, IP y detalle
