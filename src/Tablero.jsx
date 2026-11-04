@@ -290,7 +290,6 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
     if (puntos.length > 20) return setError(t('Máximo 20 actividades a la vez.'))
     if (!encargado && puntos.some((p) => p.length > 200)) return setError(t('Cada actividad, máximo 200 caracteres.'))
     setEnviando(true)
-    let hechas = 0
     try {
       if (encargado) {
         await api('/api/actividades', {
@@ -298,10 +297,7 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
           body: { por: user.no, para, fecha, turno, comentario: comentario.trim(), prioridad: 'diaria', criticidad: 'nueva', puntos: puntos.map((p) => ({ texto: p })) },
         })
       } else {
-        for (const texto of puntos) {
-          await api('/api/actividades/propia', { method: 'POST', body: { por: user.no, texto, prioridad: 'diaria', criticidad: 'nueva', hoy: hoy() } })
-          hechas++
-        }
+        await api('/api/actividades/propia', { method: 'POST', body: { por: user.no, textos: puntos, prioridad: 'diaria', criticidad: 'nueva', hoy: hoy() } })
       }
       setAbierta(false)
       setTexto('')
@@ -309,7 +305,6 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
       alCrear(puntos.length)
     } catch (err) {
       setError(err.message)
-      if (hechas) setTexto(puntos.slice(hechas).join('\n')) // las ya agregadas no se repiten al reintentar
     } finally {
       setEnviando(false)
     }

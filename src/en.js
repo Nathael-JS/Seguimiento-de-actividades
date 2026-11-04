@@ -691,4 +691,5 @@ export default {
   'no aprobó mover “{actividad}” a {columna}': 'did not approve moving “{actividad}” to {columna}',
   'Respaldo descargado. Guárdalo en un lugar seguro: trae contraseñas cifradas y secretos del MFA.': 'Backup downloaded. Keep it somewhere safe: it contains hashed passwords and MFA secrets.',
   'Descargar respaldo': 'Download backup',
+  'agregó {n} tareas, entre ellas': 'added {n} tasks, including',
 }

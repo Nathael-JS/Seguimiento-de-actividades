@@ -158,9 +158,10 @@ const actualizarSchema = {
 
 // Tarea que registra el propio técnico / Ing. Jr. cierre: fin de su turno (instante UTC calculado en su navegador)
 const propiaSchema = {
-  body: objeto(['por', 'texto', 'prioridad', 'hoy'], {
+  body: objeto(['por', 'textos', 'prioridad', 'hoy'], {
     por: noEmpleado,
-    texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+    // Una o varias (Tablero: una por renglón); el encargado recibe un solo aviso
+    textos: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' } },
     prioridad: { enum: ['diaria', 'urgente'] },
     criticidad,
     hoy: { type: 'string', format: 'date' },
@@ -790,7 +791,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
 
   // El técnico / Ing. Jr agrega una tarea suya: se toman sus datos tal cual (él mismo, su turno, la fecha de hoy)
   app.post('/api/actividades/propia', { schema: propiaSchema }, async (req, reply) => {
-    const { por, texto, prioridad, hoy, cierre, criticidad = 'normal' } = req.body
+    const { por, textos, prioridad, hoy, cierre, criticidad = 'normal' } = req.body
     const u = empleado(por)
     if (!u || esEncargado(u)) return reply.code(403).send({ error: 'Solo técnicos e Ing. Jr agregan tareas propias.' })
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
@@ -800,14 +801,17 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       return reply.code(400).send({ error: 'No se pudo calcular el fin de tu turno.' })
     }
     const at = ahora()
-    const a = {
-      id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
-      pct: 0, status: 'pending', mgr: '', note: '',
-      propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }),
-    }
-    actividades.push(a)
-    if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: a.id })
-    return reply.code(201).send(a)
+    const nuevas = textos.map((texto) => {
+      const a = {
+        id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
+        pct: 0, status: 'pending', mgr: '', note: '',
+        propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }),
+      }
+      actividades.push(a)
+      return a
+    })
+    if (u.boss) notificar({ for: u.boss, kind: 'propia', who: u.no, ref: nuevas[0].id, count: nuevas.length })
+    return reply.code(201).send(nuevas)
   })
 
   app.get('/api/actividades/:no', { schema: porEmpleado }, conEmpleado((u) =>

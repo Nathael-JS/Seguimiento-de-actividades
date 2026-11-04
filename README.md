@@ -77,7 +77,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/notificaciones/:no/:id/leida` | Marcar una como leída (al tocarla en el Buzón) |
 | `GET` | `/api/equipo/:no` | Equipo de un encargado con jefe y actividades vigentes de cada uno |
 | `POST` | `/api/actividades` | Crear actividades por puntos (criticidad, `nueva` = por clasificar, o urgentes con el cierre del turno) y notificar al empleado |
-| `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una tarea suya, diaria o urgente (con su fin de turno); se avisa a su encargado |
+| `POST` | `/api/actividades/propia` | El técnico / Ing. Jr agrega una o varias tareas suyas (`textos`, hasta 20), diarias o urgentes (con su fin de turno); su encargado recibe un solo aviso |
 | `GET` | `/api/actividades/:no` | Actividades asignadas a un empleado (urgentes abiertas primero) |
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `GET` | `/api/actividades/:id/receptores` | Quiénes pueden recibir esa actividad (cualquier departamento) y quién la validaría |

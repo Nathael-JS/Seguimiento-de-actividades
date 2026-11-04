@@ -23,6 +23,7 @@ export function Notificacion({ n }) {
   if (n.kind === 'assigned') return <>{quien} {t(n.count === 1 ? 'te asignó {n} actividad' : 'te asignó {n} actividades', { n: n.count })}</>
   if (n.kind === 'comment') return <>{quien} {t('comentó en')} “{n.actividad}”</>
   if (n.kind === 'inherited') return <>{quien} {t('heredó')} “{n.actividad}”</>
+  if (n.kind === 'propia' && n.count > 1) return <>{quien} {t('agregó {n} tareas, entre ellas', { n: n.count })} “{n.actividad}”</>
   if (n.kind === 'propia') return <>{quien} {t(n.urgente ? 'agregó una tarea urgente' : 'agregó una tarea')} “{n.actividad}”</>
   if (n.kind === 'urgent-closed') {
     return n.who
