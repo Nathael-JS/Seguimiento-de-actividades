@@ -1,6 +1,6 @@
 # Seguimiento-de-actividades
 
-> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md).
+> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md). Cambios de cada versión: [CHANGELOG.md](CHANGELOG.md).
 apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura

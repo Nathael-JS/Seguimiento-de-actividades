@@ -20,7 +20,7 @@ Documento técnico de todo el sistema: para qué sirve, cómo está construido, 
 14. [Pruebas](#14-pruebas)
 15. [Despliegue, variables de entorno y respaldos](#15-despliegue-variables-de-entorno-y-respaldos)
 16. [Límites conocidos](#16-límites-conocidos)
-17. [Problemas resueltos y guía rápida](#17-problemas-resueltos-y-guía-rápida)
+17. [Bitácora de incidentes](#17-bitácora-de-incidentes)
 
 ---
 
@@ -478,47 +478,91 @@ Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propó
 - **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.
 - **MAC:** la MAC del equipo no se puede obtener desde un navegador.
 
-## 17. Problemas resueltos y guía rápida
+## 17. Bitácora de incidentes
 
-Casos reales que ya pasaron, qué los causaba y cómo se resolvieron, para no repetirlos.
+Problemas reales que ya pasaron. Si algo vuelve a fallar, busca aquí el síntoma. Cada caso tiene número, fecha, PR, síntoma, causa, solución y cómo prevenirlo. Los cambios de cada PR están en el [CHANGELOG](CHANGELOG.md).
 
-### Paneles encimados en el Inicio del gerente
-- **Síntoma:** en el Inicio del gerente, "Notificaciones recientes" quedaba encima de "Avance por turno".
-- **Causa:** el Inicio del gerente usaba la clase CSS `.tablero`. Esa misma clase la usa el Tablero kanban, con una rejilla de 6 columnas, y por eso su estilo se aplicaba también al Inicio.
-- **Solución:** el Inicio usa su propia clase `.inicio-gerente`.
-- **Regla:** cada pantalla usa nombres de clase propios. Antes de crear una clase nueva, buscar si ya existe (`grep -n "\.nombre" src/index.css`).
+**Para agregar un incidente**, copia esta plantilla al final de la sección:
 
-### "Se desactivó la cuenta" al abrir dos cuentas en dos pestañas
-- **Síntoma:** con el gerente abierto en una pestaña, en otra se entra como Jr / Técnico, y la del gerente "se desactiva".
-- **Causa:** no es un bloqueo de seguridad. Todas las pestañas de un navegador comparten la cookie de sesión: la segunda pestaña ya abre como gerente, y al cerrar sesión para cambiar de cuenta se cierra la sesión del navegador entero.
-- **Solución:** las pestañas se sincronizan (evento `storage` de `localStorage` y la bandera `otraCuenta` en el 403). Si una pestaña sale, las demás vuelven al login con un aviso; si entra con otra cuenta, las demás pasan a esa cuenta con un aviso.
-- **Para usar dos cuentas a la vez:** una en la ventana normal y la otra en una ventana de **incógnito**, o en otro navegador.
+```markdown
+### I-NN. Título corto del síntoma
+- **Fecha / PR:** AAAA-MM-DD · PR #NN
+- **Síntoma:** lo que vio el usuario (pantalla, mensaje exacto, pasos).
+- **Causa:** por qué pasó (archivo y línea si aplica).
+- **Solución:** qué se cambió.
+- **Prevención:** regla o prueba para que no se repita.
+```
 
-### Columnas nuevas y la base de producción
-- **Riesgo:** una tabla que ya existe en Neon no recibe columnas nuevas con `create table if not exists`, así que guardar fallaría.
-- **Solución:** `conectar()` ejecuta `alter table … add column if not exists` en cada arranque.
-- **Regla:** toda columna nueva en `TABLAS` (server/db.js) debe aceptar null, porque la tabla ya tiene filas.
+### I-01. Paneles encimados en el Inicio del gerente
+- **Fecha / PR:** 2026-11-04 · PR #23
+- **Síntoma:** en el Inicio del gerente, "Notificaciones recientes" quedaba encima de "Avance por turno" (se vio en tema oscuro, a unos 1280 px).
+- **Causa:** `TableroGerente.jsx` usaba la clase `.tablero`. El Tablero kanban (PR #17) le dio a esa misma clase una rejilla de 6 columnas, y el Inicio del gerente heredó esa rejilla.
+- **Solución:** el Inicio del gerente usa su propia clase, `.inicio-gerente`.
+- **Prevención:**
+  - Cada pantalla usa nombres de clase propios.
+  - Antes de crear una clase nueva, buscar si ya existe (`grep -n "\.nombre" src/index.css`).
+  - Al cambiar estilos, revisar en el navegador las otras pantallas que usen esa clase.
 
-### Advertencia de SSL de `pg` en el log de Render
-- **Mensaje:** `SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`.
-- **Qué hacer:** solo es una advertencia. En `DATABASE_URL` cambiar `sslmode=require` por `sslmode=verify-full`. El respaldo de GitHub Actions usa `PGSSLROOTCERT=system` para ese modo.
+### I-02. "Se desactivó la cuenta" al abrir dos cuentas en dos pestañas
+- **Fecha / PR:** 2026-11-04 · PR #23
+- **Síntoma:** con el gerente abierto en una pestaña, se entra como Jr / Técnico en otra, y la del gerente deja de funcionar.
+- **Causa:** no es un bloqueo de seguridad. Todas las pestañas de un navegador comparten la cookie de sesión. La segunda pestaña ya abre como gerente; al cerrar sesión para cambiar de cuenta, se cierra la sesión del navegador entero, y la primera pestaña no se enteraba.
+- **Solución:**
+  - Al entrar o salir, una pestaña avisa a las demás (evento `storage` de `localStorage`). Las demás pasan a esa cuenta o al login, con un aviso.
+  - El 403 de "otra cuenta" trae `otraCuenta: true`.
+- **Prevención:**
+  - Para dos cuentas a la vez, abrir una en ventana de **incógnito** o en otro navegador.
+  - No cambiar a sesiones por pestaña (token en JavaScript): sería menos seguro que la cookie `HttpOnly`.
 
-### Revisar que un respaldo diario se puede abrir
-1. Descargar el artefacto en GitHub: *Actions → Respaldo → la ejecución → Artifacts*, y descomprimir el zip.
-2. Abrir **Git Bash** en esa carpeta. Desde PowerShell no funciona: no trae `openssl` ni `gunzip` y daña los datos al pasarlos con `|`.
-3. Escribir el comando a mano o pegarlo con clic derecho / **Shift+Insert**. Con Ctrl+V la terminal agrega `^[[200~` y el comando falla.
-4. Correr:
-   ```bash
-   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | grep -c "CREATE TABLE"
-   ```
-   Debe responder el número de tablas (10 con `guardadas`). Con `| head -20` aparece "error writing output file": es normal, porque `head` se cierra antes de que termine.
-5. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.
+### I-03. Columnas nuevas y la base de producción
+- **Fecha / PR:** 2026-11-04 · PR #22
+- **Síntoma (evitado antes de llegar a producción):** guardar habría fallado con `column "recurrencia" does not exist`.
+- **Causa:** `create table if not exists` no agrega columnas a una tabla que ya existe en Neon.
+- **Solución:** en cada arranque, `conectar()` ejecuta `alter table … add column if not exists` para todas las columnas de `TABLAS`. La prueba de base de datos lo comprueba sobre una tabla vieja.
+- **Prevención:** toda columna nueva en `TABLAS` (`server/db.js`) debe aceptar null, porque la tabla ya tiene filas.
 
-### Workflow que no se puede correr a mano
-- **Síntoma:** en GitHub no aparece **Run workflow**.
-- **Causa:** GitHub solo muestra workflows que ya están en `main`, y el botón está en la pestaña **Actions** del repositorio, no en *Settings*.
+### I-04. Advertencia de SSL de `pg` en el log de Render
+- **Fecha / PR:** 2026-11-03 · PR #19
+- **Síntoma:** en el log aparece `SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`.
+- **Causa:** la cadena de Neon trae `sslmode=require`. La versión actual de `pg` ya verifica todo, pero avisa que la v9 cambiará ese comportamiento.
+- **Solución:** en Render, en `DATABASE_URL`, cambiar `sslmode=require` por `sslmode=verify-full`.
+- **Prevención:** el workflow de respaldo usa `PGSSLROOTCERT=system` y monta los certificados del runner para ese mismo modo.
 
-### Recuperar contraseña ya no deja pasar
-- **Mensajes:** "Escribe el código de 6 dígitos de tu app autenticadora", o "Tu cuenta aún no tiene la app autenticadora".
-- **Causa:** desde que se corrigió la auditoría, recuperar pide el código de la app. Una cuenta sin app vinculada la restablece un super administrador (Usuarios → contraseña temporal).
+### I-05. Recurrente movida a Urgente se repetía como "urgente cerrada" falsa
+- **Fecha / PR:** 2026-11-04 · PR #22 (se encontró en la revisión, antes del merge)
+- **Síntoma (evitado):** en cada periodo habría aparecido una urgente "cerrada sin terminar", con dos avisos.
+- **Causa:** al mover una tarjeta a Urgente se conservaba la recurrencia. La copia nacía sin `cierreTurno`, y `cerrarUrgentes()` la cerraba al instante.
+- **Solución:** `aColumna()` le quita `recurrencia` y `diaMes` al pasar a Urgente. Hay una prueba en `server/app.test.js`.
+- **Prevención:** una regla que vale en un lugar (aquí, "una urgente no se repite") se aplica también en todos los caminos que llevan al mismo estado.
 
+### I-06. Recuperar contraseña con solo número y correo
+- **Fecha / PR:** 2026-11-04 · PR #22 (auditoría de seguridad)
+- **Riesgo:** un compañero que supiera el número y el correo de otra persona podía cambiarle la contraseña. Si la cuenta no tenía la app vinculada, podía quedarse con ella.
+- **Solución:**
+  - Recuperar pide el código de la app.
+  - Sin app vinculada, la restablece un super administrador.
+  - Hay límite de intentos.
+  - Las cuentas de la plantilla nacen con contraseña temporal.
+- **Síntoma esperado ahora:** "Escribe el código de 6 dígitos de tu app autenticadora" o "Tu cuenta aún no tiene la app autenticadora".
+
+### I-07. "Run workflow" no aparece en GitHub
+- **Fecha / PR:** 2026-11-03 · PR #20
+- **Síntoma:** en GitHub no se ve el botón para correr el respaldo a mano.
+- **Causa:** GitHub solo muestra los workflows que ya están en `main`, y el botón está en la pestaña **Actions** del repositorio, no en *Settings*.
+- **Solución:** fusionar el PR, ir a **Actions → Respaldo → Run workflow**.
+
+### I-08. Errores al revisar un respaldo en Windows
+- **Fecha / PR:** 2026-11-03 · PR #20 y #21
+- **Síntomas y causas:**
+  - **`command not found` con `^[[200~`:** el comando se pegó con Ctrl+V en Git Bash, y la terminal le agrega esas marcas invisibles.
+  - **`error writing output file`:** sale al usar `| head -20`; `head` se cierra antes de que termine. Es normal.
+  - **PowerShell no sirve:** no trae `openssl` ni `gunzip` y daña los datos al pasarlos con `|`.
+- **Procedimiento correcto:**
+  1. Descargar el artefacto en *Actions → Respaldo → la ejecución → Artifacts* y descomprimir el zip.
+  2. Abrir **Git Bash** en esa carpeta. Escribir el comando a mano, o pegarlo con clic derecho o **Shift+Insert**.
+  3. Correr:
+     ```bash
+     openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | grep -c "CREATE TABLE"
+     ```
+     Debe responder el número de tablas (10, con `guardadas`). Si dice `bad decrypt`, la contraseña no coincide con el secreto `BACKUP_PASSWORD`.
+  4. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.
