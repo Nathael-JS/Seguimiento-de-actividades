@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, depto, fechaHora, hoy, rol } from './comun.js'
+import { api, depto, fechaHora, hoy, nombreTurno, rol } from './comun.js'
 import { Criticidad, Estado } from './ui.jsx'
 import { t } from './i18n.js'
 
@@ -12,7 +12,7 @@ const ESTADO_HERENCIA = {
   anulada: ['Anulada', 'badge-anulada'],
 }
 const EstadoHerencia = ({ estado }) => <span className={`badge ${ESTADO_HERENCIA[estado][1]}`}>{t(ESTADO_HERENCIA[estado][0])}</span>
-const persona = (p, conDepto) => `${p.name} · ${rol(p.role)} · ${t('Turno')} ${p.shift}${conDepto ? ` · ${depto(p.dept)}` : ''}`
+const persona = (p, conDepto) => `${p.name} · ${rol(p.role)} · ${nombreTurno(p.shift)}${conDepto ? ` · ${depto(p.dept)}` : ''}`
 
 export default function Herencias({ user, recargar, avisar }) {
   const [equipo, setEquipo] = useState(null)
@@ -50,7 +50,7 @@ export default function Herencias({ user, recargar, avisar }) {
       <section className="card cupos" aria-label={t('Lo que te queda hoy')}>
         <h2>{t('Hoy')}</h2>
         <ul>
-          {['A', 'B', 'C'].map((k) => <Cupo key={k} etiqueta={`${t('Turno')} ${k}`} usadas={usadas.turnos[k]} limite={limite} />)}
+          {['A', 'B', 'C', 'D'].map((k) => <Cupo key={k} etiqueta={nombreTurno(k)} usadas={usadas.turnos[k]} limite={limite} />)}
           <Cupo etiqueta={t('A otro departamento')} usadas={usadas.cruzadas} limite={limite} />
           <Cupo etiqueta={t('Redirecciones')} usadas={usadas.redirecciones} limite={limite} />
         </ul>
@@ -153,7 +153,7 @@ function ParaHeredar({ a, user, bandeja, alHeredar, avisar }) {
   return (
     <article className="card herencia">
       <Actividad a={a}>
-        {a.nombre} · <span className="mono">{a.date} · {t('Turno')} {a.shift}</span>
+        {a.nombre} · <span className="mono">{a.date} · {nombreTurno(a.shift)}</span>
       </Actividad>
       {a.mgr && <div className="mgr-note">{a.mgr}</div>}
 
@@ -225,7 +225,7 @@ function PorValidar({ h, user, redirigir, alResolver, avisar }) {
   return (
     <article className="card herencia">
       <Actividad a={h.actividad}>
-        {h.de.name} · {depto(h.de.dept)} · <span className="mono">{h.actividad.date} · {t('Turno')} {h.actividad.shift}</span>
+        {h.de.name} · {depto(h.de.dept)} · <span className="mono">{h.actividad.date} · {nombreTurno(h.actividad.shift)}</span>
       </Actividad>
       <dl className="ruta-herencia">
         <div><dt>{t('Para')}</dt><dd>{persona(h.paraPersona)}</dd></div>

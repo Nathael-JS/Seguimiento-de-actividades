@@ -18,7 +18,7 @@ export function resumenArea(equipo, hoy) {
       const gente = [l, ...rama(l.no)]
       return { ...l, personas: gente.length - 1, ...cifras(gente.flatMap((e) => e.actividades)) }
     }),
-    turnos: ['A', 'B', 'C'].map((turno) => ({
+    turnos: ['A', 'B', 'C', 'D'].map((turno) => ({
       turno, personas: equipo.filter((e) => e.shift === turno).length, ...cifras(todas.filter((a) => a.shift === turno)),
     })),
     incompletas: todas.filter((a) => a.status === 'incomplete'),

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ESTADOS, api, depto, estado as nombreEstado, finTurno, hora, hoy, iniciales, pctRealizadas, rol } from './comun.js'
-import { Anillo, Campo, Criticidad, Estado, SelectorCriticidad } from './ui.jsx'
+import { ESTADOS, api, depto, estado as nombreEstado, finTurno, hora, hoy, nombreTurno, pctRealizadas, rol } from './comun.js'
+import { Anillo, Avatar, Campo, Criticidad, Estado, SelectorCriticidad } from './ui.jsx'
 import { t } from './i18n.js'
 import Icono from './Icono.jsx'
 import { ListaActividades } from './Lista.jsx'
@@ -115,7 +115,7 @@ function Tarea({ tarea, user, onGuardado }) {
         <div>
           <h3>{tarea.text}</h3>
           <div className="meta">
-            {tarea.propia ? t('Registrada por ti') : `${t('Asignada por')} ${tarea.byName}`} · <span className="mono">{tarea.date} · {t('Turno')} {tarea.shift} · {hora(tarea.at)}</span>
+            {tarea.propia ? t('Registrada por ti') : `${t('Asignada por')} ${tarea.byName}`} · <span className="mono">{tarea.date} · {nombreTurno(tarea.shift)} · {hora(tarea.at)}</span>
             {urgenteAbierta && <> · <b className="txt-incompleta">{t('Cierra a las {hora}', { hora: hora(tarea.cierreTurno) })}</b></>}
           </div>
         </div>
@@ -198,12 +198,12 @@ function NuevaTarea({ user, alCrear, cancelar }) {
     <form className="card form-card" onSubmit={agregar} noValidate>
       <h2 className="card-title" style={{ margin: 0 }}>{t('Nueva tarea')}</h2>
       <div className="emp-chip" aria-label={t('Se registra con tus datos')}>
-        <span className="avatar">{iniciales(user.name)}</span>
+        <Avatar no={user.no} name={user.name} />
         <div style={{ flex: 1 }}>
           <b>{user.name}</b>
           <div className="meta"><span className="mono">{t('No.')} {user.no}</span> · {depto(user.dept)} · {rol(user.role)}</div>
         </div>
-        <span className="chip">{t('Turno')} {user.shift} · {hoy()}</span>
+        <span className="chip">{nombreTurno(user.shift)} · {hoy()}</span>
       </div>
       <Campo label={t('Tarea')} id="tarea" maxLength={200} placeholder={t('Describe la tarea')} value={texto}
         onChange={(e) => setTexto(e.target.value)} autoFocus />

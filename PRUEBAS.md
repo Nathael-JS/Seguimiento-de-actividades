@@ -5,14 +5,12 @@ Lista para probar la app en Render antes de abrirla a usuarios reales. Cómo usa
 2. Cuando algo falle, anota en *Notas* qué hiciste y qué viste. Si el mensaje trae un **código** (por ejemplo `a1b2c3d4`), anótalo: con él se encuentra el error en el log de Render.
 3. Pásame solo las ❌.
 
-Cuentas de prueba (contraseña `demo1234`, entran sin código mientras `CUENTAS_PRUEBA` no sea `no`):
+Cuentas del inicio limpio (por registrar: cada una elige su contraseña en **Crear cuenta** y vincula su app autenticadora):
 
-| Cuenta | Rol |
-|---|---|
-| `10001` | Laura Méndez, Gerente |
-| `10230` | Diego Herrera, Ing. Full (encargado de Jorge) |
-| `10482` | Jorge Salinas, Técnico |
-| `10490` | María López, Ing. Jr |
+| Número | Correo | Rol |
+|---|---|---|
+| `10001` | laura.mendez@empresa.com | Laura Méndez, Gerente (Turno 4 · Administrativo) |
+| `10482` | jorge.salinas@empresa.com | Jorge Salinas, Técnico (Turno 1 · Matutino), a cargo de Laura |
 
 Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incógnito** (ver incidente [I-02](DOCUMENTACION.md#i-02-se-desactivó-la-cuenta-al-abrir-dos-cuentas-en-dos-pestañas)).
 
@@ -23,7 +21,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
 | A1 | Portada | Abrir la app | Presentación, luego elegir Gerencia o Jr / Técnico | | |
-| A2 | Entrar como gerente | Gerencia → `10001` / `demo1234` | Entra al Inicio del gerente | | |
+| A2 | Entrar como gerente | Gerencia → `10001` y su contraseña → código de la app | Entra al Inicio del gerente y dice "Bienvenido, Laura: asistencia checada a las …" (solo la primera vez del día) | | |
 | A3 | Acceso equivocado | Gerencia → `10482` | "Esta cuenta es de Jr / Técnico: entra por ese acceso." | | |
 | A4 | Contraseña mala ×10 | 10 intentos con contraseña mala | El 11.º dice "Demasiados intentos. Espera 15 minutos." | | |
 | A9 | Registro rechazado | Jr / Técnico → Registrarse con un número de la plantilla y un correo equivocado | "Tus datos no coinciden con la plantilla… Comunícate con los administradores" | | |
@@ -33,7 +31,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | A7 | Cerrar sesión con otra pestaña abierta | Abrir 2 pestañas y cerrar sesión en una | La otra vuelve al login con "Se cerró la sesión en otra pestaña" | | |
 | A8 | Idioma y tema | Botones ES/EN y luna/sol | Cambian textos y colores, y se recuerdan | | |
 
-## B. Gerente / encargado (`10001` o `10230`)
+## B. Gerente / encargado (`10001`)
 
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
@@ -51,9 +49,13 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B12 | Aprobar solicitud | (después de C4) en la tarjeta con borde ámbar → Aprobar | Se mueve a la columna pedida; al Jr le llega el aviso | | |
 | B13 | Herencias | Herencias → proponer una pendiente a alguien del turno siguiente | Queda por validar (o entra directo si eres su encargado) | | |
 | B14 | Monitoreo | Monitoreo → lista y % de realizadas | Datos del equipo, detalle desplegable | | |
-| B15 | Reportes | Reportes → fechas → Exportar CSV / PDF | Archivo correcto | | |
+| B15 | Reportes | Reportes → fechas → Exportar Excel; Exportar PDF | CSV correcto; el PDF abre **vista previa** (en celular se descarga) y *Descargar PDF* baja el archivo con logo, resumen, comparativo y detalle | | |
 | B16 | Matriz y Jerarquía | Abrir ambas | Cargan sin error | | |
 | B17 | Ajustes (solo gerente) | Cargar plantilla de ejemplo (.xlsx) | Vista previa; al cargar, las personas nuevas quedan **por registrar** (ver D7) | | |
+| B19 | Turnos | Ver Perfil, Monitoreo y el selector de turno al crear | "Turno 1 · Matutino 07:00–15:00" … "Turno 4 · Administrativo 08:00–17:30" | | |
+| B20 | Editar / borrar departamento | Ajustes → lápiz → nuevo nombre → Guardar; papelera en uno vacío | Se renombra; uno con personas no se puede borrar | | |
+| B21 | Foto de perfil | Perfil → Cambiar foto | Sale en el menú, en Perfil y en las listas del equipo | | |
+| B22 | Matriz | Matriz de seguimiento | Yield y asistencia (sin tiempo extra por ahora) | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |
 
 ## C. Jr / Técnico (`10482` o `10490`)
@@ -66,6 +68,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | C4 | Pedir mover | Arrastrar una tarjeta a Alta | No se mueve; dice "Pediste mover a Alta" | | |
 | C5 | Editar la suya | ⋯ → Editar en una que agregó | Puede cambiar texto, fecha y Repetir (no turno ni comentario) | | |
 | C6 | No edita las asignadas | ⋯ en una que le asignaron | No aparece Editar | | |
+| C8 | Límite de cambios de estado | Cambiar el estado de una misma actividad 6 veces | La 6.ª: "Ya cambiaste el estado de esta actividad 5 veces. Espera 10 min…" | | |
 | C7 | Tarea urgente | Actividades asignadas → Nueva tarea → Urgente | Se crea; se cierra al terminar el turno | | |
 
 ## D. Super administrador (cuentas de `SUPERADMINS`)
@@ -100,12 +103,12 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 Hazlo en este orden cuando todas las pruebas estén en ✅:
 
 1. [ ] **Super administradores:** `SUPERADMINS` en Render con las cuentas reales; entrar y vincular la app autenticadora.
-2. [ ] **Departamentos y personas:** el gerente crea los departamentos (Ajustes) y carga la plantilla de Excel; entrega las contraseñas temporales.
-3. [ ] **Apagar las cuentas de prueba:** en Render, Environment → `CUENTAS_PRUEBA` = `no` → guardar. Desde ese momento `demo1234` deja de funcionar y el botón de revisión rápida desaparece.
-4. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full`, `SUPERADMINS`, `CUENTAS_PRUEBA=no`.
-5. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
-6. [ ] **Plan de Render:** el plan gratis se duerme tras 15 min sin uso (la primera visita tarda hasta un minuto). Para uso diario en planta, pasar a un plan de pago (Starter).
-7. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
-8. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
+2. [ ] **Inicio limpio:** GitHub → Actions → **Vaciar datos** → Run workflow → escribir `VACIAR`. Respalda, deja solo a Laura y Jorge (por registrar) y Liquid Cooling, y conserva a los super administradores. Después: Render → Manual Deploy → **Restart service**.
+3. [ ] **Laura y Jorge se registran** (Crear cuenta con su número y correo) y vinculan su app.
+4. [ ] **Departamentos y personas:** el gerente crea o renombra departamentos (Ajustes) y carga la plantilla de Excel; cada persona se registra sola.
+5. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
+6. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
+7. [ ] **Plan de Render:** el plan gratis se duerme tras 15 min sin uso (la primera visita tarda hasta un minuto). Para uso diario en planta, pasar a un plan de pago (Starter).
+8. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
+9. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
 
-Los datos de prueba (actividades de ejemplo de octubre) se quedan en la base. Si los quieres borrar antes de empezar, pídemelo y preparo una limpieza que conserve usuarios y departamentos.

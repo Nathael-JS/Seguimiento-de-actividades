@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, iniciales, rol } from './comun.js'
+import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, rol, turnoLargo } from './comun.js'
+import { Avatar } from './ui.jsx'
 import Icono from './Icono.jsx'
 import { t } from './i18n.js'
 
@@ -122,7 +123,7 @@ export function Usuarios({ user, avisar }) {
               {visibles.map((u) => (
                 <li key={u.no}>
                   <button aria-current={u.no === elegido ? 'true' : undefined} onClick={() => setElegido(u.no)}>
-                    <span className="avatar">{iniciales(u.name)}</span>
+                    <Avatar no={u.no} name={u.name} />
                     <span className="quien">
                       <b>{u.name}</b>
                       <span className="meta">{rol(u.role)} · <span className="mono">{u.no}</span>{u.dept && ` · ${depto(u.dept)}`}</span>
@@ -178,7 +179,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
   return (
     <section className="card ficha" aria-labelledby="ficha-titulo">
       <header className="row" style={{ gap: 14 }}>
-        <span className="avatar" style={{ width: 48, height: 48, fontSize: 16 }}>{iniciales(u.name)}</span>
+        <Avatar no={u.no} name={u.name} style={{ width: 48, height: 48, fontSize: 16 }} />
         <div style={{ minWidth: 0 }}>
           <h2 id="ficha-titulo" className="card-title" style={{ margin: 0 }}>{u.name}</h2>
           <div className="meta">{rol(u.role)} · <span className="mono">{u.no}</span></div>
@@ -191,7 +192,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
         <div><dt>{t('Correo electrónico')}</dt><dd>{u.email}</dd></div>
         <div><dt>{t('Departamento')}</dt><dd>{u.dept ? `${depto(u.dept)} · ${u.area}` : u.area}</dd></div>
         <div><dt>{t('Encargado')}</dt><dd>{u.bossName ?? '—'}</dd></div>
-        <div><dt>{t('Turno')}</dt><dd>{u.shift} <span className="mono muted">{TURNOS[u.shift]}</span></dd></div>
+        <div><dt>{t('Turno')}</dt><dd>{turnoLargo(u.shift)} <span className="mono muted">{TURNOS[u.shift]}</span></dd></div>
         <div><dt>{t('Verificación en dos pasos')}</dt><dd>{t(u.prueba ? 'Cuenta de prueba: entra sin código' : u.mfa ? 'App vinculada' : 'Sin vincular')}</dd></div>
         <div>
           <dt>{t('Contraseña')}</dt>
@@ -211,7 +212,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
           <label className="field">
             <span>{t('Turno')}</span>
             <select value={shift} onChange={(e) => setShift(e.target.value)}>
-              {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{k} · {v}</option>)}
+              {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{turnoLargo(k)} · {v}</option>)}
             </select>
           </label>
           <button className="btn btn-primary" disabled={enviando || (shift === u.shift && role === u.role)}

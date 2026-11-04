@@ -5,7 +5,9 @@ import { createHmac, randomBytes, randomInt, randomUUID, scrypt, scryptSync, tim
 import { promisify } from 'node:util'
 import { respaldo } from './db.js'
 
-const leer = (archivo) => JSON.parse(readFileSync(new URL(archivo, import.meta.url)))
+// Datos con que arranca una base vacía: server/datos/inicio (inicio limpio) o, en las pruebas automáticas,
+// server/datos/pruebas (DATOS_SEMILLA=pruebas): los de los mockups, con cuentas de prueba
+const leer = (archivo) => JSON.parse(readFileSync(new URL(`./datos/${process.env.DATOS_SEMILLA ?? 'inicio'}/${archivo}`, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
 
 // Menor número = más rango. Encargados: Gerente, Senior, Ing. Full
@@ -55,7 +57,7 @@ const filaPlantilla = objeto(['no', 'name', 'email', 'role', 'shift', 'boss'], {
   name: { type: 'string', minLength: 3, maxLength: 100, pattern: '\\S' },
   email: { type: 'string', format: 'email', maxLength: 100 },
   role: { enum: ['tec', 'jr', 'full', 'sr'] },
-  shift: { enum: ['A', 'B', 'C'] },
+  shift: { enum: ['A', 'B', 'C', 'D'] },
   area: { type: 'string', maxLength: 100 },
   boss: { type: 'string', pattern: '^\\d{1,10}$' },
 })
@@ -73,7 +75,7 @@ const confirmarSchema = { body: objeto(['por', 'password'], { por: noEmpleado, p
 const editarUsuarioSchema = {
   ...porEmpleadoAdmin,
   body: objeto(['por'], {
-    por: noEmpleado, shift: { enum: ['A', 'B', 'C'] }, role: { enum: ['tec', 'jr', 'full', 'sr', 'gte'] }, activo: { type: 'boolean' },
+    por: noEmpleado, shift: { enum: ['A', 'B', 'C', 'D'] }, role: { enum: ['tec', 'jr', 'full', 'sr', 'gte'] }, activo: { type: 'boolean' },
   }),
 }
 const accionAdminSchema = { ...porEmpleadoAdmin, body: objeto(['por'], { por: noEmpleado }) }
@@ -117,7 +119,7 @@ const registrarSchema = {
       por: noEmpleado,
       para: noEmpleado,
       fecha: { type: 'string', format: 'date' },
-      turno: { enum: ['A', 'B', 'C'] },
+      turno: { enum: ['A', 'B', 'C', 'D'] },
       puntos: {
         type: 'array',
         minItems: 1,
@@ -178,7 +180,7 @@ const editarSchema = {
     texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
     comentario: { type: 'string', maxLength: 500 },
     fecha: { type: 'string', format: 'date' },
-    turno: { enum: ['A', 'B', 'C'] },
+    turno: { enum: ['A', 'B', 'C', 'D'] },
     recurrencia: { enum: ['no', ...PERIODOS] },
   }),
 }
@@ -228,7 +230,7 @@ const reporteSchema = {
       empleados: { type: 'array', minItems: 1, maxItems: 500, uniqueItems: true, items: noEmpleado },
       desde: { type: 'string', format: 'date' },
       hasta: { type: 'string', format: 'date' },
-      turno: { enum: ['A', 'B', 'C'] },
+      turno: { enum: ['A', 'B', 'C', 'D'] },
     },
   },
 }
@@ -281,13 +283,9 @@ async function passwordCorrecta(guardada, intento) {
 }
 // Temporal que da el super administrador: cumple las reglas (mayúscula, minúscula, número, símbolo, 10+)
 const passwordTemporal = () => `Tmp-${aBase32(randomBytes(5))}!${randomInt(10, 100)}`
-const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A' }
-// Fin de cada turno en minutos desde la medianoche del día en que empieza (el C termina al día siguiente)
-const FIN_TURNO = { A: 14 * 60 + 30, B: 23 * 60, C: 30 * 60 }
-const minutos = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))
-// Minutos que salió después del fin de su turno; la salida antes de la entrada es del día siguiente
-const tiempoExtra = ({ entrada, salida }, turno) =>
-  Math.max(0, minutos(salida) + (salida < entrada ? 1440 : 0) - FIN_TURNO[turno])
+// Turnos (en pantalla Turno 1 a 4): A matutino 07:00–15:00, B vespertino 15:00–22:30, C nocturno 22:30–07:00 y D
+// administrativo 08:00–17:30. Tras el C viene el A del día siguiente; el administrativo sigue con el administrativo
+const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A', D: 'D' }
 const diaHabil = (fecha) => new Date(fecha).getUTCDay() % 6 !== 0 // lunes a viernes
 // Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
 const sumarDias = (fecha, n) => new Date(Date.parse(fecha) + n * 86_400_000).toISOString().slice(0, 10)
@@ -343,7 +341,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     })
   }
 
-  const usuarios = cargado?.usuarios ?? leer('./usuarios.json')
+  const usuarios = cargado?.usuarios ?? leer('usuarios.json')
   // Super administradores: se agregan o actualizan por correo y conservan su MFA; los que ya no están en la
   // variable pierden el acceso
   const correosSA = superadmins.map((sa) => sa.email.trim().toLowerCase())
@@ -377,18 +375,14 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (registros.length > 5000) registros.shift()
     req.log.info({ registro: r }, evento)
   }
-  const actividades = cargado?.actividades ?? leer('./actividades.json')
-  const notificaciones = cargado?.notificaciones ?? leer('./notificaciones.json')
+  const actividades = cargado?.actividades ?? leer('actividades.json')
+  const notificaciones = cargado?.notificaciones ?? leer('notificaciones.json')
   const herencias = cargado?.herencias ?? [] // propuestas de herencia: pendientes de validar y su historial
   const guardadas = cargado?.guardadas ?? [] // tareas guardadas: plantillas personales para reutilizar
   // Los de los mockups y los que crea un gerente, que queda como quien lo dirige
-  const departamentos = cargado?.departamentos ?? [
-    { clave: 'lc', nombre: 'Liquid Cooling', gerente: '10001' },
-    { clave: 'pf', nombre: 'Pruebas Funcionales', gerente: '10700' },
-    { clave: 'smt', nombre: 'SMT', gerente: null },
-  ]
+  const departamentos = cargado?.departamentos ?? leer('departamentos.json')
   // shortcut: checador simulado (entrada/salida en hora de planta, lunes a viernes, oct–dic 2026); cambiar por el real
-  const checador = cargado?.checador ?? leer('./checador.json')
+  const checador = cargado?.checador ?? leer('checador.json')
   // Códigos de verificación y permisos de recuperación pendientes, por token
   const verificaciones = new Map()
   const recuperaciones = new Map()
@@ -509,7 +503,6 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
   const apagada = (u) => u.prueba && !cuentasPrueba
   const PUBLICAS = new Set([
-    '/api/config',
     '/api/login', '/api/login/verificar', '/api/logout',
     '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/deptos', '/api/salud', '/api/errores',
   ])
@@ -545,6 +538,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
   // 10 contraseñas incorrectas seguidas desde la misma IP para el mismo usuario bloquean 15 minutos
   const fallosLogin = new Map()
+  const cambiosEstado = new Map() // actividad → cambios de estado recientes del técnico / Ing. Jr
   const BLOQUEO = 15 * 60_000
   // Intentos fallidos por IP y cuenta: contraseña, código de la app y recuperar comparten el mismo bloqueo
   const claveFallos = (req, cuenta) => `${ipDe(req)}|${cuenta}`
@@ -702,9 +696,6 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   })
 
   // Registro (sin sesión): a quién se puede elegir como encargado
-  // Lo que la pantalla de acceso necesita saber antes de entrar: si muestra el botón de revisión rápida
-  app.get('/api/config', async () => ({ cuentasPrueba }))
-
   app.get('/api/salud', async () => {
     await salud?.()
     return { ok: true }
@@ -752,6 +743,33 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const d = { clave, nombre, gerente: yo.no }
     departamentos.push(d)
     return reply.code(201).send({ clave, nombre })
+  })
+
+  // Editar el nombre o borrar un departamento: solo el gerente que lo dirige. Se borra vacío (sin personas) y nunca el
+  // suyo propio; la clave no cambia, así lo guardado sigue apuntando a él
+  const dirige = (req, reply) => {
+    const d = departamentos.find((x) => x.clave === req.params.clave)
+    if (!d) { reply.code(404).send({ error: 'Ese departamento no existe.' }); return null }
+    if (d.gerente !== req.body.por) { reply.code(403).send({ error: 'Solo el gerente que dirige el departamento lo cambia.' }); return null }
+    return d
+  }
+  const deptoSchema = { params: { type: 'object', properties: { clave: claveDepto } } }
+  app.patch('/api/departamentos/:clave', { schema: { ...deptoSchema, body: crearDeptoSchema.body } }, async (req, reply) => {
+    const d = dirige(req, reply)
+    if (!d) return
+    const nombre = req.body.nombre.trim().replace(/\s+/g, ' ')
+    if (departamentos.some((x) => x !== d && x.nombre.toLowerCase() === nombre.toLowerCase())) {
+      return reply.code(409).send({ error: 'Ya existe un departamento con ese nombre.' })
+    }
+    d.nombre = nombre
+    return { clave: d.clave, nombre }
+  })
+  app.delete('/api/departamentos/:clave', { schema: { ...deptoSchema, body: objeto(['por'], { por: noEmpleado }) } }, async (req, reply) => {
+    const d = dirige(req, reply)
+    if (!d) return
+    if (usuarios.some((u) => u.dept === d.clave)) return reply.code(409).send({ error: 'Tiene personas: muévelas o quítalas de la plantilla antes de borrarlo.' })
+    departamentos.splice(departamentos.indexOf(d), 1)
+    return { ok: true }
   })
 
   // Plantilla del departamento: el gerente sube a su gente (Excel o CSV, leído en el navegador) y aquí se valida
@@ -810,6 +828,26 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     }
   }))
 
+  // Foto de perfil: la imagen ya viene recortada a 256 px desde el navegador (unos 20 kB, data URL JPEG/PNG/WebP).
+  // Se guarda con el usuario y se sirve aparte (/api/fotos) para no cargarla en cada lista
+  const fotoSchema = { ...porEmpleado, body: objeto(['foto'], { foto: { type: 'string', maxLength: 300_000, pattern: '^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$' } }) }
+  app.post('/api/perfil/:no/foto', { schema: fotoSchema }, conEmpleado((u, req) => {
+    u.foto = req.body.foto
+    return { ok: true }
+  }))
+  app.delete('/api/perfil/:no/foto', { schema: porEmpleado }, conEmpleado((u) => {
+    delete u.foto
+    return { ok: true }
+  }))
+  // Con sesión, cualquiera ve la foto de cualquiera (como su nombre). 404 si no tiene: se muestran sus iniciales.
+  // Unos minutos de caché; quien la cambia la ve al momento porque su navegador pide otra versión (?v=)
+  app.get('/api/fotos/:empleado', { schema: { params: { type: 'object', properties: { empleado: noEmpleado } } } }, async (req, reply) => {
+    const foto = empleado(req.params.empleado)?.foto
+    reply.header('cache-control', 'private, max-age=300')
+    if (!foto) return reply.code(404).send({ error: 'Sin foto.' })
+    const [, tipo, datos] = foto.match(/^data:(image\/\w+);base64,(.+)$/)
+    return reply.type(tipo).send(Buffer.from(datos, 'base64'))
+  })
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado(async (u, req, reply) => {
     if (!(await passwordCorrecta(u.password, req.body.actual))) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
     if (req.body.nueva === req.body.actual) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
@@ -844,6 +882,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
             id: n.id,
             kind: n.kind,
             who: empleado(n.who)?.name,
+            whoNo: n.who, // para su foto
             actividad: a?.text,
             activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
             urgente: a?.prioridad === 'urgente',
@@ -854,6 +893,19 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
           }
         }),
     }
+  }))
+
+  // Asistencia: la primera vez que la persona abre la app en el día queda su entrada (fecha y hora de su equipo,
+  // validadas contra el reloj del servidor). Las siguientes veces del mismo día no cambia nada
+  const asistenciaSchema = { ...porEmpleado, body: objeto(['hoy', 'hora'], { hoy: { type: 'string', format: 'date' }, hora: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' } }) }
+  app.post('/api/asistencia/:no', { schema: asistenciaSchema }, conEmpleado((u, req, reply) => {
+    const { hoy, hora } = req.body
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    if (u.role === 'sa') return { nueva: false }
+    const marca = checador.find((r) => r.no === u.no && r.date === hoy)
+    if (marca) return { nueva: false, entrada: marca.entrada }
+    checador.push({ no: u.no, date: hoy, entrada: hora, salida: '' }) // salida: la pondrá el checador real
+    return { nueva: true, entrada: hora }
   }))
 
   app.post('/api/notificaciones/:no/leidas', { schema: porEmpleado }, conEmpleado((u) => {
@@ -958,6 +1010,18 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
     if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
 
+    // El técnico / Ing. Jr cambia el estado de una actividad hasta 5 veces seguidas; luego espera 10 min. En memoria:
+    // un reinicio lo reinicia, y para esto basta
+    if (estado !== a.status && !esEncargado(empleado(por))) {
+      const clave = `estado|${a.id}`
+      limpiarVencidos(cambiosEstado)
+      const c = cambiosEstado.get(clave) ?? { n: 0, vence: 0 }
+      if (c.n >= 5) {
+        const min = Math.ceil((c.vence - Date.now()) / 60_000)
+        return reply.code(429).send({ error: 'Ya cambiaste el estado de esta actividad 5 veces. Espera {min} min para volver a cambiarlo.', min })
+      }
+      cambiosEstado.set(clave, { n: c.n + 1, vence: Date.now() + 10 * 60_000 })
+    }
     const cambioEstado = estado !== a.status
     const cambioNota = nota.trim() !== a.note
     // doneAt: cuándo quedó realizada; se conserva si ya lo estaba y se borra si se reabre
@@ -1122,7 +1186,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const base = a.date > hoy ? a.date : hoy
     const nueva = {
       ...a, id: siguienteId(actividades), to: para, by: por, at: ahora(), status: 'pending', note: '', inh: true,
-      date: mismo || a.shift === 'C' ? diaSiguiente(base) : base,
+      date: mismo || a.shift === 'C' || a.shift === 'D' ? diaSiguiente(base) : base,
       shift: mismo ? a.shift : SIGUIENTE_TURNO[a.shift],
       ...(a.criticidad === 'critica' && { pasadaEl: hoy }),
     }
@@ -1218,7 +1282,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       return {
         limite: LIMITE,
         usadas: {
-          turnos: Object.fromEntries(['A', 'B', 'C'].map((t) => [t, cuenta((h) => h.por === u.no && h.hoy === hoy && h.turno === t && !h.critica)])),
+          turnos: Object.fromEntries(['A', 'B', 'C', 'D'].map((t) => [t, cuenta((h) => h.por === u.no && h.hoy === hoy && h.turno === t && !h.critica)])),
           cruzadas: cuenta((h) => h.por === u.no && h.hoy === hoy && h.cruzada && !h.critica),
           redirecciones: herencias.filter((h) => h.resueltaPor === u.no && h.resueltaHoy === hoy && h.estado === 'redirigida').length,
         },
@@ -1300,7 +1364,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   // Matriz de seguimiento del equipo entre dos fechas (hasta hoy):
   // - yield de diarias y de urgentes: realizadas ÷ las que cuentan. Las de hoy abiertas y las urgentes aún sin
   //   cerrar no cuentan todavía; una heredada cuenta una vez, en quien la recibió
-  // - tiempo extra (minutos) y asistencia según el checador, hasta ayer (la salida de hoy aún no ocurre)
+  // - asistencia según el checador, hasta ayer (la salida de hoy aún no ocurre). El tiempo extra se quitó por ahora:
+  //   se implementará después con sus reglas
   app.get('/api/matriz/:no', { schema: matrizSchema }, conEmpleado((u, req, reply) => {
     if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
     const { desde, hoy } = req.query
@@ -1321,7 +1386,6 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
           no, name, role, shift, boss,
           diarias: yieldDe(suyas.filter((a) => a.prioridad !== 'urgente' && (a.status === 'done' || a.date < hoy))),
           urgentes: yieldDe(suyas.filter((a) => a.prioridad === 'urgente' && (a.status === 'done' || a.cerrada))),
-          extra: marcas.reduce((s, r) => s + tiempoExtra(r, shift), 0),
           asistencia: [marcas.filter((r) => diaHabil(r.date)).length, habiles],
         }
       })

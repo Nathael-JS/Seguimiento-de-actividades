@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { TURNOS, api, depto, descargarCsv, estado, hora, hoy, pctRealizadas, rol } from './comun.js'
+import { useEffect, useRef, useState } from 'react'
+import { TURNOS, api, depto, descargar, descargarCsv, estado, fechaHora, hora, hoy, nombreTurno, pctRealizadas, rol, turnoLargo } from './comun.js'
 import { t } from './i18n.js'
 import { comparar } from './reporte.js'
+import Icono from './Icono.jsx'
 import { Estado, Rate } from './ui.jsx'
 
 const haceUnaSemana = () => new Date(Date.now() - 7 * 86_400_000).toLocaleDateString('en-CA')
@@ -19,6 +20,8 @@ const celdas = (f) => [f.date, f.shift, hora(f.at), f.name, rol(f.role), depto(f
 // El % a tiempo va primero: es la cifra que se compara y en móvil queda a la vista sin desplazar
 const COLUMNAS_COMPARATIVO = ['Nombre', 'Puesto', '% a tiempo', 'Atrasadas', 'Incompletas', 'Realizadas', 'Actividades']
 const celdasComparativo = (x) => [x.name, rol(x.role), x.aTiempo ?? '', x.atrasadas, x.incompletas, x.realizadas, x.actividades]
+// Color del estado en el PDF (los mismos tonos que en pantalla, tema claro)
+const COLOR_ESTADO = { done: [29, 95, 168], progress: [11, 110, 110], pending: [138, 81, 0], incomplete: [180, 35, 24] }
 
 export default function Reportes({ user }) {
   const [equipo, setEquipo] = useState(null)
@@ -30,6 +33,9 @@ export default function Reportes({ user }) {
   const [vista, setVista] = useState('empleados')
   const [error, setError] = useState('')
   const [generando, setGenerando] = useState(false)
+  const [pdf, setPdf] = useState(null) // { url, nombre }: vista previa abierta
+  const [creandoPdf, setCreandoPdf] = useState(false)
+  const vistaPdf = useRef(null)
 
   useEffect(() => {
     api(`/api/equipo/${user.no}`)
@@ -63,6 +69,47 @@ export default function Reportes({ user }) {
     }
   }
 
+  const comparativo = filas?.length > 0 && equipo ? comparar(filas, equipo, user, hoy())[vista] : null
+
+  // PDF de verdad (no la impresión del navegador): en pantalla grande se ve antes de descargarlo; en el celular, donde
+  // los visores de PDF dentro de la página no funcionan bien, se descarga directo
+  async function exportarPdf() {
+    setCreandoPdf(true)
+    try {
+      const { reportePdf } = await import('./pdf.js')
+      const nombres = elegidos.length === personas.length ? t('Todos') : t(elegidos.length === 1 ? '{n} empleado' : '{n} empleados', { n: elegidos.length })
+      const realizadas = pctRealizadas(filas.filter((f) => !f.heredadaA))
+      const blob = await reportePdf({
+        titulo: t('Reporte de actividades'),
+        detalle: [`${desde} – ${hasta}`, turno ? `${nombreTurno(turno)}` : t('Todos los turnos'), nombres],
+        resumen: [
+          [t('Registros'), filas.length],
+          [t('Realizadas'), `${realizadas}%`],
+          [t('Incompletas'), filas.filter((f) => f.status === 'incomplete').length],
+          [t('Pendientes'), filas.filter((f) => f.status === 'pending').length],
+        ],
+        tablas: [
+          ...(comparativo ? [{ titulo: `${t('Comparativo')} · ${t(vista === 'lideres' ? 'Por líder' : 'Por empleado')}`, columnas: COLUMNAS_COMPARATIVO.map((c) => t(c)), filas: comparativo.map(celdasComparativo) }] : []),
+          { titulo: t('Detalle'), columnas: COLUMNAS.map((c) => t(c)), filas: filas.map(celdas), colores: (i, c) => c === 7 && COLOR_ESTADO[filas[i].status] },
+        ],
+        pie: `${t('Seguimiento de Actividades')} · ${t('Generado el {fecha} por {nombre}', { fecha: fechaHora(new Date().toISOString()), nombre: user.name })}`,
+      })
+      const nombre = `${t('reporte')}_${desde}_${hasta}.pdf`
+      if (matchMedia('(max-width: 760px)').matches) return descargar(blob, nombre)
+      setPdf({ url: URL.createObjectURL(blob), nombre, blob })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setCreandoPdf(false)
+    }
+  }
+  // El diálogo se abre ya montado
+  useEffect(() => { if (pdf) vistaPdf.current?.showModal() }, [pdf])
+  function cerrarPdf() {
+    URL.revokeObjectURL(pdf.url)
+    setPdf(null)
+  }
+
   return (
     <>
       <div className="page-head">
@@ -93,7 +140,7 @@ export default function Reportes({ user }) {
           <span>{t('Turno')}</span>
           <select value={turno} onChange={(e) => setTurno(e.target.value)}>
             <option value="">{t('Todos los turnos')}</option>
-            {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{k} · {v}</option>)}
+            {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{turnoLargo(k)} · {v}</option>)}
           </select>
         </label>
         <button className="btn btn-primary" type="submit" disabled={generando || !equipo}>
@@ -102,8 +149,8 @@ export default function Reportes({ user }) {
         {error && <p className="error wide" role="alert">{error}</p>}
       </form>
 
-      {filas?.length > 0 && equipo && (
-        <Comparativo filas={comparar(filas, equipo, user, hoy())[vista]} vista={vista} setVista={setVista}
+      {comparativo && (
+        <Comparativo filas={comparativo} vista={vista} setVista={setVista}
           exportar={(x) => descargarCsv(COLUMNAS_COMPARATIVO, x.map(celdasComparativo), `${t('comparativo')}_${desde}_${hasta}.csv`)} />
       )}
 
@@ -112,10 +159,12 @@ export default function Reportes({ user }) {
           <div className="row between" style={{ flexWrap: 'wrap' }}>
             <p className="muted">
               <b className="mono" style={{ color: 'var(--ink)' }}>{filas.length}</b> {t('registros')} · {t('Realizadas')}: <b className="mono" style={{ color: 'var(--ink)' }}>{pctRealizadas(filas.filter((f) => !f.heredadaA))}%</b>
-              <span className="solo-impresion"> · {desde} – {hasta}{turno && ` · ${t('Turno')} ${turno}`}</span>
+              <span className="solo-impresion"> · {desde} – {hasta}{turno && ` · ${nombreTurno(turno)}`}</span>
             </p>
             <div className="row no-imprimir">
-              <button className="btn btn-secondary btn-sm" onClick={() => window.print()} disabled={!filas.length}>{t('Exportar PDF')}</button>
+              <button className="btn btn-secondary btn-sm" onClick={exportarPdf} disabled={!filas.length || creandoPdf}>
+                <Icono nombre="file" />{t(creandoPdf ? 'Creando PDF…' : 'Exportar PDF')}
+              </button>
               <button className="btn btn-secondary btn-sm" onClick={() => descargarCsv(COLUMNAS, filas.map(celdas), `${t('reporte')}_${desde}_${hasta}.csv`)} disabled={!filas.length}>
                 {t('Exportar Excel')}
               </button>
@@ -137,6 +186,19 @@ export default function Reportes({ user }) {
             </table>
           </div>
         </section>
+      )}
+
+      {pdf && (
+        <dialog ref={vistaPdf} className="card modal vista-pdf" aria-labelledby="pdf-titulo" onClose={cerrarPdf}>
+          <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <h2 id="pdf-titulo" className="card-title" style={{ margin: 0 }}>{t('Vista previa del PDF')}</h2>
+            <div className="row" style={{ gap: 8 }}>
+              <button type="button" className="btn btn-primary" onClick={() => descargar(pdf.blob, pdf.nombre)}><Icono nombre="upload" />{t('Descargar PDF')}</button>
+              <button type="button" className="btn btn-ghost" onClick={() => vistaPdf.current.close()}>{t('Cerrar')}</button>
+            </div>
+          </div>
+          <iframe title={t('Vista previa del PDF')} src={pdf.url} />
+        </dialog>
       )}
     </>
   )

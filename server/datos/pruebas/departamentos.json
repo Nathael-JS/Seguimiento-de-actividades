@@ -1,0 +1,17 @@
+[
+  {
+    "clave": "lc",
+    "nombre": "Liquid Cooling",
+    "gerente": "10001"
+  },
+  {
+    "clave": "pf",
+    "nombre": "Pruebas Funcionales",
+    "gerente": "10700"
+  },
+  {
+    "clave": "smt",
+    "nombre": "SMT",
+    "gerente": null
+  }
+]

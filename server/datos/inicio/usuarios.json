@@ -1,0 +1,28 @@
+[
+  {
+    "no": "10001",
+    "name": "Laura Méndez",
+    "role": "gte",
+    "dept": "lc",
+    "boss": null,
+    "shift": "D",
+    "area": "Gerencia",
+    "email": "laura.mendez@empresa.com",
+    "pwdChanged": "2026-11-05T00:00:00.000Z",
+    "password": null,
+    "porRegistrar": true
+  },
+  {
+    "no": "10482",
+    "name": "Jorge Salinas",
+    "role": "tec",
+    "dept": "lc",
+    "boss": "10001",
+    "shift": "A",
+    "area": "Gerencia",
+    "email": "jorge.salinas@empresa.com",
+    "pwdChanged": "2026-11-05T00:00:00.000Z",
+    "password": null,
+    "porRegistrar": true
+  }
+]

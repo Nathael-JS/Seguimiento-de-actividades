@@ -25,17 +25,19 @@ test('grupoDia: Hoy, Ayer o la fecha, según el día local', async () => {
 test('finTurno: la próxima hora de salida del turno, en hora local', async () => {
   const { finTurno } = await import('./comun.js')
   const a = (y, mo, d, h, mi) => new Date(y, mo, d, h, mi)
-  assert.deepEqual(finTurno('A', a(2026, 10, 2, 9, 0)), a(2026, 10, 2, 14, 30)) // en su turno: hoy 14:30
-  assert.deepEqual(finTurno('B', a(2026, 10, 2, 16, 0)), a(2026, 10, 2, 23, 0))
-  assert.deepEqual(finTurno('C', a(2026, 10, 2, 23, 30)), a(2026, 10, 3, 6, 0)) // turno nocturno: sale al día siguiente
-  assert.deepEqual(finTurno('C', a(2026, 10, 3, 2, 0)), a(2026, 10, 3, 6, 0))
-  assert.deepEqual(finTurno('A', a(2026, 10, 2, 15, 0)), a(2026, 10, 3, 14, 30)) // ya salió: el de mañana
+  assert.deepEqual(finTurno('A', a(2026, 10, 2, 9, 0)), a(2026, 10, 2, 15, 0)) // turno 1 (matutino): hoy 15:00
+  assert.deepEqual(finTurno('B', a(2026, 10, 2, 16, 0)), a(2026, 10, 2, 22, 30)) // turno 2 (vespertino)
+  assert.deepEqual(finTurno('C', a(2026, 10, 2, 23, 0)), a(2026, 10, 3, 7, 0)) // turno 3 (nocturno): sale al día siguiente
+  assert.deepEqual(finTurno('C', a(2026, 10, 3, 2, 0)), a(2026, 10, 3, 7, 0))
+  assert.deepEqual(finTurno('D', a(2026, 10, 2, 10, 0)), a(2026, 10, 2, 17, 30)) // turno 4 (administrativo)
+  assert.deepEqual(finTurno('A', a(2026, 10, 2, 15, 30)), a(2026, 10, 3, 15, 0)) // ya salió: el de mañana
 })
 
-test('turnoDe: el turno de cada hora del día, también el C que cruza la medianoche', async () => {
-  const { turnoDe, RANGOS } = await import('./comun.js')
-  assert.deepEqual(RANGOS, { A: [6, 14.5], B: [14.5, 23], C: [23, 30] })
-  assert.deepEqual([6, 14.4, 14.5, 22.9, 23, 0, 5.9].map(turnoDe), ['A', 'A', 'B', 'B', 'C', 'C', 'C'])
+test('turnoDe: el turno rotativo de cada hora del día, también el 3 que cruza la medianoche', async () => {
+  const { turnoDe, RANGOS, nombreTurno, turnoLargo } = await import('./comun.js')
+  assert.deepEqual(RANGOS, { A: [7, 15], B: [15, 22.5], C: [22.5, 31] }) // el administrativo (D) no es "el turno de ahora"
+  assert.deepEqual([7, 14.9, 15, 22.4, 22.5, 0, 6.9].map(turnoDe), ['A', 'A', 'B', 'B', 'C', 'C', 'C'])
+  assert.deepEqual([nombreTurno('C'), turnoLargo('D')], ['Turno 3', 'Turno 4 · Administrativo'])
 })
 
 test('dispositivo: navegador y sistema a partir del user-agent', async () => {

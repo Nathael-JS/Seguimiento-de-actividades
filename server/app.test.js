@@ -3,6 +3,9 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { build, siguienteFecha, totp } from './app.js'
 
+// Las pruebas usan los datos de los mockups (server/datos/pruebas), no el inicio limpio
+process.env.DATOS_SEMILLA = 'pruebas'
+
 const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/api/login', payload })
 // Clave TOTP de cada cuenta por instancia de la app (el primer login la entrega para darla de alta) y último paso usado
 const mfa = new WeakMap()
@@ -32,7 +35,7 @@ async function sesionDe(app, no) {
 }
 // Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
 async function pedir(app, method, url, payload) {
-  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas)\/(\d{5})/)?.[1]
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas|asistencia)\/(\d{5})/)?.[1]
   const enviar = async () => {
     const cookie = no && await sesionDe(app, no)
     return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
@@ -208,7 +211,7 @@ test('registrar valida permisos y entrada', async () => {
   assert.equal(await codigo({ puntos: [] }), 400)
   assert.equal(await codigo({ puntos: [{ texto: '  ' }] }), 400)
   assert.equal(await codigo({ fecha: '31/10/2026' }), 400)
-  assert.equal(await codigo({ turno: 'D' }), 400)
+  assert.equal(await codigo({ turno: 'E' }), 400)
 })
 
 test('actualizar: solo el asignado, realizada fuerza 100 % y notifica estado y comentario al encargado', async () => {
@@ -703,10 +706,10 @@ test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checado
     assert.equal(code, 200)
     assert.deepEqual(body.map((f) => f.no), ['10490', '10482']) // su rama, por puesto
     const jorge = body.find((f) => f.no === '10482')
-    // 29 oct: 4 diarias, 1 realizada. Hasta ayer: salidas después de las 14:30 suman 517 min; 6 de 6 días hábiles
-    assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.extra, jorge.asistencia], [[1, 4], [0, 0], 517, [6, 6]])
+    // 29 oct: 4 diarias, 1 realizada. Hasta ayer: 6 de 6 días hábiles (sin tiempo extra por ahora)
+    assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.extra, jorge.asistencia], [[1, 4], [0, 0], undefined, [6, 6]])
     const maria = body.find((f) => f.no === '10490')
-    assert.deepEqual([maria.extra, maria.asistencia], [455, [5, 6]]) // faltó el 30 oct
+    assert.deepEqual(maria.asistencia, [5, 6]) // faltó el 30 oct
     // Una urgente abierta aún no cuenta; al cerrar el turno sí
     await pedir(app, 'POST', '/api/actividades/propia', propia({ prioridad: 'urgente', hoy: '2026-11-03', cierre: enUnaHora() }))
     const urgentes = async () => (await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')).body.find((f) => f.no === '10482').urgentes
@@ -904,7 +907,7 @@ async function conSA() {
 }
 
 test('contraseñas: se guardan con hash, nunca tal cual', async () => {
-  assert.ok(!readFileSync(new URL('./usuarios.json', import.meta.url), 'utf8').includes('demo1234'))
+  assert.ok(!readFileSync(new URL('./datos/pruebas/usuarios.json', import.meta.url), 'utf8').includes('demo1234'))
   assert.equal((await login({ usuario: '10482', password: 'demo1234' })).statusCode, 200)
   assert.equal((await login({ usuario: '10482', password: 'Demo1234' })).statusCode, 401)
   const { adm } = await conSA()
@@ -1165,19 +1168,17 @@ test('notificaciones: cada quien conserva sus últimas 200', async () => {
   const app = build()
   const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, puntos: [{ texto: 'Muchas veces' }] }))).body
   for (let i = 0; i < 220; i++) {
-    await pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por: '10482', estado: i % 2 ? 'pending' : 'progress' })
+    await pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por: '10482', estado: 'pending', nota: `Comentario ${i}` }) // cada comentario avisa
   }
   const deDiego = app.estado.notificaciones.filter((n) => n.for === '10230')
   assert.equal(deDiego.length, 200)
-  assert.equal(deDiego.at(-1).kind, 'pending') // la más nueva se conserva
+  assert.equal(deDiego.at(-1).kind, 'comment') // la más nueva se conserva
 })
 
-test('CUENTAS_PRUEBA=no: las cuentas de prueba no entran, sus sesiones dejan de servir y se oculta la revisión rápida', async () => {
+test('CUENTAS_PRUEBA=no: las cuentas de prueba no entran y sus sesiones dejan de servir', async () => {
   const encendidas = build()
-  assert.deepEqual((await encendidas.inject({ method: 'GET', url: '/api/config' })).json(), { cuentasPrueba: true })
   const cookie = cookieDe(await login({ usuario: '10001', password: 'demo1234' }, encendidas))
   const app = build({ cuentasPrueba: false, estado: encendidas.estado })
-  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/config' })).json(), { cuentasPrueba: false })
   assert.equal((await login({ usuario: '10001', password: 'demo1234' }, app)).statusCode, 403)
   assert.equal((await app.inject({ method: 'GET', url: '/api/sesion', headers: { cookie } })).statusCode, 401) // la sesión abierta ya no sirve
   assert.equal((await app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '10482', email: 'jorge.salinas@empresa.com' } })).statusCode, 403)
@@ -1213,4 +1214,59 @@ test('errores en Registros: el super administrador ve los del servidor (con su c
   const [servidor, navegador] = ['error-servidor', 'error-navegador'].map((e) => app.estado.registros.find((x) => x.evento === e))
   assert.ok(servidor.detalle.startsWith(r.json().codigo) && servidor.detalle.includes('se cayó la base'))
   assert.equal(navegador.detalle, '#tablero · x is undefined')
+})
+
+test('departamentos: el gerente que lo dirige le cambia el nombre o lo borra si está vacío', async () => {
+  const app = build()
+  const d = (await pedir(app, 'POST', '/api/departamentos', { por: '10001', nombre: 'Calidad' })).body
+  const editar = (clave, por, nombre) => pedir(app, 'PATCH', `/api/departamentos/${clave}`, { por, nombre })
+  assert.equal((await editar(d.clave, '10001', 'Calidad de Proceso')).body.nombre, 'Calidad de Proceso')
+  assert.equal((await editar(d.clave, '10001', 'smt')).code, 409) // nombre de otro
+  assert.equal((await editar(d.clave, '10700', 'Mío')).code, 403) // otro gerente
+  assert.equal((await pedir(app, 'DELETE', '/api/departamentos/lc', { por: '10001' })).code, 409) // tiene personas
+  assert.equal((await pedir(app, 'DELETE', `/api/departamentos/${d.clave}`, { por: '10001' })).body.ok, true)
+  assert.ok(!(await pedir(app, 'GET', '/api/deptos')).body.some((x) => x.clave === d.clave))
+})
+
+test('estado: el técnico lo cambia hasta 5 veces seguidas por actividad; después espera 10 min', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, puntos: [{ texto: 'Ida y vuelta' }] }))).body
+  const cambiar = (estado) => pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por: '10482', estado })
+  for (const e of ['progress', 'pending', 'progress', 'pending', 'progress']) assert.equal((await cambiar(e)).code, 200)
+  const r = await cambiar('done')
+  assert.deepEqual([r.code, r.body.min], [429, 10])
+  assert.equal((await pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por: '10482', estado: 'progress', nota: 'solo el comentario' })).code, 200) // mismo estado: sí
+  mock.timers.enable({ apis: ['Date'], now: Date.now() + 10 * 60_000 + 1000 })
+  try {
+    assert.equal((await cambiar('done')).code, 200)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('foto de perfil: la sube su dueño, la ve quien tenga sesión, se quita', async () => {
+  const app = build()
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  assert.equal((await pedir(app, 'POST', '/api/perfil/10482/foto', { foto: png })).code, 200)
+  assert.equal((await pedir(app, 'POST', '/api/perfil/10482/foto', { foto: 'data:text/html;base64,PGI+' })).code, 400) // solo imágenes
+  const diego = await sesionDe(app, '10230')
+  const r = await conCookie(app, 'GET', '/api/fotos/10482', diego)
+  assert.deepEqual([r.statusCode, r.headers['content-type'], r.rawPayload.length], [200, 'image/png', 70])
+  assert.equal((await conCookie(app, 'GET', '/api/fotos/10482', undefined)).statusCode, 401) // sin sesión no
+  assert.equal((await conCookie(app, 'GET', '/api/fotos/10230', diego)).statusCode, 404) // sin foto: iniciales
+  assert.ok(!('foto' in (await pedir(app, 'GET', '/api/equipo/10230')).body.find((e) => e.no === '10482'))) // no viaja en las listas
+  await pedir(app, 'DELETE', '/api/perfil/10482/foto')
+  assert.equal((await conCookie(app, 'GET', '/api/fotos/10482', diego)).statusCode, 404)
+})
+
+test('asistencia: la primera vez del día al abrir la app; las siguientes no cambian', async () => {
+  const app = build()
+  const ch = app.estado.checador // los datos de prueba traen el checador simulado: se quita el de hoy
+  ch.splice(0, ch.length, ...ch.filter((r) => !(r.no === '10482' && r.date === HOY_REAL)))
+  const checar = (cuerpo) => pedir(app, 'POST', '/api/asistencia/10482', { hoy: HOY_REAL, hora: '07:02', ...cuerpo })
+  assert.deepEqual((await checar()).body, { nueva: true, entrada: '07:02' })
+  assert.deepEqual((await checar({ hora: '09:15' })).body, { nueva: false, entrada: '07:02' })
+  assert.equal((await checar({ hoy: '2030-01-01' })).code, 400) // reloj del equipo mal puesto
+  assert.equal((await checar({ hora: '25:00' })).code, 400)
+  assert.equal(app.estado.checador.filter((r) => r.no === '10482' && r.date === HOY_REAL).length, 1)
 })

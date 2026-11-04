@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { RANGOS, TURNOS, api, horaActual, rol, turnoDe } from './comun.js'
+import { RANGOS, TURNOS, api, horaActual, turnoDe, turnoLargo } from './comun.js'
 import Dial from './Dial.jsx'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
@@ -9,7 +9,7 @@ import { t } from './i18n.js'
 
 // Portada (slides → elegir acceso) y luego el login de ese acceso: 'login' → 'codigo' (2 pasos), o 'registro' /
 // 'recuperar' que vuelven al login
-export default function Login({ onLogin, aviso: avisoInicial = '', pruebas }) {
+export default function Login({ onLogin, aviso: avisoInicial = '' }) {
   // Con un aviso (sesión terminada) se vuelve directo a elegir acceso, sin repetir la presentación
   const [acceso, setAcceso] = useState(null)
   const [pantalla, setPantalla] = useState('login')
@@ -41,7 +41,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '', pruebas }) {
           <BotonIdioma /><BotonTema />
         </div>
         {pantalla === 'login' && (
-          <Credenciales aviso={aviso} ir={setPantalla} acceso={acceso} onLogin={onLogin} pruebas={pruebas}
+          <Credenciales aviso={aviso} ir={setPantalla} acceso={acceso} onLogin={onLogin}
             onPaso1={(v) => { setVerificacion(v); setAviso(''); setPantalla('codigo') }} />
         )}
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
@@ -95,7 +95,7 @@ function Portada({ aviso, saltar, onElegir }) {
         {final ? (
           <section className="portada-texto entra" key="final" aria-labelledby="portada-titulo">
             <p className="ahora">
-              <span className={`punto t-${activo}`} />{t('Ahora: turno {turno} · {horas}', { turno: activo, horas: TURNOS[activo] })}
+              <span className={`punto t-${activo}`} />{t('Ahora: {turno} · {horas}', { turno: turnoLargo(activo), horas: TURNOS[activo] })}
             </p>
             <h1 id="portada-titulo">{t('¿Cómo entras hoy?')}</h1>
             {aviso && <div className="notice warn" role="status"><Icono nombre="alert" /><span>{aviso}</span></div>}
@@ -117,7 +117,7 @@ function Portada({ aviso, saltar, onElegir }) {
           </section>
         ) : (
           <section className="portada-texto entra" key={i} aria-live={pausa ? 'polite' : 'off'}>
-            <p className="ahora"><span className={`punto t-${activo}`} />{t('Turno {turno} · {horas}', { turno: activo, horas: TURNOS[activo] })}</p>
+            <p className="ahora"><span className={`punto t-${activo}`} />{turnoLargo(activo)} · {TURNOS[activo]}</p>
             <h1>{t(SLIDES[i][1])}</h1>
             <p className="bajada">{t(SLIDES[i][2])}</p>
           </section>
@@ -128,7 +128,7 @@ function Portada({ aviso, saltar, onElegir }) {
         <footer className="portada-pie">
           <div className="pasos-slide" role="group" aria-label={t('Presentación')}>
             {SLIDES.map(([turno], k) => (
-              <button key={turno} type="button" aria-current={k === i ? 'step' : undefined} aria-label={t('Turno {turno}', { turno })}
+              <button key={turno} type="button" aria-current={k === i ? 'step' : undefined} aria-label={turnoLargo(turno)}
                 onClick={() => setI(k)}>
                 {/* La barra se llena en lo que dura el slide: muestra cuánto falta para el siguiente */}
                 <i className={k === i && !pausa ? 'llenando' : k < i ? 'lleno' : ''} style={{ animationDuration: `${PAUSA}ms` }} />
@@ -145,10 +145,8 @@ function Portada({ aviso, saltar, onElegir }) {
   )
 }
 
-// Cuentas de prueba para revisiones rápidas (entran sin el código de la app); se apagan con CUENTAS_PRUEBA=no
-const PRUEBA = { gerencia: ['10001', 'Laura Méndez', 'gte'], operativo: ['10482', 'Jorge Salinas', 'tec'] }
 
-function Credenciales({ aviso, ir, acceso, onPaso1, onLogin, pruebas }) {
+function Credenciales({ aviso, ir, acceso, onPaso1, onLogin }) {
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -181,7 +179,6 @@ function Credenciales({ aviso, ir, acceso, onPaso1, onLogin, pruebas }) {
       setLoading(false)
     }
   }
-  const [noPrueba, nombrePrueba, rolPrueba] = PRUEBA[acceso]
 
   return (
     <form className="auth-form" onSubmit={submit} noValidate>
@@ -198,12 +195,6 @@ function Credenciales({ aviso, ir, acceso, onPaso1, onLogin, pruebas }) {
       <p className="muted" style={{ textAlign: 'center' }}>
         {t('¿No tienes cuenta?')} <button type="button" className="link" onClick={() => ir('registro')}>{t('Registrarse')}</button>
       </p>
-      {pruebas && <div className="prueba">
-        <span>{t('Revisión rápida, sin código de la app:')}</span>
-        <button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => entrar(noPrueba, 'demo1234')}>
-          {nombrePrueba} · {rol(rolPrueba)}
-        </button>
-      </div>}
     </form>
   )
 }

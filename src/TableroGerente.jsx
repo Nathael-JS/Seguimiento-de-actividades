@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, dia, hoy, iniciales, inicioDeHoy, rol } from './comun.js'
+import { TURNOS, api, dia, hoy, inicioDeHoy, nombreTurno, rol } from './comun.js'
 import { t } from './i18n.js'
 import { resumenArea } from './tablero.js'
-import { Anillo, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
+import { Anillo, Avatar, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
 
 // Singular o plural según la cantidad
 const cuenta = (n, uno, varios) => t(n === 1 ? uno : varios, { n })
@@ -33,7 +33,7 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                   {r.lideres.map((l) => (
                     <li key={l.no}>
                       <a className="lider" href={`#monitoreo?lider=${l.no}`} aria-label={t('Ver el equipo de {nombre} en Monitoreo', { nombre: l.name })}>
-                        <span className="avatar">{iniciales(l.name)}</span>
+                        <Avatar no={l.no} name={l.name} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <b>{l.name}</b> <span className="meta">· {rol(l.role)} · {cuenta(l.personas, '{n} persona', '{n} personas')}</span>
                           <div className="meta">
@@ -56,7 +56,7 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                   <div key={x.turno} className="turno">
                     <Anillo pct={x.avance} size={56} width={6} />
                     <div>
-                      <b>{t('Turno')} {x.turno}</b>
+                      <b>{nombreTurno(x.turno)}</b>
                       <div className="muted mono" style={{ fontSize: 12 }}>{TURNOS[x.turno]}</div>
                       <div className="meta">{actividades(x.actividades)}</div>
                       <div className="meta">{cuenta(x.personas, '{n} persona', '{n} personas')}</div>
@@ -77,7 +77,7 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
             <div className="alerta">
               <h3>{t('Sin actividades hoy')} <span className="mono muted">{r.sinActividades.length}</span></h3>
               {r.sinActividades.length ? (
-                <div className="chips-estaticos">{r.sinActividades.map((e) => <span key={e.no} className="chip">{e.name} · {t('Turno')} {e.shift}</span>)}</div>
+                <div className="chips-estaticos">{r.sinActividades.map((e) => <span key={e.no} className="chip">{e.name} · {nombreTurno(e.shift)}</span>)}</div>
               ) : <p className="muted">{t('Todos tienen actividades.')}</p>}
             </div>
           </Panel>

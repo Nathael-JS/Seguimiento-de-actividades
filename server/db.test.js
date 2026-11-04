@@ -1,7 +1,11 @@
 import { test } from 'node:test'
+import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import { build } from './app.js'
 import { cargar, conectar, guardador, respaldo, restaurar } from './db.js'
+
+// Las pruebas usan los datos de los mockups (server/datos/pruebas), no el inicio limpio
+process.env.DATOS_SEMILLA = 'pruebas'
 
 // Contra un PostgreSQL de pruebas (BORRA sus tablas): TEST_DATABASE_URL=postgresql://… npm test
 const url = process.env.TEST_DATABASE_URL
@@ -73,6 +77,21 @@ test('PostgreSQL: primera carga con los datos de prueba; lo que cambia sobrevive
     const [d] = (await tercera.inject({ method: 'POST', url: '/api/login', payload: { usuario: '10230', password: 'demo1234' } }).then(async (l) =>
       tercera.inject({ method: 'POST', url: '/api/actividades', headers: { cookie: l.headers['set-cookie'].split(';')[0] }, payload: { por: '10230', para: '10482', fecha: '2026-11-04', turno: 'A', puntos: [{ texto: 'Tras restaurar' }] } }))).json()
     assert.equal(d.id, c.id + 1) // el contador de números también se restauró
+  } finally {
+    await pool.end()
+  }
+})
+
+test('vaciar: deja el inicio limpio (Laura y Jorge por registrar) y conserva a los super administradores', { skip: !url && 'sin TEST_DATABASE_URL' }, async () => {
+  const pool = await conectar(url)
+  try {
+    const { app } = await arrancar(pool) // con datos y con el super administrador de prueba
+    await app.inject({ method: 'POST', url: '/api/login', payload: { usuario: '10230', password: 'demo1234' } })
+    execFileSync('node', ['server/vaciar.js', 'VACIAR'], { env: { ...process.env, DATABASE_URL: url } })
+    const { datos } = await cargar(pool)
+    assert.deepEqual(datos.usuarios.map((u) => [u.no, u.role, !!u.porRegistrar]).sort(), [['10001', 'gte', true], ['10482', 'tec', true], ['90001', 'sa', false]])
+    assert.deepEqual([datos.actividades.length, datos.notificaciones.length, datos.checador.length, datos.departamentos.map((d) => d.clave)], [0, 0, 0, ['lc']])
+    assert.equal(datos.sesiones.size, 0)
   } finally {
     await pool.end()
   }

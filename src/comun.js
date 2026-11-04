@@ -1,7 +1,9 @@
 import { idiomaActual, t } from './i18n.js'
 
 export const ROLES = { tec: 'Técnico', jr: 'Ing. Jr', full: 'Ing. Full', sr: 'Senior', gte: 'Gerente', sa: 'Super administrador' }
-export const TURNOS = { A: '06:00–14:30', B: '14:30–23:00', C: '23:00–06:00' }
+// Turnos: claves internas A–D (así quedan guardados); en pantalla, número y nombre (Turno 1 · Matutino)
+export const TURNOS = { A: '07:00–15:00', B: '15:00–22:30', C: '22:30–07:00', D: '08:00–17:30' }
+const NOMBRES_TURNO = { A: [1, 'Matutino'], B: [2, 'Vespertino'], C: [3, 'Nocturno'], D: [4, 'Administrativo'] }
 export const DEPARTAMENTOS = { lc: 'Liquid Cooling', pf: 'Pruebas Funcionales', smt: 'SMT' }
 export const ESTADOS = { done: 'Realizada', progress: 'En proceso', pending: 'Pendiente', incomplete: 'Incompleta' }
 // Criticidad de una actividad diaria, de menor a mayor. La crítica va debajo de la urgente y sí se hereda
@@ -11,8 +13,9 @@ export const CRITICIDADES = { simple: 'Simple', normal: 'Normal', alta: 'Alta', 
 export const rol = (k) => t(ROLES[k])
 // Los creados por un gerente llegan del servidor (/api/deptos) con su nombre tal cual, sin traducción
 const deptosCreados = {}
-export const registrarDeptos = (lista) => lista.forEach((d) => { if (!DEPARTAMENTOS[d.clave]) deptosCreados[d.clave] = d.nombre })
-export const depto = (k) => (DEPARTAMENTOS[k] ? t(DEPARTAMENTOS[k]) : deptosCreados[k] ?? k)
+// Manda el nombre guardado (el gerente puede renombrar); t() traduce los de siempre y deja igual los demás
+export const registrarDeptos = (lista) => lista.forEach((d) => { deptosCreados[d.clave] = d.nombre })
+export const depto = (k) => { const n = deptosCreados[k] ?? DEPARTAMENTOS[k]; return n ? t(n) : k }
 export const clavesDeptos = () => [...Object.keys(DEPARTAMENTOS), ...Object.keys(deptosCreados)]
 // Acceso desde la portada: Gerencia (encargados) o Jr / Técnico
 export const ACCESOS = { gerencia: ['gte', 'sr', 'full'], operativo: ['jr', 'tec'] }
@@ -50,6 +53,11 @@ const permitido = (m, user) =>
   user.role === 'sa' ? m.solo === 'sa' || m.ruta === 'perfil'
     : (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : m.solo === 'encargado' && user.encargado)) && m.excepto !== user.role
 export const modulosDe = (user) => MODULOS.filter((m) => permitido(m, user))
+
+// Versión de las fotos de perfil en las direcciones: cambia al subir una nueva y así nadie ve la anterior en caché
+let version = Date.now()
+export const versionFotos = () => version
+export const fotoCambiada = () => { version = Date.now() }
 
 // Errores del navegador al log del servidor (/api/errores): se encuentran en Render sin pedir capturas
 export function reportarError(e) {
@@ -90,7 +98,9 @@ export async function api(url, { method = 'GET', body } = {}) {
 export const hoy = () => new Date().toLocaleDateString('en-CA')
 // Fecha y zona horaria del navegador: el servidor las usa para el rate de aprobación ("a tiempo" en tu hora local)
 export const consultaRate = () => `hoy=${hoy()}&zona=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`
-// Fin del turno en la hora local: la próxima vez que llega su hora de salida (A 14:30, B 23:00, C 06:00).
+export const nombreTurno = (k) => t('Turno {n}', { n: NOMBRES_TURNO[k]?.[0] ?? k })
+export const turnoLargo = (k) => (NOMBRES_TURNO[k] ? `${nombreTurno(k)} · ${t(NOMBRES_TURNO[k][1])}` : k)
+// Fin del turno en la hora local: la próxima vez que llega su hora de salida (1: 15:00, 2: 22:30, 3: 07:00, 4: 17:30).
 // Una tarea urgente se cierra en ese momento
 export function finTurno(turno, ahora = new Date()) {
   const [h, m] = TURNOS[turno].split('–')[1].split(':').map(Number)
@@ -100,14 +110,15 @@ export function finTurno(turno, ahora = new Date()) {
   return fin
 }
 const horas = (txt) => { const [h, m] = txt.split(':').map(Number); return h + m / 60 }
-// Inicio y fin de cada turno en horas; el C cruza la medianoche
-export const RANGOS = Object.fromEntries(Object.entries(TURNOS).map(([k, v]) => {
+// Inicio y fin de cada turno en horas; el 3 (C) cruza la medianoche. El administrativo (D) se cruza con los otros:
+// el reloj lo dibuja aparte y "el turno de ahora" es siempre uno de los tres rotativos
+export const RANGOS = Object.fromEntries(Object.entries(TURNOS).filter(([k]) => k !== 'D').map(([k, v]) => {
   const [a, b] = v.split('–').map(horas)
   return [k, [a, b < a ? b + 24 : b]]
 }))
 export const turnoDe = (h) => Object.keys(RANGOS).find((k) => { const [a, b] = RANGOS[k]; return (h >= a && h < b) || (h + 24 >= a && h + 24 < b) })
 export const horaActual = (d = new Date()) => d.getHours() + d.getMinutes() / 60
-// Fin del turno que empieza en `fecha` (el C termina al día siguiente), en la hora local
+// Fin del turno que empieza en `fecha` (el 3 termina al día siguiente), en la hora local
 export function cierreTurno(fecha, turno) {
   const fin = new Date(`${fecha}T${TURNOS[turno].split('–')[1]}`)
   if (turno === 'C') fin.setDate(fin.getDate() + 1)

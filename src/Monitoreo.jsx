@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Icono from './Icono.jsx'
-import { api, consultaRate, dia, esEncargado, hora, hoy, iniciales, inicioDeHoy, pctRealizadas, rol } from './comun.js'
+import { api, consultaRate, dia, esEncargado, hora, hoy, inicioDeHoy, nombreTurno, pctRealizadas, rol } from './comun.js'
 import { t } from './i18n.js'
-import { Anillo, Criticidad, Estado, Rate } from './ui.jsx'
+import { Anillo, Avatar, Criticidad, Estado, Rate } from './ui.jsx'
 import { ListaActividades, PorcentajeRealizadas } from './Lista.jsx'
 
 // % realizadas; null sin actividades (el anillo muestra "—")
@@ -67,10 +67,10 @@ export default function Monitoreo({ user }) {
           {visibles.map((e) => (
             <article key={e.no} className="card emp-card">
               <header>
-                <span className="avatar">{iniciales(e.name)}</span>
+                <Avatar no={e.no} name={e.name} />
                 <div className="who">
                   <h3><button className="enlace" onClick={() => setElegido(e.no)} aria-haspopup="dialog">{e.name}</button></h3>
-                  <div className="meta meta-sm">{rol(e.role)} · <span className="mono">{e.no}</span> · <span className="nowrap">{t('Turno')} {e.shift}</span></div>
+                  <div className="meta meta-sm">{rol(e.role)} · <span className="mono">{e.no}</span> · <span className="nowrap">{nombreTurno(e.shift)}</span></div>
                   <div className="tree">↳ {nombres[e.boss] ?? '—'}</div>
                 </div>
                 <Anillo pct={conAvance(e.actividades)} size={72} width={8} />
@@ -127,10 +127,10 @@ function Detalle({ user, emp, cerrar }) {
     <dialog ref={ref} className="card modal detalle" aria-labelledby="detalle-titulo" onClose={cerrar}>
       <header className="row between" style={{ alignItems: 'flex-start' }}>
         <div className="row" style={{ gap: 12 }}>
-          <span className="avatar">{iniciales(emp.name)}</span>
+          <Avatar no={emp.no} name={emp.name} />
           <div>
             <h2 id="detalle-titulo" className="card-title" style={{ margin: 0 }}>{emp.name}</h2>
-            <div className="meta">{rol(emp.role)} · <span className="mono">{emp.no}</span> · {t('Turno')} {emp.shift}</div>
+            <div className="meta">{rol(emp.role)} · <span className="mono">{emp.no}</span> · {nombreTurno(emp.shift)}</div>
           </div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => ref.current.close()} autoFocus>{t('Cerrar')}</button>
@@ -149,7 +149,7 @@ function Detalle({ user, emp, cerrar }) {
                     <span>
                       {a.text}
                       <small className="muted">
-                        {t('Turno')} {a.shift} · {hora(a.at)}
+                        {nombreTurno(a.shift)} · {hora(a.at)}
                         {a.heredadaA && <> · {t('Heredada a {nombre}', { nombre: a.heredadaA })}</>}
                         {a.note && <> · “{a.note}”</>}
                       </small>

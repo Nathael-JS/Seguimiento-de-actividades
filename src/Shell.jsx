@@ -1,7 +1,7 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
+import { api, hoy, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
+import { Avatar, BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
 import { t } from './i18n.js'
 import Inicio from './Inicio.jsx'
 
@@ -44,6 +44,7 @@ export default function Shell({ user, onLogout, avisoInicial }) {
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState(avisoInicial ?? '')
+  const [dia, setDia] = useState(hoy)
   const salir = useRef(null)
   const temporizador = useRef(null)
 
@@ -73,7 +74,11 @@ export default function Shell({ user, onLogout, avisoInicial }) {
   useEffect(() => { recargar() }, [recargar, ruta])
   // Avisos al momento: contador y Buzón se actualizan solos cada 30 s mientras la pestaña está a la vista
   useEffect(() => {
-    const id = setInterval(() => document.visibilityState === 'visible' && recargar(), 30_000)
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      recargar()
+      setDia(hoy()) // si la pestaña sigue abierta al día siguiente, se vuelve a marcar la asistencia
+    }, 30_000)
     return () => clearInterval(id)
   }, [recargar])
 
@@ -88,6 +93,16 @@ export default function Shell({ user, onLogout, avisoInicial }) {
     const id = setTimeout(() => setAviso(''), 10_000)
     return () => clearTimeout(id)
   }, [avisoInicial])
+
+  // Asistencia: al abrir la app (y al cambiar el día con la pestaña abierta), la primera vez del día queda la entrada
+  useEffect(() => {
+    if (user.role === 'sa') return
+    const ahora = new Date()
+    const hora = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
+    api(`/api/asistencia/${user.no}`, { method: 'POST', body: { hoy: dia, hora } })
+      .then((r) => r.nueva && avisar(t('Bienvenido, {nombre}: asistencia checada a las {hora}.', { nombre: user.name.split(' ')[0], hora: r.entrada })))
+      .catch(() => { /* sin red: se marca la próxima vez que abra la app */ })
+  }, [user, avisar, dia])
 
   async function cerrarSesion() {
     // Aunque falle la red se sale de la pantalla; la cookie se borra en la siguiente salida o al cerrar el navegador
@@ -130,7 +145,7 @@ export default function Shell({ user, onLogout, avisoInicial }) {
         </nav>
         <div className="spacer" />
         <a className="me" href="#perfil" data-etq={user.name} onClick={() => setMenuAbierto(false)}>
-          <span className="avatar">{iniciales(user.name)}</span>
+          <Avatar no={user.no} name={user.name} />
           <div className="etq"><b>{user.name}</b><div style={{ opacity: 0.75 }}>{rol(user.role)} · {user.no}</div></div>
         </a>
       </aside>
