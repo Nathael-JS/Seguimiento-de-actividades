@@ -7,9 +7,9 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
 - `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, guardada con hash), actividades, notificaciones y el checador simulado.
 
-**Sin base de datos por ahora:** los cambios (cuentas nuevas, contraseñas, actividades, avances, notificaciones leídas) viven en la memoria del servidor y se comparten entre usuarios, pero se pierden al reiniciar o redeployar.
+**Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, guarda solo lo que cambió (en una transacción) antes de responder. La primera vez, con la base vacía, se llena con los datos de prueba de `server/*.json`. Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar. Una sola instancia del servidor: con varias, cada una tendría su propia copia (ver `server/db.js`).
 
-**Sesión:** al terminar los 2 pasos el servidor guarda la sesión en una cookie `HttpOnly` y `SameSite=Strict` (en Render, también `Secure`). Al recargar la página se sigue dentro; se cierra con "Cerrar sesión", al cerrar el navegador o tras 12 h sin uso. El servidor toma de la sesión quién pide: nadie puede ver ni cambiar datos como otro empleado. Cambiar la contraseña cierra las demás sesiones de esa persona (recuperarla, todas). Las sesiones también viven en memoria: al reiniciar el servidor hay que volver a entrar.
+**Sesión:** al terminar los 2 pasos el servidor guarda la sesión en una cookie `HttpOnly` y `SameSite=Strict` (en Render, también `Secure`). Al recargar la página se sigue dentro; se cierra con "Cerrar sesión", al cerrar el navegador o tras 12 h sin uso. El servidor toma de la sesión quién pide: nadie puede ver ni cambiar datos como otro empleado. Cambiar la contraseña cierra las demás sesiones de esa persona (recuperarla, todas). Con base de datos las sesiones sobreviven a un reinicio o redeploy; sin ella hay que volver a entrar.
 
 **Matriz de seguimiento** (encargados, su rama): yield de diarias y de urgentes (realizadas ÷ asignadas; las de hoy abiertas y las urgentes sin cerrar aún no cuentan), tiempo extra (salida después del fin de turno) y asistencia (días hábiles con entrada ÷ días hábiles), estos dos hasta ayer. **Checador simulado:** `server/checador.json` trae entrada/salida de lunes a viernes, oct–dic 2026; se cambia por el checador real.
 
@@ -104,11 +104,18 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
 2. Render ejecuta `npm install && npm run build` y luego `npm start`.
-3. Elige el acceso y entra con `10001` / `demo1234` (Gerencia) o `10482` / `demo1234` (Jr / Técnico), o con el botón de revisión rápida. Una cuenta registrada vincula su app autenticadora con el QR; los datos viven en memoria y tras reiniciar el servidor se vuelve a vincular.
+3. Elige el acceso y entra con `10001` / `demo1234` (Gerencia) o `10482` / `demo1234` (Jr / Técnico), o con el botón de revisión rápida. Una cuenta registrada vincula su app autenticadora con el QR (con base de datos, una sola vez).
+
+**Base de datos en Neon:**
+
+1. En [neon.tech](https://neon.tech) crea un proyecto (región cercana a la de Render, p. ej. *US East (Ohio)* si Render está en Ohio/Virginia).
+2. En **Connect** copia la *connection string* (`postgresql://…?sslmode=require`).
+3. En Render: servicio → **Environment** → agregar `DATABASE_URL` con esa cadena y guardar (Render vuelve a desplegar).
+4. El primer arranque crea las tablas y carga los datos de prueba (en el log: `PostgreSQL vacío: se cargaron los datos de prueba`); los siguientes, `datos cargados de PostgreSQL`.
 
 ## Scripts
 
 - `npm run build` — compila el frontend.
 - `npm start` — levanta Fastify (puerto `PORT`, 3000 por defecto).
-- `npm test` — pruebas de la API, de la plantilla y de las traducciones (todo texto de interfaz del código y del servidor debe tener su inglés en `src/en.js`).
+- `npm test` — pruebas de la API, de la plantilla y de las traducciones (todo texto de interfaz del código y del servidor debe tener su inglés en `src/en.js`). La de PostgreSQL corre solo con `TEST_DATABASE_URL` apuntando a una base de pruebas (borra sus tablas).
 - `npm run lint` — oxlint.
