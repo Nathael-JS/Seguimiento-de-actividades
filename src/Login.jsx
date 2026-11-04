@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { RANGOS, TURNOS, api, horaActual, rol, turnoDe, turnoLargo } from './comun.js'
+import { RANGOS, TURNOS, api, horaActual, turnoDe, turnoLargo } from './comun.js'
 import Dial from './Dial.jsx'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
@@ -9,7 +9,7 @@ import { t } from './i18n.js'
 
 // Portada (slides → elegir acceso) y luego el login de ese acceso: 'login' → 'codigo' (2 pasos), o 'registro' /
 // 'recuperar' que vuelven al login
-export default function Login({ onLogin, aviso: avisoInicial = '', pruebas }) {
+export default function Login({ onLogin, aviso: avisoInicial = '' }) {
   // Con un aviso (sesión terminada) se vuelve directo a elegir acceso, sin repetir la presentación
   const [acceso, setAcceso] = useState(null)
   const [pantalla, setPantalla] = useState('login')
@@ -41,7 +41,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '', pruebas }) {
           <BotonIdioma /><BotonTema />
         </div>
         {pantalla === 'login' && (
-          <Credenciales aviso={aviso} ir={setPantalla} acceso={acceso} onLogin={onLogin} pruebas={pruebas}
+          <Credenciales aviso={aviso} ir={setPantalla} acceso={acceso} onLogin={onLogin}
             onPaso1={(v) => { setVerificacion(v); setAviso(''); setPantalla('codigo') }} />
         )}
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
@@ -145,10 +145,8 @@ function Portada({ aviso, saltar, onElegir }) {
   )
 }
 
-// Cuentas de prueba para revisiones rápidas (entran sin el código de la app); se apagan con CUENTAS_PRUEBA=no
-const PRUEBA = { gerencia: ['10001', 'Laura Méndez', 'gte'], operativo: ['10482', 'Jorge Salinas', 'tec'] }
 
-function Credenciales({ aviso, ir, acceso, onPaso1, onLogin, pruebas }) {
+function Credenciales({ aviso, ir, acceso, onPaso1, onLogin }) {
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -181,7 +179,6 @@ function Credenciales({ aviso, ir, acceso, onPaso1, onLogin, pruebas }) {
       setLoading(false)
     }
   }
-  const [noPrueba, nombrePrueba, rolPrueba] = PRUEBA[acceso]
 
   return (
     <form className="auth-form" onSubmit={submit} noValidate>
@@ -198,12 +195,6 @@ function Credenciales({ aviso, ir, acceso, onPaso1, onLogin, pruebas }) {
       <p className="muted" style={{ textAlign: 'center' }}>
         {t('¿No tienes cuenta?')} <button type="button" className="link" onClick={() => ir('registro')}>{t('Registrarse')}</button>
       </p>
-      {pruebas && <div className="prueba">
-        <span>{t('Revisión rápida, sin código de la app:')}</span>
-        <button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={() => entrar(noPrueba, 'demo1234')}>
-          {nombrePrueba} · {rol(rolPrueba)}
-        </button>
-      </div>}
     </form>
   )
 }

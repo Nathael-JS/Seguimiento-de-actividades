@@ -12,7 +12,45 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
-## [PR #25] 2026-11-04: Reportes en PDF real (vista previa y descarga)
+## [PR #25] 2026-11-05: Turnos 1-4, foto de perfil, asistencia al entrar, inicio limpio y Reportes en PDF
+
+### Agregado
+- **Turnos nuevos**, guardados con las claves internas A–D: 1 Matutino 07:00–15:00, 2 Vespertino 15:00–22:30, 3 Nocturno 22:30–07:00 y 4 Administrativo 08:00–17:30.
+  - En pantalla se ven como "Turno N · Nombre".
+  - El reloj de la portada dibuja el turno 4 por dentro.
+  - La plantilla de Excel acepta 1-4.
+  - En herencias, al administrativo le sigue el administrativo del día siguiente.
+- **Foto de perfil:**
+  - Se sube desde Perfil y se recorta a 256 px en el navegador.
+  - Aparece en todas partes donde antes había iniciales (componente `Avatar`).
+  - Endpoints: `POST`/`DELETE /api/perfil/:no/foto` y `GET /api/fotos/:empleado`.
+- **Asistencia al entrar:** la primera vez del día que la persona abre la app queda su entrada y ve "Bienvenido, {nombre}: asistencia checada a las HH:MM". Endpoint: `POST /api/asistencia/:no`, con la fecha validada contra el servidor.
+- **Departamentos:** el gerente que lo dirige puede renombrarlo o borrarlo, solo si no tiene personas. Endpoints: `PATCH`/`DELETE /api/departamentos/:clave`.
+- **Límite de cambios de estado:** el técnico / Ing. Jr puede cambiar el estado de una misma actividad hasta 5 veces; después espera 10 minutos.
+- **Inicio limpio:**
+  - `server/datos/inicio/` trae a Laura y Jorge por registrar y el departamento Liquid Cooling.
+  - Workflow **Vaciar datos**: primero respalda, luego vacía y conserva a los super administradores (`server/vaciar.js`).
+  - Los datos de los mockups pasan a `server/datos/pruebas/` y solo se usan en las pruebas automáticas.
+
+### Cambiado
+- **Sin "versión demo":** se quitaron el botón de revisión rápida y `GET /api/config`. Laura y Jorge son cuentas normales: se registran y usan MFA.
+- **Matriz sin tiempo extra:** se implementará después con sus reglas.
+- **Nombres de departamento:** siempre se usa el nombre guardado, así que renombrar se ve en todas partes.
+
+### Corregido
+- **Nombre flotante del menú plegado** tapado por el contenido. Ver incidente [I-09](DOCUMENTACION.md#i-09-nombre-flotante-del-menú-plegado-tapado-por-el-contenido).
+
+### Advertencias
+- **Turnos de usuarios existentes:** la base de producción conserva sus claves A, B y C, que ahora se leen como turnos 1, 2 y 3 con los **horarios nuevos**. Tras el inicio limpio no hay datos viejos.
+- **Después de Vaciar datos:**
+  - Hay que reiniciar Render.
+  - Laura y Jorge deben registrarse cuanto antes con su número y correo.
+  - Los super administradores se conservan con su app vinculada.
+
+### Archivos
+`server/app.js`, `server/db.js` (sin cambios de tablas), `server/vaciar.js`, `server/datos/**`, `.github/workflows/vaciar.yml`, `src/comun.js`, `src/ui.jsx`, `src/Shell.jsx`, `src/Login.jsx`, `src/App.jsx`, `src/Perfil.jsx`, `src/Ajustes.jsx`, `src/Dial.jsx`, `src/Matriz.jsx`, `src/plantilla.js`, `src/tablero.js` y casi todas las páginas (turnos y `Avatar`), `src/en.js`, `src/index.css`, pruebas, documentación
+
+## Reportes en PDF real (vista previa y descarga), en el mismo PR #25
 
 ### Cambiado
 - **Exportar PDF en Reportes** ya no abre la impresión del navegador: genera un PDF de verdad.

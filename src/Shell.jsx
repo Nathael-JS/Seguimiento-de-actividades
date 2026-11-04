@@ -89,6 +89,16 @@ export default function Shell({ user, onLogout, avisoInicial }) {
     return () => clearTimeout(id)
   }, [avisoInicial])
 
+  // Asistencia: al abrir la app, la primera vez del día queda la entrada con la fecha y hora del equipo
+  useEffect(() => {
+    if (user.role === 'sa') return
+    const ahora = new Date()
+    const hora = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
+    api(`/api/asistencia/${user.no}`, { method: 'POST', body: { hoy: hoy(), hora } })
+      .then((r) => r.nueva && avisar(t('Bienvenido, {nombre}: asistencia checada a las {hora}.', { nombre: user.name.split(' ')[0], hora: r.entrada })))
+      .catch(() => { /* sin red: se marca la próxima vez que abra la app */ })
+  }, [user, avisar])
+
   async function cerrarSesion() {
     // Aunque falle la red se sale de la pantalla; la cookie se borra en la siguiente salida o al cerrar el navegador
     await api('/api/logout', { method: 'POST' }).catch(() => {})

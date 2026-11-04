@@ -28,7 +28,16 @@ Documento técnico de todo el sistema: para qué sirve, cómo está construido, 
 
 Aplicación web para asignar, dar seguimiento y medir las actividades de los turnos de una planta (departamentos como Liquid Cooling, Pruebas Funcionales o SMT). Los encargados (Gerente, Senior, Ing. Full) crean y clasifican las actividades de su equipo por **criticidad**, y las marcan urgentes cuando hace falta. Los ejecutores (Ing. Jr, Técnico) las actualizan, agregan las suyas y piden cambios. El sistema avisa en el Buzón, hereda actividades entre turnos, genera reportes y una matriz de seguimiento. Los super administradores manejan las cuentas y la auditoría.
 
-Turnos: **A** 06:00–14:30, **B** 14:30–23:00, **C** 23:00–06:00. El que sigue al C es el A del día siguiente.
+Turnos (en pantalla "Turno N · Nombre"; guardados con su clave interna):
+
+| Turno | Clave | Horario |
+|---|---|---|
+| 1 · Matutino | `A` | 07:00–15:00 |
+| 2 · Vespertino | `B` | 15:00–22:30 |
+| 3 · Nocturno | `C` | 22:30–07:00 (termina al día siguiente) |
+| 4 · Administrativo | `D` | 08:00–17:30 |
+
+El que sigue al 3 es el 1 del día siguiente; el administrativo sigue con el administrativo del día siguiente. El reloj de la portada dibuja los tres rotativos y el administrativo como un arco interior.
 
 ## 2. Arquitectura
 
@@ -91,7 +100,9 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 │   ├── app.js              build(): toda la API, reglas de negocio y seguridad
 │   ├── db.js               PostgreSQL: tablas, carga, guardado por diferencias, respaldo/restauración
 │   ├── restaurar.js        Script: restaurar un respaldo JSON (npm run restaurar)
-│   ├── usuarios.json       Datos de prueba: cuentas (contraseña demo1234, con hash)
+│   ├── datos/inicio/       Inicio limpio: Laura y Jorge por registrar, Liquid Cooling (base vacía)
+│   ├── datos/pruebas/      Datos de los mockups, solo para las pruebas automáticas
+│   ├── vaciar.js           Script: inicio limpio en producción (workflow Vaciar datos)
 │   ├── actividades.json    Datos de prueba: actividades
 │   ├── notificaciones.json Datos de prueba: avisos
 │   ├── checador.json       Datos de prueba: entradas y salidas (matriz)
@@ -171,7 +182,7 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
   - **PDF real** (`src/pdf.js`, con jsPDF): encabezado con logo y filtros, recuadros de resumen, comparativo y detalle con el estado en color, y en el pie quién lo generó, cuándo y el número de página. En escritorio se abre una **vista previa** con *Descargar PDF*; en celular se descarga directo.
 - **Matriz de seguimiento:** por persona y periodo, muestra:
   - el yield de diarias y de urgentes (realizadas ÷ las que cuentan);
-  - el tiempo extra y la asistencia, según el checador.
+  - la asistencia, según el checador. El tiempo extra se quitó por ahora y se implementará después.
 - **Jerarquía:** árbol de quién reporta a quién.
 - **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
 - **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
@@ -301,7 +312,6 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/registro` | Público | `{ no, email, password }`: activa una cuenta por registrar de la plantilla si número y correo coinciden (403 y registro del intento si no). 10 fallos por IP bloquean 15 min |
 | POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña (número, correo y código de la app; límite de intentos) |
 | GET | `/api/deptos` | Público | Catálogo de departamentos |
-| GET | `/api/config` | Público | `{ cuentasPrueba }`: si la pantalla de acceso muestra la revisión rápida |
 | GET | `/api/salud` | Público | `{ ok: true }` si el servidor y la base responden. Render la usa como health check |
 | POST | `/api/errores` | Público | Error del navegador (`mensaje`, `pila`, `ruta`) → log de Render. Hasta 10 por IP cada 15 min |
 | GET | `/api/departamentos` | Encargado | Plantilla de sus departamentos con rate |
@@ -310,12 +320,16 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET | `/api/perfil/:no` · POST `/api/perfil/:no/password` | Propio | Perfil y cambio de contraseña |
 | GET | `/api/inicio/:no?desde&hoy` | Propio | Indicadores y notificaciones; con `hoy` genera avisos y renueva recurrentes |
 | POST | `/api/notificaciones/:no/leidas` · `/:no/:id/leida` | Propio | Marcar como leídas |
+| POST | `/api/asistencia/:no` | Propio | `{ hoy, hora }`: la primera vez del día que abre la app queda su entrada en el checador (`nueva: true`) |
+| POST · DELETE | `/api/perfil/:no/foto` | Propio | Subir (data URL de 256 px, JPEG/PNG/WebP) o quitar la foto de perfil |
+| GET | `/api/fotos/:empleado` | Sesión | La foto de perfil (404 si no tiene: se muestran las iniciales); caché de 5 min |
+| PATCH · DELETE | `/api/departamentos/:clave` | Gerente que lo dirige | Renombrar; borrar si no tiene personas |
 | DELETE | `/api/notificaciones/:no` | Propio | Borrar el historial de notificaciones (los avisos automáticos no vuelven) |
 | GET | `/api/equipo/:no` | Encargado | Su equipo con sus actividades vigentes |
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
 | GET | `/api/actividades/:no` | Propio | Sus actividades (urgentes primero) |
-| PATCH | `/api/actividades/:id` | Asignado | Estado y comentario |
+| PATCH | `/api/actividades/:id` | Asignado | Estado y comentario. El técnico / Ing. Jr cambia el estado de una actividad hasta 5 veces; luego espera 10 min (429) |
 | PATCH | `/api/actividades/:id/tablero` | Encargado / asignado | Mover o fijar; el técnico asignado crea una solicitud (202) |
 | POST | `/api/actividades/:id/solicitud` | Encargado | Aprobar o rechazar la solicitud de cambio |
 | PATCH | `/api/actividades/:id/editar` | Encargado / dueño | Editar texto, comentario, fecha, turno y recurrencia (`no` la quita) |
@@ -459,7 +473,7 @@ Código en `server/db.js`.
 |---|---|---|
 | `DATABASE_URL` | Render y secreto de GitHub | Conexión a Neon (`?sslmode=verify-full`) |
 | `SUPERADMINS` | Render | JSON `[{ "name", "email", "password", "no"? }]` de los super administradores |
-| `CUENTAS_PRUEBA` | Render | `no` con usuarios reales: las cuentas de prueba (`demo1234`, sin MFA) no entran, sus sesiones dejan de servir y se oculta la revisión rápida |
+| `CUENTAS_PRUEBA` | Render | `no` apaga las cuentas marcadas `prueba` (solo existen en los datos de las pruebas automáticas; el inicio limpio no trae ninguna) |
 | `PORT` | Render (automática) | Puerto del servidor |
 | `BACKUP_PASSWORD` | Secreto de GitHub | Contraseña del cifrado de los respaldos |
 | `TEST_DATABASE_URL` | Local | Base para `db.test.js` (se borra) |
@@ -584,3 +598,11 @@ Problemas reales que ya pasaron. Si algo vuelve a fallar, busca aquí el síntom
      ```
      Debe responder el número de tablas (10, con `guardadas`). Si dice `bad decrypt`, la contraseña no coincide con el secreto `BACKUP_PASSWORD`.
   4. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.
+
+### I-09. Nombre flotante del menú plegado tapado por el contenido
+- **Fecha / PR:** 2026-11-05 · PR #25
+- **Síntoma:** con el menú plegado, al pasar el mouse sobre un icono (por ejemplo "Jerarquía") el nombre aparecía cortado o tapado por la barra superior y las tarjetas.
+- **Causa:** el menú (`.side`, `position: sticky`) no tenía `z-index`, así que el contenido que viene después en la página se dibujaba encima del nombre flotante.
+- **Solución:** `.plegado .side{z-index:25}`, por encima de la barra superior (5) y de los menús de las tarjetas (20).
+- **Prevención:** todo lo que flota (nombres, menús, avisos) debe estar en una capa con `z-index` mayor que el contenido junto al que aparece. Revisar con el menú plegado y desplegado.
+

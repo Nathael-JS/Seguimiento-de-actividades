@@ -5,7 +5,9 @@ import { createHmac, randomBytes, randomInt, randomUUID, scrypt, scryptSync, tim
 import { promisify } from 'node:util'
 import { respaldo } from './db.js'
 
-const leer = (archivo) => JSON.parse(readFileSync(new URL(archivo, import.meta.url)))
+// Datos con que arranca una base vacía: server/datos/inicio (inicio limpio) o, en las pruebas automáticas,
+// server/datos/pruebas (DATOS_SEMILLA=pruebas): los de los mockups, con cuentas de prueba
+const leer = (archivo) => JSON.parse(readFileSync(new URL(`./datos/${process.env.DATOS_SEMILLA ?? 'inicio'}/${archivo}`, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
 
 // Menor número = más rango. Encargados: Gerente, Senior, Ing. Full
@@ -339,7 +341,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     })
   }
 
-  const usuarios = cargado?.usuarios ?? leer('./usuarios.json')
+  const usuarios = cargado?.usuarios ?? leer('usuarios.json')
   // Super administradores: se agregan o actualizan por correo y conservan su MFA; los que ya no están en la
   // variable pierden el acceso
   const correosSA = superadmins.map((sa) => sa.email.trim().toLowerCase())
@@ -373,18 +375,14 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (registros.length > 5000) registros.shift()
     req.log.info({ registro: r }, evento)
   }
-  const actividades = cargado?.actividades ?? leer('./actividades.json')
-  const notificaciones = cargado?.notificaciones ?? leer('./notificaciones.json')
+  const actividades = cargado?.actividades ?? leer('actividades.json')
+  const notificaciones = cargado?.notificaciones ?? leer('notificaciones.json')
   const herencias = cargado?.herencias ?? [] // propuestas de herencia: pendientes de validar y su historial
   const guardadas = cargado?.guardadas ?? [] // tareas guardadas: plantillas personales para reutilizar
   // Los de los mockups y los que crea un gerente, que queda como quien lo dirige
-  const departamentos = cargado?.departamentos ?? [
-    { clave: 'lc', nombre: 'Liquid Cooling', gerente: '10001' },
-    { clave: 'pf', nombre: 'Pruebas Funcionales', gerente: '10700' },
-    { clave: 'smt', nombre: 'SMT', gerente: null },
-  ]
+  const departamentos = cargado?.departamentos ?? leer('departamentos.json')
   // shortcut: checador simulado (entrada/salida en hora de planta, lunes a viernes, oct–dic 2026); cambiar por el real
-  const checador = cargado?.checador ?? leer('./checador.json')
+  const checador = cargado?.checador ?? leer('checador.json')
   // Códigos de verificación y permisos de recuperación pendientes, por token
   const verificaciones = new Map()
   const recuperaciones = new Map()
@@ -505,7 +503,6 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
   const apagada = (u) => u.prueba && !cuentasPrueba
   const PUBLICAS = new Set([
-    '/api/config',
     '/api/login', '/api/login/verificar', '/api/logout',
     '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/deptos', '/api/salud', '/api/errores',
   ])
@@ -699,9 +696,6 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   })
 
   // Registro (sin sesión): a quién se puede elegir como encargado
-  // Lo que la pantalla de acceso necesita saber antes de entrar: si muestra el botón de revisión rápida
-  app.get('/api/config', async () => ({ cuentasPrueba }))
-
   app.get('/api/salud', async () => {
     await salud?.()
     return { ok: true }
@@ -899,6 +893,19 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
           }
         }),
     }
+  }))
+
+  // Asistencia: la primera vez que la persona abre la app en el día queda su entrada (fecha y hora de su equipo,
+  // validadas contra el reloj del servidor). Las siguientes veces del mismo día no cambia nada
+  const asistenciaSchema = { ...porEmpleado, body: objeto(['hoy', 'hora'], { hoy: { type: 'string', format: 'date' }, hora: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' } }) }
+  app.post('/api/asistencia/:no', { schema: asistenciaSchema }, conEmpleado((u, req, reply) => {
+    const { hoy, hora } = req.body
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    if (u.role === 'sa') return { nueva: false }
+    const marca = checador.find((r) => r.no === u.no && r.date === hoy)
+    if (marca) return { nueva: false, entrada: marca.entrada }
+    checador.push({ no: u.no, date: hoy, entrada: hora, salida: '' }) // salida: la pondrá el checador real
+    return { nueva: true, entrada: hora }
   }))
 
   app.post('/api/notificaciones/:no/leidas', { schema: porEmpleado }, conEmpleado((u) => {

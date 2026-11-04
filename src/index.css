@@ -570,8 +570,6 @@ dialog.modal.detalle{max-width:640px;max-height:calc(100dvh - 48px)}
 .pasos-slide button:focus-visible{outline:2px solid var(--turno-a);outline-offset:2px;border-radius:4px}
 @keyframes llena{from{transform:scaleX(0)}to{transform:none}}
 
-.prueba{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--ink-muted);border-top:1px solid var(--line);padding-top:16px}
-.prueba>span{width:100%}
 
 @media (max-width:860px){
   .portada{padding:18px 16px;gap:12px}

@@ -7,9 +7,10 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 - `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Tablero (crear y clasificar actividades), Herencias, Actividades asignadas, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
-- `server/*.json` — datos de prueba de los mockups: usuarios (contraseña `demo1234`, guardada con hash), actividades, notificaciones y el checador simulado.
+- `server/datos/inicio/` — **inicio limpio**: con lo que arranca una base vacía (Laura Méndez, gerente, y Jorge Salinas, técnico, **por registrar**, y el departamento Liquid Cooling).
+- `server/datos/pruebas/` — datos de los mockups, solo para las pruebas automáticas (`DATOS_SEMILLA=pruebas`).
 
-**Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, después de cada petición que cambia algo (no las consultas `GET`) guarda solo lo que cambió, en una transacción, antes de responder. La primera vez, con la base vacía, se llena con los datos de prueba de `server/*.json`. Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar.
+**Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, después de cada petición que cambia algo (no las consultas `GET`) guarda solo lo que cambió, en una transacción, antes de responder. La primera vez, con la base vacía, se llena con el inicio limpio de `server/datos/inicio/`. Para volver a ese inicio en producción: *Actions → Vaciar datos* (escribe VACIAR; antes hace un respaldo). Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar.
 
 **Una sola instancia:** al arrancar, cada servidor toma la base en la misma transacción en que la carga. Durante un redeploy de Render la instancia anterior sigue viva unos segundos: si recibe un cambio, ve que ya no es la dueña, no lo guarda y responde 503 ("El sistema se actualizó. Recarga la página"), así nada se pisa. Varias instancias a la vez no se reparten el trabajo (ver `server/db.js`).
 
@@ -102,7 +103,7 @@ Las rutas de login, registro, recuperar contraseña, `/api/deptos`, `/api/config
 
 ## Despliegue en Render
 
-**Cuentas de prueba:** con usuarios reales, en Render agregar `CUENTAS_PRUEBA` = `no` (las de `demo1234` dejan de entrar y se oculta la revisión rápida). Ver la lista completa en [PRUEBAS.md](PRUEBAS.md).
+**Primer acceso:** Laura (`10001`, laura.mendez@empresa.com) y Jorge (`10482`, jorge.salinas@empresa.com) entran a **Crear cuenta** con su número y correo, eligen su contraseña y vinculan su app autenticadora. Ver la lista completa en [PRUEBAS.md](PRUEBAS.md).
 
 **Super administradores:** en el servicio de Render, *Environment* → agregar `SUPERADMINS` con un JSON (no se sube al repositorio; en local, en un `.env` que git ignora):
 
@@ -115,7 +116,7 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
 2. Render ejecuta `npm install && npm run build` y luego `npm start`.
-3. Elige el acceso y entra con `10001` / `demo1234` (Gerencia) o `10482` / `demo1234` (Jr / Técnico), o con el botón de revisión rápida. Una cuenta registrada vincula su app autenticadora con el QR (con base de datos, una sola vez).
+3. Elige el acceso, regístrate con un número y correo de la plantilla (al inicio: Laura o Jorge) y vincula tu app autenticadora con el QR.
 
 **Base de datos en Neon:**
 

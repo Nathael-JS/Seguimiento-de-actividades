@@ -1,0 +1,44 @@
+# Inicio limpio de la base de producción (Neon). Solo a mano: Actions → Vaciar datos → Run workflow, escribiendo
+# VACIAR. Primero guarda un respaldo cifrado (como el diario) y luego deja la base con server/datos/inicio,
+# conservando a los super administradores. Al terminar, reiniciar el servicio en Render.
+name: Vaciar datos
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe VACIAR para borrar todos los datos (se respalda antes)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  vaciar:
+    if: inputs.confirmacion == 'VACIAR'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+    steps:
+      - name: Respaldo antes de vaciar
+        run: |
+          set -euo pipefail
+          docker run --rm -e DATABASE_URL -e PGSSLROOTCERT=system -v /etc/ssl/certs:/etc/ssl/certs:ro postgres:18 \
+            sh -c 'pg_dump --no-owner --no-privileges "$DATABASE_URL"' \
+            | gzip -9 | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSWORD -out respaldo.sql.gz.enc
+          test "$(stat -c %s respaldo.sql.gz.enc)" -gt 1000
+      - uses: actions/upload-artifact@v7 # Node 24
+        with:
+          name: respaldo-antes-de-vaciar-${{ github.run_number }}
+          path: respaldo.sql.gz.enc
+          retention-days: 30
+          if-no-files-found: error
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Vaciar
+        run: node server/vaciar.js VACIAR

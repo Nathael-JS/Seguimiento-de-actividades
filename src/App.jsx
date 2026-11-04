@@ -15,7 +15,6 @@ export default function App() {
   const [user, setUser] = useState()
   const [aviso, setAviso] = useState('')
   const [cambio, setCambio] = useState('') // otra pestaña entró con otra cuenta
-  const [pruebas, setPruebas] = useState(false) // botón de revisión rápida (cuentas de prueba encendidas)
   const actual = useRef(user)
   useEffect(() => { actual.current = user }, [user])
   const idioma = useIdioma()
@@ -25,11 +24,7 @@ export default function App() {
   useEffect(() => {
     // Al recargar, la cookie de sesión dice quién es
     // Los nombres de los departamentos creados por gerentes, antes de pintar cualquier pantalla
-    Promise.all([json('/api/sesion'), json('/api/deptos'), json('/api/config')]).then(([u, deptos, config]) => {
-      registrarDeptos(deptos ?? [])
-      setPruebas(!!config?.cuentasPrueba)
-      setUser(u)
-    })
+    Promise.all([json('/api/sesion'), json('/api/deptos')]).then(([u, deptos]) => { registrarDeptos(deptos ?? []); setUser(u) })
     // api() avisa cuando el servidor ya no reconoce la sesión (venció, o se cambió la contraseña en otro equipo)
     const terminada = () => { setAviso(t('Tu sesión terminó. Vuelve a iniciar sesión.')); setUser(null) }
     addEventListener('sesion-terminada', terminada)
@@ -59,5 +54,5 @@ export default function App() {
   }
   return user
     ? <Shell key={user.no} user={user} avisoInicial={cambio} onLogout={() => { avisarPestanas(); setUser(null) }} />
-    : <Login aviso={aviso} pruebas={pruebas} onLogin={(u) => { setAviso(''); setCambio(''); avisarPestanas(); setUser(u) }} />
+    : <Login aviso={aviso} onLogin={(u) => { setAviso(''); setCambio(''); avisarPestanas(); setUser(u) }} />
 }
