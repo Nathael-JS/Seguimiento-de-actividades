@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { TURNOS, api, cierreTurno, columnaTablero as nombreColumna, dia, hoy, iniciales, rol } from './comun.js'
+import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, hoy, iniciales, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { Estado } from './ui.jsx'
 import { t } from './i18n.js'
@@ -10,6 +10,7 @@ import { t } from './i18n.js'
 //   solicitudes de cambio de su equipo.
 // - Técnico / Ing. Jr: ve solo las suyas y agrega en Por clasificar; al moverlas pide el cambio a su encargado
 const COLUMNAS = ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente']
+const NIVELES = ['simple', 'normal', 'alta', 'critica'] // criticidades de una tarea guardada
 const columnaDe = (a) => (a.prioridad === 'urgente' ? 'urgente' : a.criticidad ?? 'normal')
 
 // Semanas de lunes a domingo, como AAAA-MM-DD locales
@@ -47,6 +48,8 @@ export default function Tablero({ user, recargar, avisar }) {
   const [semana, setSemana] = useState(() => (semanas.includes(lunesDe(hoy())) ? lunesDe(hoy()) : semanas[0]))
   const [nuevaSemana, setNuevaSemana] = useState('')
   const [encima, setEncima] = useState(null) // columna sobre la que se arrastra
+  const [guardadas, setGuardadas] = useState([])
+  const [usar, setUsar] = useState(null) // tarea guardada elegida para crear: abre el panel Por clasificar con ella
   const encargado = user.encargado
 
   // animar: las tarjetas recién creadas entran con la misma transición que al moverse
@@ -58,6 +61,8 @@ export default function Tablero({ user, recargar, avisar }) {
     else setActs(lista)
   }).catch((e) => setError(e.message)), [user, encargado])
   useEffect(() => { cargar(false) }, [cargar])
+  const cargarGuardadas = useCallback(() => api(`/api/guardadas/${user.no}`).then(setGuardadas).catch(() => {}), [user.no])
+  useEffect(() => { cargarGuardadas() }, [cargarGuardadas])
 
   function cambiarSemanas(lista, elegir) {
     const orden = [...new Set(lista)].sort()
@@ -98,6 +103,29 @@ export default function Tablero({ user, recargar, avisar }) {
     if (!encargado) return aplicar(a, { solicitud: { columna } }, cuerpo, t('Solicitud enviada a tu encargado: mover a {columna}.', { columna: nombreColumna(columna) }))
     const cambios = urgente ? { prioridad: 'urgente', criticidad: undefined } : { prioridad: undefined, criticidad: columna }
     aplicar(a, { ...cambios, solicitud: undefined }, cuerpo, t('Movida a {columna}.', { columna: nombreColumna(columna) }))
+  }
+  // Lanza el error para que el formulario de la tarjeta lo muestre
+  async function editar(a, cambios) {
+    const r = await api(`/api/actividades/${a.id}/editar`, { method: 'PATCH', body: { por: user.no, ...cambios } })
+    conTransicion(() => setActs((l) => l.map((x) => (x.id === a.id ? { ...r, persona: a.persona } : x))))
+    avisar(t('Cambios guardados.'))
+  }
+  async function guardarComo(a, nivel) {
+    try {
+      await api('/api/guardadas', { method: 'POST', body: { por: user.no, texto: a.text, criticidad: nivel, comentario: a.mgr ?? '', ...(a.recurrencia && { recurrencia: a.recurrencia }) } })
+      avisar(t('Guardada en tus tareas como {nivel}.', { nivel: criticidad(nivel) }))
+      cargarGuardadas()
+    } catch (e) {
+      avisar(e.message)
+    }
+  }
+  async function quitarGuardada(g) {
+    try {
+      await api(`/api/guardadas/${g.id}`, { method: 'DELETE', body: { por: user.no } })
+      setGuardadas((l) => l.filter((x) => x.id !== g.id))
+    } catch (e) {
+      avisar(e.message)
+    }
   }
   async function responder(a, aprobar) {
     try {
@@ -166,6 +194,7 @@ export default function Tablero({ user, recargar, avisar }) {
         </span>
       </div>
       <p className="meta">{dia(semana)} – {dia(domingo)} · {t(deLaSemana.length === 1 ? '{n} actividad' : '{n} actividades', { n: deLaSemana.length })}</p>
+      <Guardadas lista={guardadas} usar={(g) => setUsar({ g, n: Date.now() })} quitar={quitarGuardada} />
 
       <div className="tablero">
         {COLUMNAS.map((c) => {
@@ -182,8 +211,9 @@ export default function Tablero({ user, recargar, avisar }) {
               <header>
                 <h2 id={`col-${c}`}>{nombreColumna(c)} <span className="mono">{tarjetas.length}</span></h2>
                 {c === 'nueva' && (
-                  <NuevasActividades equipo={equipo} semana={semana} user={user}
+                  <NuevasActividades key={usar?.n ?? 0} inicial={usar?.g} guardadas={guardadas} equipo={equipo} semana={semana} user={user}
                     alCrear={(n) => {
+                      setUsar(null)
                       cargar(true)
                       recargar()
                       avisar(encargado
@@ -193,7 +223,7 @@ export default function Tablero({ user, recargar, avisar }) {
                 )}
               </header>
               <ul>
-                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} columna={c} encargado={encargado} mover={mover} fijar={fijar} eliminar={eliminar} responder={responder} />)}
+                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} columna={c} encargado={encargado} mover={mover} fijar={fijar} eliminar={eliminar} responder={responder} editar={editar} guardarComo={guardarComo} />)}
               </ul>
               {!tarjetas.length && <p className="vacia">{t(c === 'nueva' ? 'Crea actividades con +; luego arrástralas a su criticidad.' : 'Arrastra una tarjeta aquí.')}</p>}
             </section>
@@ -204,10 +234,23 @@ export default function Tablero({ user, recargar, avisar }) {
   )
 }
 
-function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder }) {
+function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, editar, guardarComo }) {
   const [confirmar, setConfirmar] = useState(false)
   const [arrastrando, setArrastrando] = useState(false)
+  const [editando, setEditando] = useState(false)
   const cerrada = a.cerrada
+  // El técnico / Ing. Jr edita solo las que agregó él; el encargado, las de su equipo
+  const puedeEditar = !cerrada && (encargado || a.propia)
+  // Cierra el menú ⋯ al elegir una opción
+  const cerrarMenu = (e) => { e.currentTarget.closest('details').open = false }
+  if (editando) {
+    return (
+      <li className="tarjeta editando" style={{ viewTransitionName: `tarjeta-${a.id}` }}>
+        <EditarTarjeta a={a} encargado={encargado} cancelar={() => setEditando(false)}
+          guardar={async (cambios) => { await editar(a, cambios); setEditando(false) }} />
+      </li>
+    )
+  }
   return (
     <li className={`tarjeta${a.status === 'done' ? ' hecha' : ''}${arrastrando ? ' arrastrando' : ''}${a.solicitud ? ' con-solicitud' : ''}`} style={{ viewTransitionName: `tarjeta-${a.id}` }}
       draggable={!cerrada} onDragEnd={() => setArrastrando(false)}
@@ -225,6 +268,17 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder }) {
                 ))}
               </div>
             </>}
+            <span className="meta">{t('Guardar como tarea')}</span>
+            <div className="mover-a">
+              {NIVELES.map((c) => (
+                <button key={c} type="button" className="chip-col" onClick={(e) => { cerrarMenu(e); guardarComo(a, c) }}>{criticidad(c)}</button>
+              ))}
+            </div>
+            {puedeEditar && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={(e) => { cerrarMenu(e); setEditando(true) }}>
+                <Icono nombre="edit" />{t('Editar')}
+              </button>
+            )}
             {encargado && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => fijar(a)}>{t(a.fijada ? 'Desfijar' : 'Fijar arriba')}</button>
               {confirmar
@@ -242,6 +296,7 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder }) {
         <Estado estado={a.status} />
         {cerrada && <span className="tag suave">{t('Cerrada con el turno')}</span>}
         {a.inh && <span className="tag">{t('Heredada')}</span>}
+        {a.recurrencia && <span className="tag suave repite"><Icono nombre="repeat" />{t(PERIODOS[a.recurrencia])}</span>}
       </div>
       {a.solicitud && (
         <div className="solicitud">
@@ -258,24 +313,114 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder }) {
   )
 }
 
-// Panel Por clasificar: crea una o varias actividades (una por renglón); nacen sin criticidad y después se
-// arrastran a la que les toca. El encargado elige para quién, fecha y turno; el técnico / Ing. Jr las agrega
-// como tareas propias (hoy, su turno) y su encargado las clasifica
-function NuevasActividades({ equipo, semana, user, alCrear }) {
+// Interruptor "Repetir" y cada cuándo (vacío: no se repite)
+function Repetir({ valor, cambiar }) {
+  return (
+    <div className="repetir">
+      <label className="switch">
+        <input type="checkbox" role="switch" checked={!!valor} onChange={(e) => cambiar(e.target.checked ? 'diaria' : '')} />
+        <span>{t('Repetir')}</span>
+      </label>
+      {valor && (
+        <select aria-label={t('Cada cuándo se repite')} value={valor} onChange={(e) => cambiar(e.target.value)}>
+          {Object.entries(PERIODOS).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
+        </select>
+      )}
+    </div>
+  )
+}
+
+// Editar una tarjeta: el encargado todo; el técnico / Ing. Jr, texto, fecha y recurrencia de las suyas
+function EditarTarjeta({ a, encargado, guardar, cancelar }) {
+  const [texto, setTexto] = useState(a.text)
+  const [comentario, setComentario] = useState(a.mgr ?? '')
+  const [fecha, setFecha] = useState(a.date)
+  const [turno, setTurno] = useState(a.shift)
+  const [repetir, setRepetir] = useState(a.recurrencia ?? '')
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const urgente = a.prioridad === 'urgente' // es para un solo turno: no se repite
+
+  async function enviar(e) {
+    e.preventDefault()
+    if (!texto.trim()) return setError(t('Escribe al menos una actividad.'))
+    setEnviando(true)
+    try {
+      await guardar({ texto: texto.trim(), fecha, ...(encargado && { comentario, turno }), ...(!urgente && { recurrencia: repetir || 'no' }) })
+    } catch (err) {
+      setError(err.message)
+      setEnviando(false)
+    }
+  }
+  return (
+    <form className="nueva-col" onSubmit={enviar} noValidate>
+      <textarea aria-label={t('Actividad')} rows={2} maxLength={200} value={texto} onChange={(e) => setTexto(e.target.value)} autoFocus />
+      {/* Uno debajo del otro: la tarjeta es angosta */}
+      <input type="date" aria-label={t('Fecha')} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+      {encargado && (
+        <select aria-label={t('Turno')} value={turno} onChange={(e) => setTurno(e.target.value)} title={TURNOS[turno]}>
+          {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{t('Turno')} {k}</option>)}
+        </select>
+      )}
+      {encargado && <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} />}
+      {!urgente && <Repetir valor={repetir} cambiar={setRepetir} />}
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="row end" style={{ gap: 6 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={cancelar}>{t('Cancelar')}</button>
+        <button className="btn btn-primary btn-sm" type="submit" disabled={enviando}>{t('Guardar')}</button>
+      </div>
+    </form>
+  )
+}
+
+// Tareas guardadas: plantillas personales. "Usar" abre Por clasificar con ella
+function Guardadas({ lista, usar, quitar }) {
+  return (
+    <details className="card guardadas">
+      <summary>
+        <Icono nombre="bookmark" />{t('Tareas guardadas')} <span className="mono">{lista.length}</span>
+        <span className="flecha-abajo"><Icono nombre="abajo" /></span>
+      </summary>
+      {!lista.length ? <p className="meta">{t('Aún no tienes tareas guardadas. En el menú ⋯ de una tarjeta elige "Guardar como tarea".')}</p> : (
+        <ul>
+          {lista.map((g) => (
+            <li key={g.id}>
+              <span className="titulo">{g.texto}</span>
+              <span className={`tag prio crit-${g.criticidad}`}>{criticidad(g.criticidad)}</span>
+              {g.recurrencia && <span className="tag suave repite"><Icono nombre="repeat" />{t(PERIODOS[g.recurrencia])}</span>}
+              <span className="row" style={{ gap: 4, marginLeft: 'auto' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => usar(g)}>{t('Usar')}</button>
+                <button type="button" className="iconbtn" aria-label={t('Eliminar “{actividad}” de tus tareas guardadas', { actividad: g.texto })} onClick={() => quitar(g)}><Icono nombre="trash" /></button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  )
+}
+
+const fechaDeLaSemana = (semana) => { const h = hoy(); return h >= semana && h <= masDias(semana, 6) ? h : semana }
+
+// Panel Por clasificar: crea una o varias actividades (una por renglón). El encargado elige para quién, fecha,
+// turno y, si quiere, la criticidad (si no, nacen Por clasificar y después se arrastran); el técnico / Ing. Jr
+// las agrega como tareas propias (hoy, su turno) y su encargado las clasifica. inicial: una tarea guardada
+function NuevasActividades({ equipo, semana, user, guardadas, inicial, alCrear }) {
   const encargado = user.encargado
-  const [abierta, setAbierta] = useState(false)
+  const [abierta, setAbierta] = useState(!!inicial)
   const [para, setPara] = useState('')
-  const [texto, setTexto] = useState('')
-  const [fecha, setFecha] = useState('')
+  const [texto, setTexto] = useState(inicial?.texto ?? '')
+  const [fecha, setFecha] = useState(() => fechaDeLaSemana(semana))
   const [turno, setTurno] = useState('')
-  const [comentario, setComentario] = useState('')
+  const [comentario, setComentario] = useState(inicial?.comentario ?? '')
+  const [nivel, setNivel] = useState(inicial?.criticidad ?? 'nueva')
+  const [repetir, setRepetir] = useState(inicial?.recurrencia ?? '')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
   const puntos = texto.split('\n').map((l) => l.trim()).filter(Boolean)
 
   function abrir() {
-    const h = hoy()
-    setFecha(h >= semana && h <= masDias(semana, 6) ? h : semana)
+    setFecha(fechaDeLaSemana(semana))
     setError('')
     setAbierta(true)
   }
@@ -284,24 +429,37 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
     const e = equipo.find((x) => x.no === no)
     if (e) setTurno(e.shift) // el turno sugerido es el de la persona
   }
+  // Una tarea guardada se agrega como un renglón más y trae su criticidad, comentario y recurrencia
+  function usarGuardada(id) {
+    const g = guardadas.find((x) => x.id === Number(id))
+    if (!g) return
+    setTexto(texto.trim() ? `${texto.trimEnd()}\n${g.texto}` : g.texto)
+    setNivel(g.criticidad)
+    if (g.comentario) setComentario(g.comentario)
+    if (g.recurrencia) setRepetir(g.recurrencia)
+  }
   async function crear(e) {
     e.preventDefault()
     if ((encargado && !para) || !puntos.length) return setError(t(encargado ? 'Elige a quién y escribe al menos una actividad.' : 'Escribe al menos una actividad.'))
     if (puntos.length > 20) return setError(t('Máximo 20 actividades a la vez.'))
-    if (!encargado && puntos.some((p) => p.length > 200)) return setError(t('Cada actividad, máximo 200 caracteres.'))
+    if (puntos.some((p) => p.length > 200)) return setError(t('Cada actividad, máximo 200 caracteres.'))
     setEnviando(true)
+    const comun = { por: user.no, prioridad: 'diaria', ...(repetir && { recurrencia: repetir }) }
     try {
       if (encargado) {
         await api('/api/actividades', {
           method: 'POST',
-          body: { por: user.no, para, fecha, turno, comentario: comentario.trim(), prioridad: 'diaria', criticidad: 'nueva', puntos: puntos.map((p) => ({ texto: p })) },
+          body: { ...comun, para, fecha, turno, comentario: comentario.trim(), criticidad: nivel, puntos: puntos.map((p) => ({ texto: p })) },
         })
       } else {
-        await api('/api/actividades/propia', { method: 'POST', body: { por: user.no, textos: puntos, prioridad: 'diaria', criticidad: 'nueva', hoy: hoy() } })
+        // Su encargado las clasifica: nacen Por clasificar aunque la tarea guardada tenga criticidad
+        await api('/api/actividades/propia', { method: 'POST', body: { ...comun, textos: puntos, criticidad: 'nueva', hoy: hoy() } })
       }
       setAbierta(false)
       setTexto('')
       setComentario('')
+      setNivel('nueva')
+      setRepetir('')
       alCrear(puntos.length)
     } catch (err) {
       setError(err.message)
@@ -313,8 +471,14 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
   if (!abierta) return <button type="button" className="iconbtn mas-col" aria-label={t('Crear actividades')} title={t('Crear actividades')} onClick={abrir}>+</button>
   return (
     <form className="nueva-col" onSubmit={crear} noValidate>
+      {guardadas.length > 0 && (
+        <select aria-label={t('Usar una tarea guardada')} value="" onChange={(e) => usarGuardada(e.target.value)}>
+          <option value="">{t('Usar una tarea guardada…')}</option>
+          {guardadas.map((g) => <option key={g.id} value={g.id}>{g.texto} · {criticidad(g.criticidad)}</option>)}
+        </select>
+      )}
       {encargado && (
-        <select aria-label={t('Empleado')} value={para} onChange={(e) => elegir(e.target.value)} autoFocus>
+        <select aria-label={t('Empleado')} value={para} onChange={(e) => elegir(e.target.value)} autoFocus={!inicial}>
           <option value="">{t('Selecciona un empleado')}</option>
           {equipo.map((p) => <option key={p.no} value={p.no}>{p.name} — {rol(p.role)}</option>)}
         </select>
@@ -328,7 +492,11 @@ function NuevasActividades({ equipo, semana, user, alCrear }) {
           {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k} title={v}>{t('Turno')} {k}</option>)}
         </select>
       </div>
+      <select aria-label={t('Criticidad')} value={nivel} onChange={(e) => setNivel(e.target.value)}>
+        {['nueva', ...NIVELES].map((c) => <option key={c} value={c}>{nombreColumna(c)}</option>)}
+      </select>
       <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} /></>}
+      <Repetir valor={repetir} cambiar={setRepetir} />
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row end" style={{ gap: 6 }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierta(false)}>{t('Cancelar')}</button>

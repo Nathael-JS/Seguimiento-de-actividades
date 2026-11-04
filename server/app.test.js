@@ -1,7 +1,7 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
-import { build, totp } from './app.js'
+import { build, siguienteFecha, totp } from './app.js'
 
 const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/api/login', payload })
 // Clave TOTP de cada cuenta por instancia de la app (el primer login la entrega para darla de alta) y último paso usado
@@ -32,7 +32,7 @@ async function sesionDe(app, no) {
 }
 // Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
 async function pedir(app, method, url, payload) {
-  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias)\/(\d{5})/)?.[1]
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas)\/(\d{5})/)?.[1]
   const enviar = async () => {
     const cookie = no && await sesionDe(app, no)
     return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
@@ -104,6 +104,36 @@ test('MFA: alta en el primer login, luego solo el código de la app; incorrecto,
   assert.equal((await verificar(otro.token, '12ab56')).statusCode, 400)
   // Las claves de cada cuenta son distintas
   assert.notEqual((await login({ usuario: '20002', password: clave }, app)).json().secreto, alta.secreto)
+})
+
+test('bloqueos: por cuenta (no por lo escrito), los códigos fallidos cuentan y recuperar pide el código de la app', async () => {
+  const app = build()
+  // Número y correo son la misma cuenta: 5 + 5 intentos la bloquean
+  for (let i = 0; i < 5; i++) await login({ usuario: '10490', password: 'mala' }, app)
+  for (let i = 0; i < 5; i++) await login({ usuario: 'maria.lopez@empresa.com', password: 'mala' }, app)
+  assert.equal((await login({ usuario: 'maria.lopez', password: 'demo1234' }, app)).statusCode, 429)
+
+  // Cuenta real con la app vinculada
+  const ana = { name: 'Ana Prueba', no: '20001', email: 'ana.prueba@empresa.com', role: 'tec', dept: 'lc', shift: 'B', boss: '10251', password: CLAVE }
+  await app.inject({ method: 'POST', url: '/api/registro', payload: ana })
+  await app.inject({ method: 'POST', url: '/api/registro', payload: { ...ana, no: '20002', email: 'sin.app@empresa.com' } })
+  const verificar = (token, codigo) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo } })
+  const alta = (await login({ usuario: '20001', password: CLAVE }, app)).json()
+  const paso = Math.floor(Date.now() / 30_000)
+  assert.equal((await verificar(alta.token, totp(alta.secreto, paso - 1))).statusCode, 200)
+  const recuperar = (cuerpo) => app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '20001', email: 'ana.prueba@empresa.com', ...cuerpo } })
+  assert.equal((await recuperar()).statusCode, 401) // sin código
+  assert.equal((await recuperar({ codigo: totp(alta.secreto, paso - 1) })).statusCode, 401) // ya usado
+  assert.equal((await recuperar({ codigo: totp(alta.secreto, paso) })).statusCode, 200)
+  // Sin la app vinculada no se recupera sola
+  assert.match((await app.inject({ method: 'POST', url: '/api/recuperar', payload: { no: '20002', email: 'sin.app@empresa.com' } })).json().error, /super administrador/)
+
+  // Los códigos fallidos suman al bloqueo del login: no se puede pedir otra verificación y seguir probando
+  for (let vuelta = 0; vuelta < 2; vuelta++) {
+    const { token } = (await login({ usuario: '20001', password: CLAVE }, app)).json()
+    for (let i = 0; i < 5; i++) await verificar(token, '000000')
+  }
+  assert.equal((await login({ usuario: '20001', password: CLAVE }, app)).statusCode, 429)
 })
 
 test('contraseña o usuario incorrecto da 401', async () => {
@@ -847,9 +877,11 @@ test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actua
   // Guardar: crea las nuevas (sin contraseña: la crean con "¿Olvidaste tu contraseña?") y actualiza a Jorge
   const ok = (await plantilla(app, 'lc', [...nuevas, fila({ no: '10482', name: 'Jorge Salinas', email: 'jorge.salinas@empresa.com', shift: 'B' })])).body
   assert.deepEqual([ok.creados, ok.actualizados], [3, 1])
-  assert.equal((await login({ usuario: '30001', password: 'null' }, app)).statusCode, 401) // aún sin contraseña
-  const { token } = (await pedir(app, 'POST', '/api/recuperar', { no: '30001', email: 'rosa.vega@empresa.com' })).body
-  assert.equal((await pedir(app, 'POST', '/api/recuperar/cambiar', { token, password: 'Nueva#Clave2026' })).code, 200)
+  // Las nuevas reciben una contraseña temporal (se muestra una vez); con ella entran y vinculan su app
+  assert.deepEqual(ok.temporales.map((x) => x.no), nuevas.map((f) => f.no))
+  const rosa = ok.temporales.find((x) => x.no === '30001')
+  assert.equal((await login({ usuario: '30001', password: 'null' }, app)).statusCode, 401)
+  assert.match((await login({ usuario: '30001', password: rosa.temporal }, app)).json().secreto, /^[A-Z2-7]{32}$/)
   const plantel = (await conCookie(app, 'GET', '/api/departamentos', await sesionDe(app, '10001'))).json()
   assert.equal(plantel.find((e) => e.no === '30002').area, 'Línea 9') // heredó el área de su encargada
   assert.equal((await pedir(app, 'GET', '/api/perfil/10482')).body.shift, 'B')
@@ -1032,4 +1064,74 @@ test('auditoría: los números de actividad no se reutilizan al eliminar; equipo
   const r = await login({ usuario: '10490', password: 'demo1234' }, app) // ya bloqueado aunque ahora acierte
   assert.deepEqual([r.statusCode, r.json().error], [429, 'Demasiados intentos. Espera 15 minutos.'])
   assert.equal((await login({ usuario: '10482', password: 'demo1234' }, app)).statusCode, 200) // otro usuario sigue entrando
+})
+
+// ── Recurrentes, edición y tareas guardadas ─────────────────────────────────────────────────────────────
+test('siguiente fecha de una recurrente: día hábil, +7 días y mismo día del mes (o el último)', () => {
+  assert.equal(siguienteFecha('2026-10-30', 'diaria'), '2026-11-02') // viernes → lunes
+  assert.equal(siguienteFecha('2026-11-02', 'diaria'), '2026-11-03')
+  assert.equal(siguienteFecha('2026-11-02', 'semanal'), '2026-11-09')
+  assert.equal(siguienteFecha('2026-01-31', 'mensual', 31), '2026-02-28')
+  assert.equal(siguienteFecha('2026-02-28', 'mensual', 31), '2026-03-31') // vuelve al 31
+  assert.equal(siguienteFecha('2026-12-15', 'mensual', 15), '2027-01-15')
+  assert.equal(siguienteFecha('2026-03-20', 'mensual'), '2026-04-20') // sin diaMes: el de la fecha
+})
+
+test('recurrente: al llegar su periodo se crea una copia nueva y la recurrencia pasa a ella', async () => {
+  const app = build()
+  const hace = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10)
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: hace(14), recurrencia: 'semanal', puntos: [{ texto: 'Inspección semanal' }] }))).body
+  assert.equal(a.recurrencia, 'semanal')
+  const copias = async () => (await pedir(app, 'GET', '/api/actividades/10482')).body.filter((x) => x.text === 'Inspección semanal')
+  assert.equal((await copias()).length, 1) // todavía no se consulta Inicio con la fecha de hoy
+  await pedir(app, 'GET', `/api/inicio/10482?hoy=${HOY_REAL}`)
+  await pedir(app, 'GET', `/api/inicio/10230?hoy=${HOY_REAL}`) // otra consulta el mismo día no duplica
+  const [nueva, vieja] = await copias()
+  assert.deepEqual([nueva.date, nueva.status, nueva.recurrencia, nueva.criticidad], [HOY_REAL, 'pending', 'semanal', 'normal']) // salta la semana sin entrar
+  assert.deepEqual([vieja.id, vieja.recurrencia], [a.id, undefined])
+  // Al moverla a Urgente deja de repetirse (es para un solo turno)
+  const u = (await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/tablero`, { por: '10230', columna: 'urgente', cierre: enUnaHora() })).body
+  assert.deepEqual([u.prioridad, u.recurrencia], ['urgente', undefined])
+  await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/editar`, { por: '10230', recurrencia: 'semanal' }) // 400: urgente
+  await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/tablero`, { por: '10230', columna: 'normal' })
+  assert.equal((await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/editar`, { por: '10230', recurrencia: 'semanal' })).body.recurrencia, 'semanal')
+  // Se deja de repetir desde Editar
+  assert.equal((await pedir(app, 'PATCH', `/api/actividades/${nueva.id}/editar`, { por: '10230', recurrencia: 'no' })).body.recurrencia, undefined)
+})
+
+test('editar: el encargado todo, el técnico solo las suyas (texto, fecha y recurrencia); se avisa al otro', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY_REAL, puntos: [{ texto: 'Revisar bomba' }] }))).body
+  const editar = (id, por, cambios) => pedir(app, 'PATCH', `/api/actividades/${id}/editar`, { por, ...cambios })
+  assert.equal((await editar(a.id, '10482', { texto: 'Otra cosa' })).code, 403) // se la asignaron: no la edita
+  assert.equal((await editar(a.id, '10251', { texto: 'Otra cosa' })).code, 403) // otra encargada
+  const e = (await editar(a.id, '10230', { texto: ' Revisar bomba P-12 ', comentario: 'Con el manual', turno: 'B', recurrencia: 'diaria' })).body
+  assert.deepEqual([e.text, e.mgr, e.shift, e.recurrencia], ['Revisar bomba P-12', 'Con el manual', 'B', 'diaria'])
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones[0].kind, 'editada')
+  // Tarea propia del técnico
+  const [p] = (await pedir(app, 'POST', '/api/actividades/propia', { por: '10482', textos: ['Mía'], prioridad: 'diaria', hoy: HOY_REAL, recurrencia: 'mensual' })).body
+  assert.deepEqual([p.recurrencia, p.diaMes], ['mensual', Number(HOY_REAL.slice(8))])
+  assert.equal((await editar(p.id, '10482', { comentario: 'x' })).code, 403)
+  assert.equal((await editar(p.id, '10482', { texto: 'Mía, corregida', recurrencia: 'no' })).body.recurrencia, undefined)
+  assert.equal((await pedir(app, 'GET', '/api/inicio/10230')).body.notificaciones[0].kind, 'editada') // a su encargado
+  // Una urgente no se repite
+  const [u] = (await pedir(app, 'POST', '/api/actividades/propia', { por: '10482', textos: ['Ya'], prioridad: 'urgente', hoy: HOY_REAL, cierre: enUnaHora() })).body
+  assert.equal((await editar(u.id, '10482', { recurrencia: 'diaria' })).code, 400)
+})
+
+test('tareas guardadas: personales, mismo texto actualiza, solo el dueño elimina', async () => {
+  const app = build()
+  const guardar = (por, cambios) => pedir(app, 'POST', '/api/guardadas', { por, texto: 'Limpiar filtros', criticidad: 'normal', ...cambios })
+  const g = (await guardar('10230')).body
+  assert.equal(g.no, '10230')
+  await guardar('10230', { texto: 'Auditoría 5S', criticidad: 'critica', recurrencia: 'semanal' })
+  assert.equal((await guardar('10230', { texto: 'limpiar filtros', criticidad: 'alta' })).body.id, g.id) // mismo texto: se actualiza
+  const mias = (await pedir(app, 'GET', '/api/guardadas/10230')).body
+  assert.deepEqual(mias.map((x) => [x.texto, x.criticidad]), [['Auditoría 5S', 'critica'], ['limpiar filtros', 'alta']])
+  assert.deepEqual((await pedir(app, 'GET', '/api/guardadas/10482')).body, []) // cada quien las suyas
+  assert.equal((await conCookie(app, 'GET', '/api/guardadas/10230', await sesionDe(app, '10482'))).statusCode, 403) // ni las de otro
+  assert.equal((await guardar('10230', { criticidad: 'urgente' })).code, 400)
+  assert.equal((await pedir(app, 'DELETE', `/api/guardadas/${g.id}`, { por: '10482' })).code, 404)
+  assert.equal((await pedir(app, 'DELETE', `/api/guardadas/${g.id}`, { por: '10230' })).code, 200)
+  assert.equal((await pedir(app, 'GET', '/api/guardadas/10230')).body.length, 1)
 })

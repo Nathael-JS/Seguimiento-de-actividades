@@ -19,9 +19,12 @@ async function arrancar(pool) {
 test('PostgreSQL: primera carga con los datos de prueba; lo que cambia sobrevive a un reinicio', { skip: !url && 'sin TEST_DATABASE_URL' }, async () => {
   const pool = await conectar(url)
   try {
-    await pool.query('drop table if exists departamentos, usuarios, actividades, notificaciones, herencias, sesiones, registros, checador, ids')
+    await pool.query('drop table if exists departamentos, usuarios, actividades, notificaciones, herencias, guardadas, sesiones, registros, checador, ids')
+    // Una base de una versión anterior (actividades sin las columnas nuevas): conectar las agrega
+    await pool.query('create table actividades (id integer primary key, texto text)')
     const limpio = await conectar(url)
     await limpio.end()
+    assert.equal((await pool.query("select count(*) from information_schema.columns where table_name = 'actividades' and column_name = 'recurrencia'")).rows[0].count, 1)
     assert.equal((await cargar(pool)).datos, null) // vacía
 
     const { app } = await arrancar(pool)

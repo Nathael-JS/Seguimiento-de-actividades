@@ -1,4 +1,6 @@
 # Seguimiento-de-actividades
+
+> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md).
 apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
@@ -23,7 +25,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Cuentas de prueba:** las de los mockups (`"prueba": true` en `server/usuarios.json`) entran sin el código de la app, para revisiones rápidas; el login de cada acceso tiene un botón para entrar con Laura (Gerente) o Jorge (Técnico). Las cuentas registradas sí piden MFA. Quitar `prueba` cuando haya usuarios reales.
 
-**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Las personas nuevas crean su contraseña con "¿Olvidaste tu contraseña?". PDF no: sus tablas no se pueden leer de forma confiable.
+**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Cada persona nueva recibe una contraseña temporal que el gerente ve una sola vez (y puede bajar en CSV) para entregarla; al entrar la cambia y vincula su app autenticadora. PDF no: sus tablas no se pueden leer de forma confiable.
 
 **Super administradores:** fuera de los departamentos; su menú es **Usuarios** (lista y ficha completa: puesto, turno, dar o quitar acceso, restablecer contraseña con una temporal que se muestra una vez y obliga a cambiarla, reiniciar el MFA) y **Registros** (inicios de sesión, intentos fallidos y cambios de los administradores, con fecha, IP y navegador/sistema; filtros, exportar CSV y borrar los anteriores a una fecha). Los cambios piden volver a escribir su contraseña (vale 5 minutos). Sus cuentas no van en el repositorio: se definen en la variable de entorno `SUPERADMINS` (ver Despliegue). La MAC del equipo no se puede obtener desde un navegador.
 
@@ -33,7 +35,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Herencias** (Ing. Full o superior): se propone heredar una actividad pendiente o incompleta del equipo, con motivo, a cualquier departamento. El servidor verifica dos condiciones sí/no: mismo nivel de puesto (técnico ↔ Ing. Jr, Ing. Full ↔ Senior) y turno siguiente (o el mismo empleado al día siguiente). La valida el encargado directo de quien la recibe: acepta, rechaza o redirige a alguien de su equipo, con comentario. Si quien propone ya es ese encargado, entra directo. Límites por día: 2 por turno y 2 a otro departamento para quien propone; 2 redirecciones para quien valida.
 
-**Tablero** (reemplaza a "Registrar actividad"). Encargados: las actividades se crean en el panel **Por clasificar** (una por renglón, para alguien del equipo, con fecha, turno y comentario) y se arrastran a Simple, Normal, Alta, Crítica o Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). El cambio de columna se anima (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla. Técnico / Ing. Jr: ve solo sus actividades y agrega en Por clasificar (para hoy, en su turno); al arrastrar una tarjeta (o "Pedir mover a") no se mueve: queda marcada con la solicitud y su encargado la **aprueba** o **rechaza** en su tarjeta (aviso en el Buzón de ambos; si el encargado la mueve a mano, también queda resuelta). Su menú es Inicio, Tablero, Actividades asignadas, Buzón y Perfil (Departamentos es solo de encargados).
+**Tablero** (reemplaza a "Registrar actividad"). Encargados: las actividades se crean en el panel **Por clasificar** (una por renglón, para alguien del equipo, con fecha, turno y comentario) y se arrastran a Simple, Normal, Alta, Crítica o Urgente, semana a semana (pestañas por semana que se agregan o quitan; se recuerdan en el navegador). El cambio de columna se anima (View Transitions); el menú de cada tarjeta permite moverla sin arrastrar, fijarla arriba o eliminarla. Técnico / Ing. Jr: ve solo sus actividades y agrega en Por clasificar (para hoy, en su turno); al arrastrar una tarjeta (o "Pedir mover a") no se mueve: queda marcada con la solicitud y su encargado la **aprueba** o **rechaza** en su tarjeta (aviso en el Buzón de ambos; si el encargado la mueve a mano, también queda resuelta). **Recurrentes:** cualquier tarea (menos las urgentes) puede repetirse con el interruptor **Repetir**, al crearla o desde **Editar**: cada día hábil, cada semana o cada mes. Cuando llega su siguiente fecha aparece una copia nueva Pendiente y la anterior queda como una tarea normal. **Tareas guardadas:** desde el menú ⋯ de una tarjeta, "Guardar como tarea" con su criticidad; la lista personal se despliega en el Tablero y "Usar" las crea de nuevo. Su menú es Inicio, Tablero, Actividades asignadas, Buzón y Perfil (Departamentos es solo de encargados).
 
 **Sin porcentaje de avance:** el avance lo da el estado (Realizada = hecha); los anillos muestran el % de realizadas. **Monitoreo** abre en lista (actividad, prioridad, estado, asignada a, fecha, creada, creada por) con el % de realizadas desplegable por persona; las tarjetas quedan como segunda vista. **Mis actividades** también abre en lista, con el estado editable en la fila.
 
@@ -67,7 +69,7 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
 | `POST` | `/api/logout` | Cerrar sesión |
 | `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
-| `POST` | `/api/recuperar` | Validar número de empleado y correo; da un permiso de un solo uso |
+| `POST` | `/api/recuperar` | Validar número de empleado, correo y el código de la app autenticadora (sin app vinculada: la restablece un super administrador); da un permiso de un solo uso. 10 fallos por IP y cuenta bloquean 15 min |
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
 | `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña; con `?hoy=&zona=`, su rate de aprobación |
 | `POST` | `/api/perfil/:no/password` | Cambiar la contraseña propia (pide la actual) |
@@ -82,6 +84,10 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `PATCH` | `/api/actividades/:id` | El asignado actualiza estado, avance y comentario; se notifica al encargado |
 | `GET` | `/api/actividades/:id/receptores` | Quiénes pueden recibir esa actividad (cualquier departamento) y quién la validaría |
 | `PATCH` | `/api/actividades/:id/tablero` | Tablero: mover a otra columna (criticidad o urgente, con `cierre`) o fijar. Si lo pide el técnico / Ing. Jr asignado, crea la solicitud (202) |
+| `PATCH` | `/api/actividades/:id/editar` | Editar: el encargado cambia texto, comentario, fecha, turno y recurrencia (`diaria`, `semanal`, `mensual` o `no`); el técnico / Ing. Jr, texto, fecha y recurrencia de las que agregó |
+| `GET` | `/api/guardadas/:no` | Tareas guardadas (plantillas personales) |
+| `POST` | `/api/guardadas` | Guardar una tarea con su criticidad, comentario y recurrencia (mismo texto: se actualiza) |
+| `DELETE` | `/api/guardadas/:id` | Eliminar una tarea guardada propia |
 | `POST` | `/api/actividades/:id/solicitud` | El encargado aprueba (`aprobar: true`, se mueve) o rechaza la solicitud de cambio |
 | `DELETE` | `/api/actividades/:id` | Tablero: eliminar una actividad del equipo |
 | `POST` | `/api/actividades/:id/heredar` | Proponer la herencia con motivo; entra directo si es crítica o si quien propone es el encargado de quien la recibe |

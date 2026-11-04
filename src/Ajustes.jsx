@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, depto, registrarDeptos, rol } from './comun.js'
+import { api, depto, descargarCsv, registrarDeptos, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { filasDePlantilla } from './plantilla.js'
 import { t } from './i18n.js'
@@ -84,6 +84,7 @@ function Plantilla({ user, deptos, alCargar, avisar }) {
   const [clave, setClave] = useState(deptos[0].clave)
   const [archivo, setArchivo] = useState('')
   const [revision, setRevision] = useState(null) // [{ renglon, fila, error, accion }]
+  const [temporales, setTemporales] = useState(null) // contraseñas de las cuentas nuevas: se muestran una vez
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -121,6 +122,7 @@ function Plantilla({ user, deptos, alCargar, avisar }) {
     try {
       const r = await api(`/api/departamentos/${clave}/plantilla`, { method: 'POST', body: { por: user.no, filas: revision.map((f) => f.fila) } })
       avisar(t('Plantilla cargada: {creados} nuevas, {actualizados} actualizadas.', { creados: r.creados, actualizados: r.actualizados }))
+      setTemporales(r.temporales)
       setRevision(null)
       setArchivo('')
       alCargar()
@@ -139,7 +141,7 @@ function Plantilla({ user, deptos, alCargar, avisar }) {
         <h2 className="card-title" style={{ margin: 0 }}>{t('Cargar plantilla')}</h2>
         <a className="btn btn-ghost btn-sm" href="/plantilla-departamento.xlsx" download>{t('Descargar ejemplo (.xlsx)')}</a>
       </div>
-      <p className="muted" style={{ fontSize: 14 }}>{t('Una fila por persona: número, nombre, correo, puesto, turno, área y su encargado. Quien ya existe se actualiza; las personas nuevas crean su contraseña con "¿Olvidaste tu contraseña?".')}</p>
+      <p className="muted" style={{ fontSize: 14 }}>{t('Una fila por persona: número, nombre, correo, puesto, turno, área y su encargado. Quien ya existe se actualiza; a cada persona nueva se le da una contraseña temporal que cambia al entrar.')}</p>
 
       <label className="field">
         <span>{t('Departamento')}</span>
@@ -155,6 +157,25 @@ function Plantilla({ user, deptos, alCargar, avisar }) {
         <span><b>{archivo || t('Elige el archivo de Excel')}</b><small>{t('Solo .xlsx; se lee la primera hoja.')}</small></span>
       </label>
       {error && <p className="error" role="alert">{error}</p>}
+
+      {temporales?.length > 0 && (
+        <div className="notice warn temporales" role="status">
+          <Icono nombre="alert" />
+          <div>
+            <b>{t('Contraseñas temporales: se muestran una sola vez.')}</b> {t('Entrégalas a cada persona; al entrar la cambia y vincula su app autenticadora.')}
+            <div className="table-wrap">
+              <table>
+                <thead><tr>{['Número', 'Nombre', 'Contraseña temporal'].map((c) => <th key={c} scope="col">{t(c)}</th>)}</tr></thead>
+                <tbody>{temporales.map((x) => <tr key={x.no}><td className="mono">{x.no}</td><td>{x.name}</td><td className="mono">{x.temporal}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => descargarCsv(['Número', 'Nombre', 'Contraseña temporal'], temporales.map((x) => [x.no, x.name, x.temporal]), `${t('contraseñas-temporales')}_${clave}.csv`)}>{t('Descargar CSV')}</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTemporales(null)}>{t('Ya las entregué')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {revision && (
         <>

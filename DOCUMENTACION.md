@@ -1,0 +1,476 @@
+# Documentación del sistema — Seguimiento de Actividades
+
+Documento técnico de todo el sistema: para qué sirve, cómo está construido, qué hace cada archivo, la API, el modelo de datos, la base de datos, la seguridad, el despliegue y los respaldos. El [README](README.md) es la guía corta de uso; este documento es la referencia completa.
+
+## Índice
+
+1. [Qué es](#1-qué-es)
+2. [Arquitectura](#2-arquitectura)
+3. [Tecnologías y librerías](#3-tecnologías-y-librerías)
+4. [Estructura de carpetas](#4-estructura-de-carpetas)
+5. [Roles y permisos](#5-roles-y-permisos)
+6. [Funcionalidades](#6-funcionalidades)
+7. [Frontend (`src/`)](#7-frontend-src)
+8. [Servidor (`server/app.js`)](#8-servidor-serverappjs)
+9. [API REST](#9-api-rest)
+10. [Modelo de datos](#10-modelo-de-datos)
+11. [Base de datos (PostgreSQL / Neon)](#11-base-de-datos-postgresql--neon)
+12. [Seguridad](#12-seguridad)
+13. [Idioma, tema y diseño](#13-idioma-tema-y-diseño)
+14. [Pruebas](#14-pruebas)
+15. [Despliegue, variables de entorno y respaldos](#15-despliegue-variables-de-entorno-y-respaldos)
+16. [Límites conocidos](#16-límites-conocidos)
+
+---
+
+## 1. Qué es
+
+Aplicación web para asignar, dar seguimiento y medir las actividades de los turnos de una planta (departamentos como Liquid Cooling, Pruebas Funcionales o SMT). Los encargados (Gerente, Senior, Ing. Full) crean y clasifican las actividades de su equipo por **criticidad**, y las marcan urgentes cuando hace falta. Los ejecutores (Ing. Jr, Técnico) las actualizan, agregan las suyas y piden cambios. El sistema avisa en el Buzón, hereda actividades entre turnos, genera reportes y una matriz de seguimiento. Los super administradores manejan las cuentas y la auditoría.
+
+Turnos: **A** 06:00–14:30, **B** 14:30–23:00, **C** 23:00–06:00. El que sigue al C es el A del día siguiente.
+
+## 2. Arquitectura
+
+Un solo servicio Node.js. **Fastify** atiende la API (`/api/*`) y además sirve el frontend compilado (`dist/`). Los datos se trabajan **en memoria** y, con `DATABASE_URL`, se guardan en **PostgreSQL** (Neon): al arrancar se carga todo y, después de cada petición que cambia algo, se escribe solo lo que cambió, antes de responder.
+
+```mermaid
+flowchart LR
+  N[Navegador<br/>React + Vite] -- "fetch /api/* (cookie HttpOnly)" --> F[Fastify<br/>server/app.js]
+  F -- "archivos estáticos" --> N
+  F <--> M[(Estado en memoria<br/>usuarios, actividades, …)]
+  M -- "guardar(): diferencias<br/>en una transacción" --> P[(PostgreSQL / Neon)]
+  P -- "cargar() al arrancar" --> M
+  G[GitHub Actions<br/>respaldo diario] -- "pg_dump cifrado" --> P
+```
+
+El flujo de una petición tiene cuatro pasos:
+1. **`onRequest`:** cierra las urgentes cuyo turno terminó.
+2. **`preHandler`:** valida la sesión y que el número de empleado de la petición sea el de la sesión.
+3. **Handler:** cambia el estado en memoria.
+4. **`onSend`:** si la petición no es `GET`, guarda en PostgreSQL y después responde.
+
+## 3. Tecnologías y librerías
+
+| Pieza | Librería / herramienta | Versión | Para qué |
+|---|---|---|---|
+| Lenguaje | JavaScript (ES modules) | Node ≥ 20 | Todo el proyecto (`"type": "module"`) |
+| Frontend | **React** + **react-dom** | 19.3 | Interfaz (componentes de función y hooks) |
+| Empaquetador | **Vite** + `@vitejs/plugin-react` | 8.3 / 6.1 | Servidor de desarrollo y compilación a `dist/` |
+| Servidor HTTP | **Fastify** | 5.12 | API, validación con JSON Schema, hooks |
+| Archivos estáticos | **@fastify/static** | 10.1 | Servir `dist/` y el `index.html` de la SPA |
+| Base de datos | **pg** (node-postgres) | 8.16 | Conexión a PostgreSQL / Neon (`pg.Pool`) |
+| MFA | **qrcode** | 1.5 | QR del alta en la app autenticadora (se carga solo al usarse) |
+| Excel | **read-excel-file** | 9.3 | Leer la plantilla `.xlsx` de un departamento (se carga solo al usarse) |
+| Lint | **oxlint** | 1.89 | Revisión de código (`npm run lint`) |
+| Pruebas | `node:test` + `node:assert` | integrado | Pruebas de API, BD y utilidades |
+| Navegador de prueba | Playwright (fuera del repo) | — | Verificación visual durante el desarrollo |
+| Criptografía | `node:crypto` | integrado | scrypt (contraseñas), HMAC-SHA1 (TOTP), tokens aleatorios |
+| Hosting | **Render** (plan free) | — | Servicio web (`render.yaml`) |
+| Base de datos administrada | **Neon** | PostgreSQL 16+ | Base de producción |
+| Respaldos | **GitHub Actions** + `pg_dump` (imagen `postgres:18`) + OpenSSL | — | Respaldo diario cifrado |
+| Tipografía | IBM Plex Sans / IBM Plex Mono | — | Fuentes de la interfaz |
+
+No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens, rutas por `location.hash`, estado con `useState` y SQL generado desde la tabla de columnas de `server/db.js`.
+
+## 4. Estructura de carpetas
+
+```
+├── index.html              Página base: aplica el tema guardado antes de pintar
+├── vite.config.js          Configuración de Vite (plugin de React)
+├── render.yaml             Blueprint de Render (build y start)
+├── package.json            Dependencias y scripts
+├── public/
+│   ├── favicon.svg         Logo (reloj de turnos con palomita)
+│   └── plantilla-departamento.xlsx   Ejemplo de plantilla de departamento
+├── .github/workflows/
+│   └── respaldo.yml        Respaldo diario cifrado de la base
+├── server/
+│   ├── index.js            Arranque: SUPERADMINS, conexión a la BD, carga y listen
+│   ├── app.js              build(): toda la API, reglas de negocio y seguridad
+│   ├── db.js               PostgreSQL: tablas, carga, guardado por diferencias, respaldo/restauración
+│   ├── restaurar.js        Script: restaurar un respaldo JSON (npm run restaurar)
+│   ├── usuarios.json       Datos de prueba: cuentas (contraseña demo1234, con hash)
+│   ├── actividades.json    Datos de prueba: actividades
+│   ├── notificaciones.json Datos de prueba: avisos
+│   ├── checador.json       Datos de prueba: entradas y salidas (matriz)
+│   ├── app.test.js         Pruebas de la API
+│   └── db.test.js          Prueba contra PostgreSQL (con TEST_DATABASE_URL)
+└── src/                    Frontend (ver sección 7)
+```
+
+## 5. Roles y permisos
+
+| Rol (clave) | Rango | Acceso | Puede |
+|---|---|---|---|
+| Gerente (`gte`) | 0 | Gerencia | Todo lo del encargado + Ajustes (crear departamentos, cargar plantilla) |
+| Senior (`sr`) | 1 | Gerencia | Encargado |
+| Ing. Full (`full`) | 2 | Gerencia | Encargado |
+| Ing. Jr (`jr`) | 3 | Jr / Técnico | Ejecutor |
+| Técnico (`tec`) | 4 | Jr / Técnico | Ejecutor |
+| Super administrador (`sa`) | — | Gerencia | Solo administra: Usuarios, Registros, Perfil |
+
+- **Encargado** = rango ≤ 2 (`esEncargado`). Su **equipo** son los empleados debajo de él en la jerarquía (`boss`), solo de sus departamentos. Solo puede asignar a quien tiene un rango menor que el suyo (`asignables`).
+- **Menús** (`MODULOS` y `modulosDe` en `src/comun.js`):
+  - Encargado: Inicio, Tablero, Actividades asignadas, Herencias, Buzón, Monitoreo, Reportes, Matriz, Jerarquía, Departamentos, Perfil (y Ajustes si es gerente; el gerente no tiene Actividades asignadas).
+  - Jr / Técnico: Inicio, Tablero, Actividades asignadas, Buzón, Perfil.
+  - Super administrador: Usuarios, Registros, Perfil.
+- El servidor vuelve a revisar cada permiso: el menú solo oculta, no protege.
+
+## 6. Funcionalidades
+
+### Acceso
+- **Portada:** presenta la app con un reloj de 24 h de los turnos (`Dial.jsx`) y pide elegir el acceso, **Gerencia** o **Jr / Técnico**.
+- **Login en 2 pasos:** primero la contraseña y después el código de 6 dígitos de la app autenticadora (TOTP). La primera vez se muestra un QR para vincular la app.
+- **Cuentas de prueba:** las que tienen `prueba: true` entran sin código, para revisiones rápidas.
+- **Registro:** de técnico o Ing. Jr; elige a su encargado del departamento y hereda su área.
+- **Recuperar contraseña:** con número de empleado, correo y el código de la app autenticadora. Una cuenta sin app vinculada la restablece un super administrador, para que nadie más la reclame.
+- **Cuentas de la plantilla:** nacen con una contraseña temporal que el gerente ve una sola vez y entrega.
+- **Contraseñas:**
+  - Vencen cada **90 días**; se avisa desde 15 días antes.
+  - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
+
+### Tablero (por criticidad)
+- **Columnas:** Por clasificar, Simple, Normal, Alta, Crítica y Urgente. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
+- **Encargado:**
+  - Crea actividades en **Por clasificar** (una por renglón, hasta 20) para alguien de su equipo, con fecha, turno, comentario y, si quiere, criticidad directa.
+  - Las arrastra a su columna (con animación de View Transitions) o usa el menú ⋯ para moverlas, fijarlas, editarlas o eliminarlas.
+  - **Urgente** se cierra al terminar su turno.
+- **Técnico / Ing. Jr:**
+  - Ve solo sus actividades y agrega en Por clasificar (para hoy, en su turno).
+  - Al moverlas crea una **solicitud de cambio** que su encargado **aprueba** o **rechaza** en la tarjeta.
+- **Recurrentes:**
+  - Cualquier tarea que no sea urgente se puede repetir con el interruptor **Repetir**: cada día hábil, cada semana o cada mes. Se activa al crearla o desde **Editar**.
+  - Al llegar su fecha aparece una copia nueva, Pendiente (ver [10.2](#102-recurrencia)).
+- **Editar:**
+  - El encargado cambia texto, comentario, fecha, turno y recurrencia.
+  - El técnico / Ing. Jr cambia texto, fecha y recurrencia, solo de las que agregó él.
+  - Se avisa a la otra persona.
+- **Tareas guardadas:**
+  - Son plantillas personales: desde el menú ⋯ se elige "Guardar como tarea" con una criticidad.
+  - El panel **Tareas guardadas** las lista; "Usar" abre Por clasificar con la tarea lista para crear.
+  - También se pueden elegir desde el formulario ("Usar una tarea guardada…").
+
+### Actividades asignadas
+Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el estado (Pendiente, En proceso, Realizada, Incompleta) y comentar. El técnico / Ing. Jr agrega tareas propias, diarias o **urgentes**; las urgentes se cierran al fin de su turno.
+
+### Herencias
+- Un encargado propone heredar una actividad pendiente o incompleta, con motivo, a alguien de cualquier departamento:
+  - al mismo empleado al día siguiente, o
+  - a otro del turno siguiente, con puesto equivalente.
+- La valida el encargado de quien la recibe: **acepta**, **rechaza** o **redirige** a alguien de su equipo.
+- **Límites por día:** 2 herencias por turno, 2 a otro departamento y 2 redirecciones.
+- Una **crítica** pasa directo al siguiente turno, una vez al día.
+
+### Seguimiento (encargados)
+- **Inicio del gerente:** avance por líder y por turno, y lo que necesita atención (`TableroGerente.jsx`, `tablero.js`).
+- **Monitoreo:** avance del equipo en tiempo real, % de realizadas con detalle desplegable y lista con persona.
+- **Reportes:** por fechas, turno y hora; exporta a CSV (Excel) o PDF (imprimir). Incluye un comparativo entre periodos (`reporte.js`).
+- **Matriz de seguimiento:** por persona y periodo, muestra:
+  - el yield de diarias y de urgentes (realizadas ÷ las que cuentan);
+  - el tiempo extra y la asistencia, según el checador.
+- **Jerarquía:** árbol de quién reporta a quién.
+- **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
+- **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
+
+### Buzón y avisos
+Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mientras la pestaña está a la vista, y al tocar una se abre la pantalla donde se atiende. Tipos de aviso:
+
+| Tipo | Cuándo |
+|---|---|
+| Asignación | Te asignan actividades (con cuántas) |
+| Cambio de estado | La actualizan (al encargado) |
+| Comentario | Comentan una actividad |
+| Tarea propia | El técnico agrega tareas (una sola notificación si agrega varias) |
+| Urgente | Marcan una tarea como urgente |
+| Cierre de turno | Una urgente se cerró sin terminarse |
+| Atraso | Una actividad quedó atrasada |
+| Herencia | Herencias: propuesta, aceptada, rechazada, redirigida o anulada |
+| Solicitud | Solicitud de cambio: pedida, aprobada o rechazada |
+| Edición | Editaron una actividad |
+| Contraseña | Tu contraseña está por vencer |
+
+### Super administración
+- **Usuarios:** ficha de cada cuenta. Se puede:
+  - cambiar puesto y turno;
+  - dar o quitar el acceso (al quitarlo se cierran sus sesiones);
+  - poner una contraseña temporal (se muestra una sola vez);
+  - reiniciar el MFA;
+  - descargar el **respaldo** completo.
+- **Registros:** inicios de sesión, intentos fallidos y cambios de los administradores, con IP y navegador/sistema. Tiene filtros, exportación a CSV y borrado de los registros anteriores a una fecha.
+- Las acciones piden volver a escribir la contraseña del super administrador (la confirmación vale 5 min).
+
+## 7. Frontend (`src/`)
+
+React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero`, `#monitoreo?lider=10112`…).
+
+### Arranque y estructura
+| Archivo | Qué hace |
+|---|---|
+| `main.jsx` | Monta `<App />` en `#root` con `StrictMode` e importa `index.css` |
+| `App.jsx` | Pregunta `/api/sesion` y `/api/deptos` al cargar; muestra `Login`, `CambioObligatorio` o `Shell`; escucha el evento `sesion-terminada` |
+| `Shell.jsx` | Menú lateral (plegable a iconos, se recuerda), barra superior (idioma, tema, campana), página actual (`PAGINAS`), recarga de indicadores cada 30 s, avisos (`avisar`) y cerrar sesión |
+| `Login.jsx` | `Portada` (slides + elegir acceso), `Credenciales`, `Codigo` (TOTP) y `Alta` (QR del MFA) |
+| `Registro.jsx`, `Recuperar.jsx`, `CambioObligatorio.jsx` | Crear cuenta, recuperar y cambio forzado de contraseña |
+
+### Páginas
+| Archivo | Componentes | Página |
+|---|---|---|
+| `Inicio.jsx` | `Inicio`, `Kpi`, `TareasAbiertas` | Inicio del ejecutor/encargado (indicadores, tareas abiertas, notificaciones recientes) |
+| `TableroGerente.jsx` | `TableroGerente`, `Alerta` | Inicio del gerente (por líder, por turno, atención) |
+| `Tablero.jsx` | `Tablero`, `Tarjeta`, `Repetir`, `EditarTarjeta`, `Guardadas`, `NuevasActividades` | Tablero por criticidad (ver sección 6) |
+| `MisActividades.jsx` | `MisActividades`, `Tarea`, `NuevaTarea` | Actividades asignadas |
+| `Lista.jsx` | `ListaActividades`, `Prioridad`, `PorcentajeRealizadas` | Vista de lista y % realizadas desplegable |
+| `Herencias.jsx` | `Herencias`, `Cupo`, `Actividad`, `ParaHeredar`, `PorValidar`, `Enviada` | Herencias |
+| `Monitoreo.jsx` | `Monitoreo`, `Detalle` | Monitoreo del equipo |
+| `Reportes.jsx` | `Reportes`, `Comparativo` | Reportes y comparativo |
+| `Matriz.jsx` | `Matriz`, `Celda`, `Extra` | Matriz de seguimiento |
+| `Jerarquia.jsx` | `Jerarquia`, `Rama`, `Nodo` | Árbol del equipo |
+| `Departamentos.jsx` | `Departamentos` | Plantilla y rate |
+| `Ajustes.jsx` | `Ajustes`, `NuevoDepto`, `Plantilla` | Departamentos del gerente |
+| `Buzon.jsx` | `Buzon` | Notificaciones por grupo y día |
+| `Perfil.jsx` | `Perfil`, `CambiarPassword` | Datos propios y contraseña |
+| `Admin.jsx` | `Usuarios`, `Ficha`, `Registros`, `useConfirmacion` | Super administración |
+
+### Utilidades
+| Archivo | Contenido principal |
+|---|---|
+| `comun.js` | **Constantes:** `ROLES`, `TURNOS`, `DEPARTAMENTOS`, `ESTADOS`, `CRITICIDADES`, `PERIODOS`, `PESO_CRITICIDAD`, `ACCESOS`, `MODULOS`, `RANGOS`. **Funciones:** `modulosDe`, `api()` (fetch con JSON; traduce errores y dispara `sesion-terminada`), fechas y horas (`hoy`, `dia`, `fecha`, `hora`, `fechaHora`, `hace`, `grupoDia`, `inicioDeHoy`), turnos (`finTurno`, `cierreTurno`, `turnoDe`, `horaActual`), `pctRealizadas`, `reglasPassword` y `passwordValida`, `descargar` y `descargarCsv`, `dispositivo` (navegador · sistema), `columnaTablero`, `criticidad`, `rol`, `depto`, `registrarDeptos` |
+| `ui.jsx` | Componentes compartidos: `Logo`, `Notificacion`, `ItemNotificacion`, `NotificacionesRecientes`, `Anillo`, `Estado`, `Campo`, `PasswordNueva`, `AvisoPassword`, `BotonTema`, `BotonIdioma`, `Rate`, `Criticidad`, `SelectorCriticidad` |
+| `Icono.jsx` | Iconos SVG en línea (`ICONOS`), mismo trazo |
+| `Dial.jsx` | Reloj de 24 h con los tres turnos como arcos |
+| `i18n.js` | `t(texto, datos)`, `idiomaActual`, `cambiarIdioma`, `useIdioma` (con `useSyncExternalStore`) |
+| `en.js` | Diccionario español → inglés |
+| `tablero.js` | `resumenArea`: cálculos del Inicio del gerente |
+| `reporte.js` | `comparar`: comparativo entre dos periodos y "a tiempo" |
+| `plantilla.js` | `filasDePlantilla`: lee y valida el formato de la plantilla de Excel |
+| `index.css` | Tokens (colores claro/oscuro, espacios, radios, sombras, fuentes) y estilos de todos los componentes |
+
+## 8. Servidor (`server/app.js`)
+
+`build({ superadmins, estado, guardar, ...opcionesFastify })` crea la app de Fastify con todo el estado y las rutas. La exportan también `totp`, `hashSync` y `siguienteFecha` para las pruebas.
+
+### Estado en memoria
+`usuarios`, `actividades`, `notificaciones`, `herencias`, `guardadas`, `departamentos`, `checador`, `registros` (los últimos 5000), `sesiones` (Map token → sesión) y `ultimosIds` (Map lista → último número, para no reutilizar ids). También viven en memoria, sin guardarse en la base, `fallosLogin`, `verificaciones` y `recuperaciones`, que duran minutos. Todo el estado se expone como `app.estado` para que `db.js` lo guarde.
+
+### Funciones y reglas principales
+| Función | Regla |
+|---|---|
+| `empleado(id)` | Busca por número, correo o usuario del correo |
+| `deptosDe(no)`, `equipo(no)`, `asignables(u)` | Departamentos propios y dirigidos; equipo por jerarquía; a quién puede asignar |
+| `vigentes()` | Actividades sin heredar (las heredadas quedan solo en el historial) |
+| `delTurno(acts, desde)` | Lo abierto + lo realizado desde el inicio del día local |
+| `siguienteId(lista)` | Siguiente número de una lista; nunca reutiliza uno borrado |
+| `notificar(n)`, `responsable(a)` | Crea un aviso; a quién avisar de una actividad (quien la asignó o el encargado si es propia) |
+| `cerrarUrgentes()` | En cada petición: una urgente que llegó a su cierre queda fija; si no se hizo, queda Incompleta y se avisa |
+| `generarAvisos(hoy)` | Al consultar Inicio: renueva recurrentes, avisa atrasadas y contraseñas por vencer (una vez cada una) |
+| `renovarRecurrentes(hoy)`, `siguienteFecha()` | Recurrencia (ver 10.2) |
+| `aColumna(a, columna, cierre, por)` | Mover en el tablero (criticidad o Urgente con su cierre); resuelve la solicitud pendiente |
+| `delEquipo(por, a)` | ¿La actividad es del equipo de quien actúa? |
+| `condiciones`, `puedeRecibir`, `traspasar`, `vistaHerencia` | Herencias: quién puede recibir, crear la copia en el siguiente turno, vista para el cliente |
+| `conRateDe(query)` | Rate de aprobación de los últimos 30 días (con la zona horaria del navegador) |
+| `registrar(req, evento, datos)` | Auditoría (IP real tras el proxy de Render, navegador) |
+| `hashPassword`, `passwordCorrecta`, `coincideSync`, `cambiarPassword` | Contraseñas con scrypt |
+| `totp`, `pasoDelCodigo` | Códigos de la app autenticadora (RFC 6238, ±1 paso, sin reutilizar) |
+| `confirmado(req)` | Acciones de super administrador: contraseña confirmada hace menos de 5 min |
+
+### Hooks
+| Hook | Qué hace |
+|---|---|
+| `onRequest` | `cerrarUrgentes()` |
+| `preHandler` | Las rutas públicas pasan sin revisión. En las demás: valida la sesión (401 si no hay); renueva su vencimiento cada 5 min a lo más; revisa que `:no` y `por` sean de la sesión (403); con contraseña temporal, solo deja cambiarla; `/api/admin/*` solo para super administradores |
+| `onSend` | Con base de datos y método distinto de `GET`: `guardar(app.estado)`. Si otra instancia tomó la base, responde **503** "El sistema se actualizó" |
+
+### Validación
+Cada ruta declara un **JSON Schema** (los `*Schema` al inicio del archivo). Fastify rechaza con 400 lo que no cumple: tipos, largos, enums y `additionalProperties: false`. El helper `objeto(requeridos, propiedades)` arma los objetos.
+
+## 9. API REST
+
+Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número de otra persona: **403**. Los errores traen `{ error: "texto para el usuario" }`.
+
+| Método | Ruta | Quién | Qué hace |
+|---|---|---|---|
+| POST | `/api/login` | Público | Paso 1: usuario y contraseña (10 fallos por IP y cuenta, contando códigos MFA fallidos, bloquean 15 min) |
+| POST | `/api/login/verificar` | Público | Paso 2: código TOTP (o alta con QR); crea la cookie de sesión |
+| GET | `/api/sesion` | Sesión | Quién soy |
+| POST | `/api/logout` | Sesión | Cierra la sesión |
+| POST | `/api/registro` | Público | Crea una cuenta de técnico / Ing. Jr |
+| POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña (número, correo y código de la app; límite de intentos) |
+| GET | `/api/encargados`, `/api/deptos` | Público | Encargados (para el registro) y departamentos |
+| GET | `/api/departamentos` | Encargado | Plantilla de sus departamentos con rate |
+| POST | `/api/departamentos` | Gerente | Crear departamento |
+| POST | `/api/departamentos/:clave/plantilla` | Gerente | Cargar o actualizar la plantilla (todo o nada) |
+| GET | `/api/perfil/:no` · POST `/api/perfil/:no/password` | Propio | Perfil y cambio de contraseña |
+| GET | `/api/inicio/:no?desde&hoy` | Propio | Indicadores y notificaciones; con `hoy` genera avisos y renueva recurrentes |
+| POST | `/api/notificaciones/:no/leidas` · `/:no/:id/leida` | Propio | Marcar como leídas |
+| GET | `/api/equipo/:no` | Encargado | Su equipo con sus actividades vigentes |
+| POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
+| POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
+| GET | `/api/actividades/:no` | Propio | Sus actividades (urgentes primero) |
+| PATCH | `/api/actividades/:id` | Asignado | Estado y comentario |
+| PATCH | `/api/actividades/:id/tablero` | Encargado / asignado | Mover o fijar; el técnico asignado crea una solicitud (202) |
+| POST | `/api/actividades/:id/solicitud` | Encargado | Aprobar o rechazar la solicitud de cambio |
+| PATCH | `/api/actividades/:id/editar` | Encargado / dueño | Editar texto, comentario, fecha, turno y recurrencia (`no` la quita) |
+| DELETE | `/api/actividades/:id` | Encargado | Eliminar (si no tiene una herencia pendiente) |
+| GET | `/api/guardadas/:no` | Propio | Tareas guardadas |
+| POST | `/api/guardadas` | Sesión | Guardar una plantilla (mismo texto la actualiza; máximo 100) |
+| DELETE | `/api/guardadas/:id` | Dueño | Eliminar una guardada |
+| GET | `/api/actividades/:id/receptores` | Encargado | Quién puede recibir la herencia y quién la valida |
+| POST | `/api/actividades/:id/heredar` | Encargado | Proponer una herencia |
+| GET | `/api/herencias/:no?hoy` | Propio | Por validar, enviadas, cupos del día |
+| POST | `/api/herencias/:id/responder` | Validador | Aceptar, rechazar o redirigir |
+| POST | `/api/reportes` | Encargado | Filas del reporte por fechas, turno y hora |
+| GET | `/api/matriz/:no` | Encargado | Matriz del periodo |
+| POST | `/api/admin/confirmar` | Super admin | Confirmar la contraseña (5 min; 5 fallos cierran la sesión) |
+| GET · PATCH | `/api/admin/usuarios` · `/:empleado` | Super admin | Listar y editar puesto, turno y acceso |
+| POST | `/api/admin/usuarios/:empleado/password` · `/mfa` | Super admin | Contraseña temporal y reinicio del MFA |
+| POST | `/api/admin/respaldo` | Super admin | Respaldo JSON de toda la base (sin sesiones) |
+| GET | `/api/admin/registros` · POST `/purgar` | Super admin | Auditoría y borrar los anteriores a una fecha |
+
+## 10. Modelo de datos
+
+### 10.1 Entidades (nombres en la app → columnas en PostgreSQL)
+
+**Usuario** (`usuarios`):
+- `no` (número de empleado), `name`, `email`, `role`, `dept`, `boss` (encargado), `shift`, `area`.
+- `password` (`scrypt$sal$hash`), `pwdChanged`, `debeCambiar`, `avisoPassword`.
+- `totp` (secreto base32), `totpPaso` (último código usado).
+- `activo`, `prueba`.
+
+**Actividad** (`actividades`):
+- **Identidad:** `id`, `to` (asignada a), `by` (quien la creó), `date`, `shift`, `at` (creada), `text`.
+- **Estado:** `status` (`pending`, `progress`, `done`, `incomplete`), `pct` (100 si está realizada, si no 0), `doneAt`.
+- **Comentarios:** `mgr` (comentario del encargado), `note` (comentario del ejecutor).
+- **Clasificación:** `criticidad` (`nueva` = por clasificar, `simple`, `normal`, `alta`, `critica`), o bien `prioridad: 'urgente'` + `cierreTurno` + `cerrada`.
+- **Banderas:** `propia` (la agregó el técnico), `fijada`, `solicitud` (`{ columna, cierre?, at }`, va en `extra`).
+- **Herencia:** `inh` (la recibió por herencia), `handedTo` (se heredó a), `herencia` (propuesta pendiente), `pasadaEl`.
+- **Avisos y recurrencia:** `avisoAtraso`, `recurrencia` (`diaria`, `semanal`, `mensual`), `diaMes`.
+
+**Otras tablas:**
+
+| Tabla | Campos |
+|---|---|
+| `notificaciones` (Notificación) | `id`, `for`, `kind`, `who`, `ref` (actividad), `count`, `columna` (en `extra`), `at`, `read` |
+| `herencias` (Herencia) | `id`, `act`, `por`, `para`, `motivo`, `hoy`, `turno`, `cruzada`, `critica`, `valida`, `estado`, `at`, `respuesta`, `resueltaPor`, `resueltaHoy`, `resueltaAt`, `redirigidaA`, `nueva` |
+| `guardadas` (Tarea guardada) | `id`, `no` (dueño), `texto`, `criticidad`, `comentario`, `recurrencia`, `at` |
+| `departamentos` | `clave`, `nombre`, `gerente` |
+| `sesiones` (Sesión) | `token`, `no`, `vence`, `confirmado`, `fallos` |
+| `registros` (Registro) | `id`, `at`, `evento`, `no`, `usuario`, `ip`, `agente`, `ok`, `detalle`, `por` |
+| `checador` | `no`, `date`, `entrada`, `salida` (llave: `no` + `fecha`) |
+| `ids` | `lista`, `ultimo` (último número por lista; la fila `instancia` marca qué servidor es el dueño de la base) |
+
+Todo campo que no tenga columna propia se guarda en `extra` (jsonb), así ningún dato se pierde.
+
+### 10.2 Recurrencia
+
+```mermaid
+sequenceDiagram
+  participant C as Navegador
+  participant S as Servidor
+  C->>S: GET /api/inicio/:no?hoy=AAAA-MM-DD
+  S->>S: renovarRecurrentes(hoy)
+  Note over S: para cada actividad con recurrencia:<br/>avanza siguienteFecha() mientras sea ≤ hoy
+  S->>S: si llegó una fecha nueva: copia Pendiente con esa fecha<br/>(lleva la recurrencia) y la anterior la pierde
+```
+
+- **Diaria:** el siguiente día hábil (lunes a viernes). **Semanal:** +7 días. **Mensual:** el mismo día del mes (`diaMes`); si el mes no lo tiene, su último día (31 → 30 de abril → 31 de mayo).
+- **Días sin entrar al sistema:** no se crean las copias de esos días, solo la de la fecha más reciente que toca.
+- **La copia anterior** queda como una tarea normal: si no se hizo, cuenta como atrasada.
+- **Para dejar de repetir:** desde Editar se apaga **Repetir**, o se elimina la última copia.
+- **Restricciones:** una urgente no se repite, y una heredada no se lleva la recurrencia, que sigue con su dueño.
+
+## 11. Base de datos (PostgreSQL / Neon)
+
+Código en `server/db.js`.
+
+| Función | Qué hace |
+|---|---|
+| `TABLAS` | Por cada tabla: llave primaria y columnas `[columna, propiedad en la app, tipo]` |
+| `conectar(url)` | `pg.Pool` (máx. 4 conexiones). Crea las tablas que no existan y **agrega las columnas nuevas** a las que ya existen (`add column if not exists`; una columna nueva debe aceptar null) |
+| `cargar(pool)` | En **una transacción**: toma la base para esta instancia (fila `instancia` de `ids`, con un número aleatorio) y carga todas las tablas. Con la base vacía devuelve `datos: null` y la app arranca con los datos de prueba |
+| `guardador(pool, instancia)` | `guardar(estado)` compara cada fila (JSON) con la última guardada y escribe solo lo nuevo, cambiado o borrado: `insert … on conflict do update` de 200 en 200 y `delete`, en **una transacción**. Las escrituras van en fila (una a la vez). Si falla, registra el error y lo reintenta en la siguiente petición. Si la fila `instancia` ya es de otra, lanza `InstanciaReemplazada` |
+| `respaldo(estado)` | `{ version, creado, tablas }` sin sesiones |
+| `restaurar(pool, respaldo)` | Reemplaza todo en una transacción y toma la base |
+| Tipos | `date` → texto `AAAA-MM-DD`; `timestamptz` → ISO; `bigint` → número |
+
+**Instancia única:** durante un redeploy de Render corren dos servidores unos segundos. El nuevo toma la base al cargar; el viejo, en su siguiente guardado, ve que ya no es el dueño, deja de guardar y responde 503 para que el navegador recargue contra el nuevo.
+
+**Conexión en producción:** `DATABASE_URL` de Neon con `sslmode=verify-full` (en Render, Environment).
+
+**Desarrollo y pruebas:** sin `DATABASE_URL` todo vive en memoria. `TEST_DATABASE_URL` apunta a una base de pruebas para `server/db.test.js`, que **borra sus tablas**.
+
+## 12. Seguridad
+
+- **Sesión:** cookie `HttpOnly`, `SameSite=Strict` y `Secure` en Render, con un token aleatorio. Vence tras 12 h sin uso. Cambiar la contraseña cierra las demás sesiones.
+- **Identidad:** el servidor toma de la sesión quién pide; `:no` y `por` deben coincidir (403).
+- **Contraseñas:**
+  - Se guardan con **scrypt** (sal de 16 bytes y clave de 64) y se comparan con `timingSafeEqual`.
+  - Con un usuario inexistente se calcula igual un hash falso, para no revelar por el tiempo de respuesta qué cuentas existen.
+  - Reglas de fuerza (`reglasPassword`) y vencimiento cada 90 días.
+- **MFA:** TOTP (RFC 6238, SHA-1, 6 dígitos, 30 s), con tolerancia de ±1 paso y sin reutilizar un código. Las cuentas de prueba no lo piden.
+- **Fuerza bruta:**
+  - Login: 10 fallos por IP y **cuenta** (número, correo o usuario del correo cuentan igual) bloquean 15 min. Los códigos MFA fallidos suman al mismo contador, y solo vuelve a cero al entrar de verdad.
+  - Recuperar contraseña: además del número y el correo pide el código de la app; 10 fallos por IP y cuenta bloquean 15 min.
+  - Código MFA: 5 intentos por verificación, que vence a los 5 min.
+  - Confirmación de super administrador: 5 fallos cierran la sesión.
+- **Super administradores:** se definen en la variable de entorno `SUPERADMINS` (nunca en el repositorio) y se identifican por correo. Los que se quitan de la variable quedan sin acceso.
+- **Validación de entrada:** JSON Schema en cada ruta; los textos tienen largo máximo.
+- **Fechas del navegador:** `hoyValido` solo acepta fechas a un día o menos de la del servidor, para que un reloj mal puesto no marque todo como atrasado.
+- **Auditoría:** cada login (exitoso o fallido) y cada acción de super administrador queda en `registros`, con la IP real (la que agrega el proxy de Render).
+- **Respaldos:** cifrados con AES-256 (PBKDF2, 200 000 iteraciones) porque el repositorio es público. El JSON del super administrador trae hashes y secretos del MFA: hay que guardarlo en un lugar seguro.
+
+## 13. Idioma, tema y diseño
+
+- **Idioma:** español por defecto e inglés con `BotonIdioma`. `t('texto')` busca en `en.js`. Una prueba (`i18n.test.js`) revisa que todo texto en español del código tenga su traducción.
+- **Tema:** claro, oscuro o el del sistema (`BotonTema`). `index.html` lo aplica antes de pintar, para que no parpadee, y al imprimir siempre se usan los colores claros.
+- **Tokens** (`index.css`, `:root`):
+  - Superficies (`--surface-*`), tinta (`--ink*`), marca `--brand` (verde azulado) y acento `--accent` (ámbar).
+  - Estados (`--status-*`), espacios (`--space-*`), radios (`--radius-*`) y sombras (`--shadow-card`, `--shadow-raise`, `--shadow-btn`, `--shadow-pop`).
+  - Fuentes IBM Plex y la curva de animación `--ease-salida`.
+- **Logo:** el reloj de los tres turnos (A verde azulado, B ámbar, C gris azulado) con una palomita. Es el mismo dibujo en `ui.jsx` (`Logo`) y en `public/favicon.svg`.
+- **Animación:** View Transitions al mover tarjetas y transiciones cortas en botones y tarjetas. Con "reducir movimiento" no se anima.
+- **Accesibilidad:** foco visible, `aria-label` en controles de solo icono, `role="switch"` en **Repetir**, menús con `<details>`, avisos con `role="status"` y alternativa de teclado (menú ⋯) para el arrastre.
+
+## 14. Pruebas
+
+| Comando | Qué prueba |
+|---|---|
+| `npm test` | `server/app.test.js`: API completa (login, MFA, permisos, actividades, tablero, solicitudes, recurrencia, edición, guardadas, herencias, reportes, matriz, super administración, respaldo). Además `src/*.test.js`: menús por rol, plantilla, reportes, Inicio del gerente y traducciones |
+| `TEST_DATABASE_URL=postgresql://… npm test` | Además, `server/db.test.js`: primera carga, cambios que sobreviven un reinicio, migración de columnas, instancia reemplazada (503) y respaldar/restaurar |
+| `npm run lint` | oxlint |
+| `npm run build` | Compila el frontend |
+
+## 15. Despliegue, variables de entorno y respaldos
+
+**Render** (`render.yaml`): `npm install && npm run build`, luego `npm start` (escucha en `PORT`, en `0.0.0.0`, con `trustProxy`).
+
+| Variable | Dónde | Para qué |
+|---|---|---|
+| `DATABASE_URL` | Render y secreto de GitHub | Conexión a Neon (`?sslmode=verify-full`) |
+| `SUPERADMINS` | Render | JSON `[{ "name", "email", "password", "no"? }]` de los super administradores |
+| `PORT` | Render (automática) | Puerto del servidor |
+| `BACKUP_PASSWORD` | Secreto de GitHub | Contraseña del cifrado de los respaldos |
+| `TEST_DATABASE_URL` | Local | Base para `db.test.js` (se borra) |
+
+**Respaldos:**
+- **Diario automático** (`.github/workflows/respaldo.yml`):
+  - Corre a las 9:17 UTC (3:17 en Ciudad de México), o a mano con *Run workflow*.
+  - Hace `pg_dump` con la imagen `postgres:18`, lo comprime y lo cifra; el artefacto se guarda 30 días.
+  - Para revisarlo: `openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | psql "$DATABASE_URL"` (en una base vacía).
+- **Manual:** Usuarios → **Descargar respaldo** (JSON).
+  - Restaurar con `DATABASE_URL=… npm run restaurar -- archivo.json`.
+  - Después hay que reiniciar el servicio en Render.
+
+**Scripts:** `dev` (Vite), `build`, `preview`, `start`, `restaurar`, `test`, `lint`.
+
+## 16. Límites conocidos
+
+Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propósito, con su límite y cuándo cambiarlas):
+- **Una sola instancia:** varias no se reparten el trabajo. Para escalar, pasar las consultas a SQL por petición.
+- **Sin tareas programadas:** el cierre de urgentes, los avisos y la renovación de recurrentes se calculan en cada petición o al consultar Inicio. Con muchos datos convendría un job programado.
+- **Consultas `GET`:** no guardan. Lo que generan (avisos, copias recurrentes) se guarda con la siguiente escritura o se vuelve a generar.
+- **IP real:** se toma del segundo salto de `X-Forwarded-For`. Si Render cambia su proxy, hay que revisarlo.
+- **Registros:** se conservan los últimos 5000.
+- **Checador simulado:** las entradas y salidas de `checador.json` son de prueba (lunes a viernes, oct–dic 2026). Hay que conectarlo al checador real.
+- **Cuentas de prueba sin MFA:** entran sin el código de la app para revisiones rápidas. Hay que quitarlas al pasar a usuarios reales.
+- **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.
+- **MAC:** la MAC del equipo no se puede obtener desde un navegador.
