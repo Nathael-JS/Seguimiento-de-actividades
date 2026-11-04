@@ -1,26 +1,28 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
-import { Registros, Usuarios } from './Admin.jsx'
-import Ajustes from './Ajustes.jsx'
-import Buzon from './Buzon.jsx'
-import Departamentos from './Departamentos.jsx'
 import Icono from './Icono.jsx'
-import { BotonIdioma, BotonTema, Logo } from './ui.jsx'
+import { BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
 import { t } from './i18n.js'
-import Herencias from './Herencias.jsx'
 import Inicio from './Inicio.jsx'
-import Jerarquia from './Jerarquia.jsx'
-import Matriz from './Matriz.jsx'
-import MisActividades from './MisActividades.jsx'
-import Monitoreo from './Monitoreo.jsx'
-import Perfil from './Perfil.jsx'
-import Reportes from './Reportes.jsx'
-import Tablero from './Tablero.jsx'
 
-// Una página por cada módulo de MODULOS
+// Una página por cada módulo de MODULOS. Inicio viene incluida; las demás se descargan al abrirlas por primera
+// vez (la app abre más rápido y cada quien baja solo los módulos de su rol)
 const PAGINAS = {
-  inicio: Inicio, 'mis-actividades': MisActividades,
-  monitoreo: Monitoreo, reportes: Reportes, tablero: Tablero, herencias: Herencias, matriz: Matriz, jerarquia: Jerarquia, buzon: Buzon, departamentos: Departamentos, ajustes: Ajustes, usuarios: Usuarios, registros: Registros, perfil: Perfil,
+  inicio: Inicio,
+  'mis-actividades': lazy(() => import('./MisActividades.jsx')),
+  monitoreo: lazy(() => import('./Monitoreo.jsx')),
+  reportes: lazy(() => import('./Reportes.jsx')),
+  tablero: lazy(() => import('./Tablero.jsx')),
+  herencias: lazy(() => import('./Herencias.jsx')),
+  matriz: lazy(() => import('./Matriz.jsx')),
+  jerarquia: lazy(() => import('./Jerarquia.jsx')),
+  buzon: lazy(() => import('./Buzon.jsx')),
+  departamentos: lazy(() => import('./Departamentos.jsx')),
+  ajustes: lazy(() => import('./Ajustes.jsx')),
+  usuarios: lazy(() => import('./Admin.jsx').then((m) => ({ default: m.Usuarios }))),
+  registros: lazy(() => import('./Admin.jsx').then((m) => ({ default: m.Registros }))),
+  plantillas: lazy(() => import('./Admin.jsx').then((m) => ({ default: m.Plantillas }))),
+  perfil: lazy(() => import('./Perfil.jsx')),
 }
 
 // #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)
@@ -150,7 +152,11 @@ export default function Shell({ user, onLogout, avisoInicial }) {
         </header>
         <main className="page">
           {/* key: cambiar de dirección (también solo el ?lider=) vuelve a montar la página con su estado inicial */}
-          <Pagina key={hash} user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
+          <SiFalla key={hash}>
+            <Suspense fallback={<p className="muted">{t('Cargando…')}</p>}>
+              <Pagina user={user} modulos={modulos} datos={datos} error={error} recargar={recargar} avisar={avisar} />
+            </Suspense>
+          </SiFalla>
         </main>
       </div>
 

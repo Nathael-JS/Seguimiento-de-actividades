@@ -254,6 +254,7 @@ const EVENTOS = {
   'password-cambiada': 'Cambió su contraseña', 'password-recuperada': 'Recuperó su contraseña',
   'admin-confirmacion': 'Confirmó su contraseña', 'admin-confirmacion-fallida': 'Confirmación fallida',
   'admin-usuario': 'Cambio de cuenta', 'admin-password': 'Contraseña restablecida', 'admin-mfa': 'MFA reiniciado', 'admin-respaldo': 'Respaldo descargado',
+  'registro-rechazado': 'Registro rechazado', 'admin-plantilla': 'Plantilla corregida', 'error-servidor': 'Error del servidor', 'error-navegador': 'Error en el navegador',
   'registros-purgados': 'Registros borrados',
 }
 const CAMPOS = { shift: 'Turno', role: 'Puesto', activo: 'Acceso' }
@@ -356,5 +357,145 @@ export function Registros({ user, avisar }) {
       </section>
       {dialogo}
     </>
+  )
+}
+
+// Plantillas: quién viene en la plantilla de su departamento y si ya se registró. A quien aún no se registra se le
+// corrige el número o el correo (o se quita), y los intentos de registro rechazados se comparan con la plantilla
+export function Plantillas({ user, avisar }) {
+  const [datos, setDatos] = useState(null)
+  const [error, setError] = useState('')
+  const [filtro, setFiltro] = useState('por-registrar')
+  const [editando, setEditando] = useState(null) // número de la fila en edición
+  const [quitar, setQuitar] = useState(null) // número de la fila por confirmar
+  const [dialogo, conConfirmacion] = useConfirmacion(user)
+
+  const cargar = useCallback(() => api('/api/admin/plantillas').then((d) => { setError(''); setDatos(d) }).catch((e) => setError(e.message)), [])
+  useEffect(() => { cargar() }, [cargar])
+
+  async function accion(hacer, mensaje) {
+    try {
+      await conConfirmacion(hacer)
+      setEditando(null)
+      setQuitar(null)
+      avisar(mensaje)
+      cargar()
+    } catch (e) {
+      if (!e.cancelado) avisar(e.message)
+    }
+  }
+  const corregir = (p, cambios) => accion(() => api(`/api/admin/plantillas/${p.no}`, { method: 'PATCH', body: { por: user.no, ...cambios } }), t('Plantilla corregida: ya puede registrarse con esos datos.'))
+  const eliminar = (p) => accion(() => api(`/api/admin/plantillas/${p.no}`, { method: 'DELETE', body: { por: user.no } }), t('{nombre} se quitó de la plantilla.', { nombre: p.name }))
+
+  if (error) return <p className="error" role="alert">{error}</p>
+  if (!datos) return <p className="muted">{t('Cargando…')}</p>
+
+  const porRegistrar = datos.personas.filter((p) => p.porRegistrar).length
+  const lista = datos.personas.filter((p) => filtro === 'todas' || (filtro === 'por-registrar') === p.porRegistrar)
+  // Con quién de las plantillas coincide lo que escribió quien no pudo registrarse
+  const pista = (r) => {
+    const porNo = datos.personas.find((p) => p.no === r.usuario)
+    const porCorreo = datos.personas.find((p) => p.email === r.detalle)
+    if (porNo && !porNo.porRegistrar) return t('{nombre} ya se registró', { nombre: porNo.name })
+    if (porNo) return t('El número es de {nombre}; en la plantilla su correo es {correo}', { nombre: porNo.name, correo: porNo.email })
+    if (porCorreo) return t('El correo es de {nombre}, con número {no}', { nombre: porCorreo.name, no: porCorreo.no })
+    return t('No está en ninguna plantilla')
+  }
+
+  return (
+    <>
+      {dialogo}
+      <div className="page-head">
+        <h1>{t('Plantillas')}</h1>
+        <p>{t('Quién viene en la plantilla de su departamento y si ya se registró. Corrige el número o el correo de quien no pudo registrarse.')}</p>
+      </div>
+
+      <div className="chips" role="group" aria-label={t('Filtrar plantillas')}>
+        {[['por-registrar', t('Por registrar ({n})', { n: porRegistrar })], ['registradas', t('Registradas ({n})', { n: datos.personas.length - porRegistrar })], ['todas', t('Todas')]].map(([k, nombre]) => (
+          <button key={k} aria-pressed={filtro === k} onClick={() => setFiltro(k)}>{nombre}</button>
+        ))}
+      </div>
+
+      <section className="card">
+        {!lista.length ? <p className="empty">{t('Nadie en esta vista.')}</p> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr>{['Número', 'Nombre', 'Correo', 'Puesto', 'Departamento', 'Encargado', 'Estado', ''].map((c) => <th key={c} scope="col">{c && t(c)}</th>)}</tr></thead>
+              <tbody>
+                {lista.map((p) => editando === p.no
+                  ? <FilaPlantilla key={p.no} p={p} guardar={(cambios) => corregir(p, cambios)} cancelar={() => setEditando(null)} />
+                  : (
+                    <tr key={p.no}>
+                      <td className="mono">{p.no}</td>
+                      <td>{p.name}</td>
+                      <td>{p.email}</td>
+                      <td>{rol(p.role)}</td>
+                      <td>{depto(p.dept)}</td>
+                      <td>{p.bossName ?? '—'}</td>
+                      <td>{p.porRegistrar ? <span className="tag">{t('Por registrar')}</span> : <span className="tag suave">{t('Registrada')}</span>}</td>
+                      <td className="nowrap">
+                        {p.porRegistrar && (quitar === p.no ? (
+                          <>
+                            <button type="button" className="btn btn-danger btn-sm" onClick={() => eliminar(p)}>{t('Sí, quitar')}</button>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQuitar(null)}>{t('Cancelar')}</button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditando(p.no)}>{t('Corregir')}</button>
+                            <button type="button" className="btn btn-ghost btn-sm peligro" onClick={() => setQuitar(p.no)}>{t('Quitar')}</button>
+                          </>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="card" style={{ marginTop: 16 }}>
+        <h2 className="card-title">{t('Intentos de registro rechazados')}</h2>
+        <p className="muted" style={{ fontSize: 14 }}>{t('Número y correo que escribió la persona y con quién coinciden en las plantillas.')}</p>
+        {!datos.rechazados.length ? <p className="empty">{t('Ningún intento rechazado.')}</p> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr>{['Fecha y hora', 'Número escrito', 'Correo escrito', 'IP', 'Coincidencia'].map((c) => <th key={c} scope="col">{t(c)}</th>)}</tr></thead>
+              <tbody>
+                {datos.rechazados.map((r) => (
+                  <tr key={r.id}>
+                    <td className="nowrap">{fechaHora(r.at)}</td>
+                    <td className="mono">{r.usuario}</td>
+                    <td>{r.detalle}</td>
+                    <td className="mono">{r.ip}</td>
+                    <td>{pista(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  )
+}
+
+function FilaPlantilla({ p, guardar, cancelar }) {
+  const [no, setNo] = useState(p.no)
+  const [email, setEmail] = useState(p.email)
+  return (
+    <tr className="editando">
+      <td><input aria-label={t('Número de empleado')} inputMode="numeric" maxLength={10} value={no} onChange={(e) => setNo(e.target.value.trim())} /></td>
+      <td>{p.name}</td>
+      <td><input aria-label={t('Correo electrónico')} type="email" maxLength={100} value={email} onChange={(e) => setEmail(e.target.value)} /></td>
+      <td>{rol(p.role)}</td>
+      <td>{depto(p.dept)}</td>
+      <td>{p.bossName ?? '—'}</td>
+      <td />
+      <td className="nowrap">
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => guardar({ ...(no !== p.no && { no }), ...(email.trim() !== p.email && { email: email.trim() }) })}>{t('Guardar')}</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={cancelar}>{t('Cancelar')}</button>
+      </td>
+    </tr>
   )
 }

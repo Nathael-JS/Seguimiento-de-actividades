@@ -20,7 +20,7 @@ Documento técnico de todo el sistema: para qué sirve, cómo está construido, 
 14. [Pruebas](#14-pruebas)
 15. [Despliegue, variables de entorno y respaldos](#15-despliegue-variables-de-entorno-y-respaldos)
 16. [Límites conocidos](#16-límites-conocidos)
-17. [Problemas resueltos y guía rápida](#17-problemas-resueltos-y-guía-rápida)
+17. [Bitácora de incidentes](#17-bitácora-de-incidentes)
 
 ---
 
@@ -123,9 +123,9 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 - **Portada:** presenta la app con un reloj de 24 h de los turnos (`Dial.jsx`) y pide elegir el acceso, **Gerencia** o **Jr / Técnico**.
 - **Login en 2 pasos:** primero la contraseña y después el código de 6 dígitos de la app autenticadora (TOTP). La primera vez se muestra un QR para vincular la app.
 - **Cuentas de prueba:** las que tienen `prueba: true` entran sin código, para revisiones rápidas.
-- **Registro:** de técnico o Ing. Jr; elige a su encargado del departamento y hereda su área.
+- **Registro (validado con la plantilla):** solo se registra quien viene en la plantilla de su departamento, cargada por su gerente. Escribe su número de empleado y su correo; si coinciden con su fila, elige su contraseña y en su primer login vincula la app autenticadora. Puesto, turno, departamento, encargado y área salen de la plantilla. Si no coinciden: *"Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla."*, y el intento queda en **Plantillas** para el super administrador.
 - **Recuperar contraseña:** con número de empleado, correo y el código de la app autenticadora. Una cuenta sin app vinculada la restablece un super administrador, para que nadie más la reclame.
-- **Cuentas de la plantilla:** nacen con una contraseña temporal que el gerente ve una sola vez y entrega.
+- **Cuentas de la plantilla:** nacen **por registrar**, sin contraseña. No pueden entrar hasta que la persona se registra.
 - **Contraseñas:**
   - Vencen cada **90 días**; se avisa desde 15 días antes.
   - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
@@ -197,6 +197,7 @@ Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mi
   - poner una contraseña temporal (se muestra una sola vez);
   - reiniciar el MFA;
   - descargar el **respaldo** completo.
+- **Plantillas:** quién viene en cada plantilla y si ya se registró. Permite corregir el número o el correo de una fila por registrar, o quitarla. También lista los intentos de registro rechazados, con lo que escribió la persona y con quién coincide ("El número es de Rosa; en la plantilla su correo es…").
 - **Registros:** inicios de sesión, intentos fallidos y cambios de los administradores, con IP y navegador/sistema. Tiene filtros, exportación a CSV y borrado de los registros anteriores a una fecha.
 - Las acciones piden volver a escribir la contraseña del super administrador (la confirmación vale 5 min).
 
@@ -294,9 +295,12 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/login/verificar` | Público | Paso 2: código TOTP (o alta con QR); crea la cookie de sesión |
 | GET | `/api/sesion` | Sesión | Quién soy |
 | POST | `/api/logout` | Sesión | Cierra la sesión |
-| POST | `/api/registro` | Público | Crea una cuenta de técnico / Ing. Jr |
+| POST | `/api/registro` | Público | `{ no, email, password }`: activa una cuenta por registrar de la plantilla si número y correo coinciden (403 y registro del intento si no). 10 fallos por IP bloquean 15 min |
 | POST | `/api/recuperar`, `/api/recuperar/cambiar` | Público | Recuperar la contraseña (número, correo y código de la app; límite de intentos) |
-| GET | `/api/encargados`, `/api/deptos` | Público | Encargados (para el registro) y departamentos |
+| GET | `/api/deptos` | Público | Catálogo de departamentos |
+| GET | `/api/config` | Público | `{ cuentasPrueba }`: si la pantalla de acceso muestra la revisión rápida |
+| GET | `/api/salud` | Público | `{ ok: true }` si el servidor y la base responden. Render la usa como health check |
+| POST | `/api/errores` | Público | Error del navegador (`mensaje`, `pila`, `ruta`) → log de Render. Hasta 10 por IP cada 15 min |
 | GET | `/api/departamentos` | Encargado | Plantilla de sus departamentos con rate |
 | POST | `/api/departamentos` | Gerente | Crear departamento |
 | POST | `/api/departamentos/:clave/plantilla` | Gerente | Cargar o actualizar la plantilla (todo o nada) |
@@ -326,6 +330,8 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET · PATCH | `/api/admin/usuarios` · `/:empleado` | Super admin | Listar y editar puesto, turno y acceso |
 | POST | `/api/admin/usuarios/:empleado/password` · `/mfa` | Super admin | Contraseña temporal y reinicio del MFA |
 | POST | `/api/admin/respaldo` | Super admin | Respaldo JSON de toda la base (sin sesiones) |
+| GET | `/api/admin/plantillas` | Super admin | Personas de las plantillas (por registrar / registradas) e intentos de registro rechazados |
+| PATCH · DELETE | `/api/admin/plantillas/:empleado` | Super admin | Corregir número o correo, o quitar, una fila por registrar (pide confirmación) |
 | GET | `/api/admin/registros` · POST `/purgar` | Super admin | Auditoría y borrar los anteriores a una fecha |
 
 ## 10. Modelo de datos
@@ -450,6 +456,7 @@ Código en `server/db.js`.
 |---|---|---|
 | `DATABASE_URL` | Render y secreto de GitHub | Conexión a Neon (`?sslmode=verify-full`) |
 | `SUPERADMINS` | Render | JSON `[{ "name", "email", "password", "no"? }]` de los super administradores |
+| `CUENTAS_PRUEBA` | Render | `no` con usuarios reales: las cuentas de prueba (`demo1234`, sin MFA) no entran, sus sesiones dejan de servir y se oculta la revisión rápida |
 | `PORT` | Render (automática) | Puerto del servidor |
 | `BACKUP_PASSWORD` | Secreto de GitHub | Contraseña del cifrado de los respaldos |
 | `TEST_DATABASE_URL` | Local | Base para `db.test.js` (se borra) |
@@ -465,6 +472,13 @@ Código en `server/db.js`.
 
 **Scripts:** `dev` (Vite), `build`, `preview`, `start`, `restaurar`, `test`, `lint`.
 
+### Errores, salud y rendimiento
+- **Errores del servidor:** un error no previsto (500) se registra en el log y en **Registros** (evento "Error del servidor", con el código, la ruta y el mensaje) con el número de la petición (8 caracteres) y el navegador recibe "Ocurrió un error en el servidor. Si se repite, comparte este código: …". Con ese código se busca la línea en Render → Logs. Los 4xx (validación) siguen como los da Fastify.
+- **Errores del navegador:** `SiFalla` (`ui.jsx`) envuelve la app y cada página. Si una pantalla falla al dibujarse, muestra "Algo falló en esta pantalla" con Recargar en vez de quedar en blanco, y manda el error a `/api/errores`. `main.jsx` también reporta los errores fuera de React (`error`, `unhandledrejection`). En Render aparecen como `error en el navegador`, y en **Registros** como "Error en el navegador", con el empleado, la pantalla y el navegador.
+- **Salud:** `render.yaml` tiene `healthCheckPath: /api/salud`, así que Render no manda tráfico a una versión que no responde o no llega a la base.
+- **Carga diferida:** en `Shell.jsx` las páginas, salvo Inicio, se descargan al abrirlas (`React.lazy`). El JS inicial bajó de 409 a 262 kB (81 kB con gzip).
+- **Precomprimido:** `npm run build` corre `scripts/comprimir.js`, que guarda `.br` y `.gz` de cada archivo. `@fastify/static` (`preCompressed`) entrega la versión que acepta el navegador: el JS principal viaja en unos 70 kB. Los archivos con hash se guardan en caché un año.
+
 ## 16. Límites conocidos
 
 Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propósito, con su límite y cuándo cambiarlas):
@@ -473,52 +487,97 @@ Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propó
 - **Consultas `GET`:** no guardan. Lo que generan (avisos, copias recurrentes) se guarda con la siguiente escritura o se vuelve a generar.
 - **IP real:** se toma del segundo salto de `X-Forwarded-For`. Si Render cambia su proxy, hay que revisarlo.
 - **Registros:** se conservan los últimos 5000.
+- **Notificaciones:** cada persona conserva sus últimas 200.
 - **Checador simulado:** las entradas y salidas de `checador.json` son de prueba (lunes a viernes, oct–dic 2026). Hay que conectarlo al checador real.
 - **Cuentas de prueba sin MFA:** entran sin el código de la app para revisiones rápidas. Hay que quitarlas al pasar a usuarios reales.
 - **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.
 - **MAC:** la MAC del equipo no se puede obtener desde un navegador.
 
-## 17. Problemas resueltos y guía rápida
+## 17. Bitácora de incidentes
 
-Casos reales que ya pasaron, qué los causaba y cómo se resolvieron, para no repetirlos.
+Problemas reales que ya pasaron. Si algo vuelve a fallar, busca aquí el síntoma. Cada caso tiene número, fecha, PR, síntoma, causa, solución y cómo prevenirlo. Los cambios de cada PR están en el [CHANGELOG](CHANGELOG.md).
 
-### Paneles encimados en el Inicio del gerente
-- **Síntoma:** en el Inicio del gerente, "Notificaciones recientes" quedaba encima de "Avance por turno".
-- **Causa:** el Inicio del gerente usaba la clase CSS `.tablero`. Esa misma clase la usa el Tablero kanban, con una rejilla de 6 columnas, y por eso su estilo se aplicaba también al Inicio.
-- **Solución:** el Inicio usa su propia clase `.inicio-gerente`.
-- **Regla:** cada pantalla usa nombres de clase propios. Antes de crear una clase nueva, buscar si ya existe (`grep -n "\.nombre" src/index.css`).
+**Para agregar un incidente**, copia esta plantilla al final de la sección:
 
-### "Se desactivó la cuenta" al abrir dos cuentas en dos pestañas
-- **Síntoma:** con el gerente abierto en una pestaña, en otra se entra como Jr / Técnico, y la del gerente "se desactiva".
-- **Causa:** no es un bloqueo de seguridad. Todas las pestañas de un navegador comparten la cookie de sesión: la segunda pestaña ya abre como gerente, y al cerrar sesión para cambiar de cuenta se cierra la sesión del navegador entero.
-- **Solución:** las pestañas se sincronizan (evento `storage` de `localStorage` y la bandera `otraCuenta` en el 403). Si una pestaña sale, las demás vuelven al login con un aviso; si entra con otra cuenta, las demás pasan a esa cuenta con un aviso.
-- **Para usar dos cuentas a la vez:** una en la ventana normal y la otra en una ventana de **incógnito**, o en otro navegador.
+```markdown
+### I-NN. Título corto del síntoma
+- **Fecha / PR:** AAAA-MM-DD · PR #NN
+- **Síntoma:** lo que vio el usuario (pantalla, mensaje exacto, pasos).
+- **Causa:** por qué pasó (archivo y línea si aplica).
+- **Solución:** qué se cambió.
+- **Prevención:** regla o prueba para que no se repita.
+```
 
-### Columnas nuevas y la base de producción
-- **Riesgo:** una tabla que ya existe en Neon no recibe columnas nuevas con `create table if not exists`, así que guardar fallaría.
-- **Solución:** `conectar()` ejecuta `alter table … add column if not exists` en cada arranque.
-- **Regla:** toda columna nueva en `TABLAS` (server/db.js) debe aceptar null, porque la tabla ya tiene filas.
+### I-01. Paneles encimados en el Inicio del gerente
+- **Fecha / PR:** 2026-11-04 · PR #23
+- **Síntoma:** en el Inicio del gerente, "Notificaciones recientes" quedaba encima de "Avance por turno" (se vio en tema oscuro, a unos 1280 px).
+- **Causa:** `TableroGerente.jsx` usaba la clase `.tablero`. El Tablero kanban (PR #17) le dio a esa misma clase una rejilla de 6 columnas, y el Inicio del gerente heredó esa rejilla.
+- **Solución:** el Inicio del gerente usa su propia clase, `.inicio-gerente`.
+- **Prevención:**
+  - Cada pantalla usa nombres de clase propios.
+  - Antes de crear una clase nueva, buscar si ya existe (`grep -n "\.nombre" src/index.css`).
+  - Al cambiar estilos, revisar en el navegador las otras pantallas que usen esa clase.
 
-### Advertencia de SSL de `pg` en el log de Render
-- **Mensaje:** `SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`.
-- **Qué hacer:** solo es una advertencia. En `DATABASE_URL` cambiar `sslmode=require` por `sslmode=verify-full`. El respaldo de GitHub Actions usa `PGSSLROOTCERT=system` para ese modo.
+### I-02. "Se desactivó la cuenta" al abrir dos cuentas en dos pestañas
+- **Fecha / PR:** 2026-11-04 · PR #23
+- **Síntoma:** con el gerente abierto en una pestaña, se entra como Jr / Técnico en otra, y la del gerente deja de funcionar.
+- **Causa:** no es un bloqueo de seguridad. Todas las pestañas de un navegador comparten la cookie de sesión. La segunda pestaña ya abre como gerente; al cerrar sesión para cambiar de cuenta, se cierra la sesión del navegador entero, y la primera pestaña no se enteraba.
+- **Solución:**
+  - Al entrar o salir, una pestaña avisa a las demás (evento `storage` de `localStorage`). Las demás pasan a esa cuenta o al login, con un aviso.
+  - El 403 de "otra cuenta" trae `otraCuenta: true`.
+- **Prevención:**
+  - Para dos cuentas a la vez, abrir una en ventana de **incógnito** o en otro navegador.
+  - No cambiar a sesiones por pestaña (token en JavaScript): sería menos seguro que la cookie `HttpOnly`.
 
-### Revisar que un respaldo diario se puede abrir
-1. Descargar el artefacto en GitHub: *Actions → Respaldo → la ejecución → Artifacts*, y descomprimir el zip.
-2. Abrir **Git Bash** en esa carpeta. Desde PowerShell no funciona: no trae `openssl` ni `gunzip` y daña los datos al pasarlos con `|`.
-3. Escribir el comando a mano o pegarlo con clic derecho / **Shift+Insert**. Con Ctrl+V la terminal agrega `^[[200~` y el comando falla.
-4. Correr:
-   ```bash
-   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | grep -c "CREATE TABLE"
-   ```
-   Debe responder el número de tablas (10 con `guardadas`). Con `| head -20` aparece "error writing output file": es normal, porque `head` se cierra antes de que termine.
-5. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.
+### I-03. Columnas nuevas y la base de producción
+- **Fecha / PR:** 2026-11-04 · PR #22
+- **Síntoma (evitado antes de llegar a producción):** guardar habría fallado con `column "recurrencia" does not exist`.
+- **Causa:** `create table if not exists` no agrega columnas a una tabla que ya existe en Neon.
+- **Solución:** en cada arranque, `conectar()` ejecuta `alter table … add column if not exists` para todas las columnas de `TABLAS`. La prueba de base de datos lo comprueba sobre una tabla vieja.
+- **Prevención:** toda columna nueva en `TABLAS` (`server/db.js`) debe aceptar null, porque la tabla ya tiene filas.
 
-### Workflow que no se puede correr a mano
-- **Síntoma:** en GitHub no aparece **Run workflow**.
-- **Causa:** GitHub solo muestra workflows que ya están en `main`, y el botón está en la pestaña **Actions** del repositorio, no en *Settings*.
+### I-04. Advertencia de SSL de `pg` en el log de Render
+- **Fecha / PR:** 2026-11-03 · PR #19
+- **Síntoma:** en el log aparece `SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`.
+- **Causa:** la cadena de Neon trae `sslmode=require`. La versión actual de `pg` ya verifica todo, pero avisa que la v9 cambiará ese comportamiento.
+- **Solución:** en Render, en `DATABASE_URL`, cambiar `sslmode=require` por `sslmode=verify-full`.
+- **Prevención:** el workflow de respaldo usa `PGSSLROOTCERT=system` y monta los certificados del runner para ese mismo modo.
 
-### Recuperar contraseña ya no deja pasar
-- **Mensajes:** "Escribe el código de 6 dígitos de tu app autenticadora", o "Tu cuenta aún no tiene la app autenticadora".
-- **Causa:** desde que se corrigió la auditoría, recuperar pide el código de la app. Una cuenta sin app vinculada la restablece un super administrador (Usuarios → contraseña temporal).
+### I-05. Recurrente movida a Urgente se repetía como "urgente cerrada" falsa
+- **Fecha / PR:** 2026-11-04 · PR #22 (se encontró en la revisión, antes del merge)
+- **Síntoma (evitado):** en cada periodo habría aparecido una urgente "cerrada sin terminar", con dos avisos.
+- **Causa:** al mover una tarjeta a Urgente se conservaba la recurrencia. La copia nacía sin `cierreTurno`, y `cerrarUrgentes()` la cerraba al instante.
+- **Solución:** `aColumna()` le quita `recurrencia` y `diaMes` al pasar a Urgente. Hay una prueba en `server/app.test.js`.
+- **Prevención:** una regla que vale en un lugar (aquí, "una urgente no se repite") se aplica también en todos los caminos que llevan al mismo estado.
 
+### I-06. Recuperar contraseña con solo número y correo
+- **Fecha / PR:** 2026-11-04 · PR #22 (auditoría de seguridad)
+- **Riesgo:** un compañero que supiera el número y el correo de otra persona podía cambiarle la contraseña. Si la cuenta no tenía la app vinculada, podía quedarse con ella.
+- **Solución:**
+  - Recuperar pide el código de la app.
+  - Sin app vinculada, la restablece un super administrador.
+  - Hay límite de intentos.
+  - Las cuentas de la plantilla nacen con contraseña temporal.
+- **Síntoma esperado ahora:** "Escribe el código de 6 dígitos de tu app autenticadora" o "Tu cuenta aún no tiene la app autenticadora".
+
+### I-07. "Run workflow" no aparece en GitHub
+- **Fecha / PR:** 2026-11-03 · PR #20
+- **Síntoma:** en GitHub no se ve el botón para correr el respaldo a mano.
+- **Causa:** GitHub solo muestra los workflows que ya están en `main`, y el botón está en la pestaña **Actions** del repositorio, no en *Settings*.
+- **Solución:** fusionar el PR, ir a **Actions → Respaldo → Run workflow**.
+
+### I-08. Errores al revisar un respaldo en Windows
+- **Fecha / PR:** 2026-11-03 · PR #20 y #21
+- **Síntomas y causas:**
+  - **`command not found` con `^[[200~`:** el comando se pegó con Ctrl+V en Git Bash, y la terminal le agrega esas marcas invisibles.
+  - **`error writing output file`:** sale al usar `| head -20`; `head` se cierra antes de que termine. Es normal.
+  - **PowerShell no sirve:** no trae `openssl` ni `gunzip` y daña los datos al pasarlos con `|`.
+- **Procedimiento correcto:**
+  1. Descargar el artefacto en *Actions → Respaldo → la ejecución → Artifacts* y descomprimir el zip.
+  2. Abrir **Git Bash** en esa carpeta. Escribir el comando a mano, o pegarlo con clic derecho o **Shift+Insert**.
+  3. Correr:
+     ```bash
+     openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | grep -c "CREATE TABLE"
+     ```
+     Debe responder el número de tablas (10, con `guardadas`). Si dice `bad decrypt`, la contraseña no coincide con el secreto `BACKUP_PASSWORD`.
+  4. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.

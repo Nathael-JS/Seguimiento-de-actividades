@@ -39,6 +39,7 @@ export const MODULOS = [
   { ruta: 'jerarquia', titulo: 'Jerarquía', icono: 'tree', desc: 'Quién reporta a quién en tu equipo.', solo: 'encargado', grupo: 'Seguimiento' },
   { ruta: 'usuarios', titulo: 'Usuarios', icono: 'users', desc: 'Cuentas, puestos, turnos y acceso al sistema.', solo: 'sa', grupo: 'Organización' },
   { ruta: 'registros', titulo: 'Registros', icono: 'log', desc: 'Quién entra, cuándo y desde dónde.', solo: 'sa', grupo: 'Organización' },
+  { ruta: 'plantillas', titulo: 'Plantillas', icono: 'file', desc: 'Quién se registró y quién falta; corrige la plantilla.', solo: 'sa', grupo: 'Organización' },
   { ruta: 'departamentos', titulo: 'Departamentos', icono: 'building', desc: 'Plantilla por puesto y rate.', solo: 'encargado', grupo: 'Organización' },
   { ruta: 'ajustes', titulo: 'Ajustes', icono: 'gear', desc: 'Tus departamentos: créalos y carga su plantilla.', solo: 'gte', grupo: 'Organización' },
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.', grupo: 'Organización' },
@@ -49,6 +50,16 @@ const permitido = (m, user) =>
   user.role === 'sa' ? m.solo === 'sa' || m.ruta === 'perfil'
     : (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : m.solo === 'encargado' && user.encargado)) && m.excepto !== user.role
 export const modulosDe = (user) => MODULOS.filter((m) => permitido(m, user))
+
+// Errores del navegador al log del servidor (/api/errores): se encuentran en Render sin pedir capturas
+export function reportarError(e) {
+  const err = e?.error ?? e?.reason ?? e
+  fetch('/api/errores', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mensaje: String(err?.message ?? err ?? 'sin mensaje').slice(0, 500), pila: String(err?.stack ?? '').slice(0, 4000), ruta: location.hash.slice(0, 200) }),
+  }).catch(() => { /* sin red: no hay a quién avisar */ })
+}
 
 export const iniciales = (nombre) => nombre.split(' ').map((p) => p[0]).slice(0, 2).join('')
 
@@ -72,7 +83,7 @@ export async function api(url, { method = 'GET', body } = {}) {
   // los de la app traen solo `error`, ya redactado para el usuario (en español: se traduce aquí)
   if (data.statusCode) throw new Error(t(res.status === 400 ? 'Revisa los datos ingresados.' : 'Ocurrió un error. Intenta de nuevo.'))
   // datos: banderas del servidor (confirmar: pide la contraseña del super administrador; debeCambiar…)
-  throw Object.assign(new Error(t(data.error ?? 'Ocurrió un error. Intenta de nuevo.')), { datos: data })
+  throw Object.assign(new Error(t(data.error ?? 'Ocurrió un error. Intenta de nuevo.', data)), { datos: data })
 }
 
 // Fecha local en formato AAAA-MM-DD, el que usan los <input type="date">

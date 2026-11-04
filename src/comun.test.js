@@ -10,7 +10,7 @@ test('Tablero para todos; Actividades asignadas para todos menos el Gerente; Dep
   assert.ok(rutas('sr', true).includes('mis-actividades'))
   assert.ok(!rutas('gte', true).includes('mis-actividades'))
   assert.ok(rutas('gte', true).includes('ajustes') && !rutas('sr', true).includes('ajustes')) // Ajustes: solo el gerente
-  assert.deepEqual(rutas('sa', false), ['usuarios', 'registros', 'perfil']) // el super administrador solo administra
+  assert.deepEqual(rutas('sa', false), ['usuarios', 'registros', 'plantillas', 'perfil']) // el super administrador solo administra
   assert.ok(!rutas('gte', true).includes('usuarios'))
 })
 

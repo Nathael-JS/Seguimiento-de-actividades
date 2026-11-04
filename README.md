@@ -1,6 +1,6 @@
 # Seguimiento-de-actividades
 
-> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md).
+> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md). Cambios de cada versión: [CHANGELOG.md](CHANGELOG.md). Pruebas manuales y lista para el deploy: [PRUEBAS.md](PRUEBAS.md).
 apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
@@ -25,7 +25,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 **Cuentas de prueba:** las de los mockups (`"prueba": true` en `server/usuarios.json`) entran sin el código de la app, para revisiones rápidas; el login de cada acceso tiene un botón para entrar con Laura (Gerente) o Jorge (Técnico). Las cuentas registradas sí piden MFA. Quitar `prueba` cuando haya usuarios reales.
 
-**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Cada persona nueva recibe una contraseña temporal que el gerente ve una sola vez (y puede bajar en CSV) para entregarla; al entrar la cambia y vincula su app autenticadora. PDF no: sus tablas no se pueden leer de forma confiable.
+**Ajustes del gerente:** crea departamentos (quien lo crea lo dirige) y carga la plantilla de su gente desde Excel (`.xlsx`; ejemplo en `public/plantilla-departamento.xlsx`). Se revisa todo antes de guardar: el formato en el navegador (`src/plantilla.js`) y las reglas en el servidor (número de otro departamento, correo repetido, encargado de mayor puesto y del mismo departamento). Si una fila tiene error no se guarda nada. Cada persona nueva queda por registrar: se registra con su número y correo (si no coinciden con la plantilla, se le pide comunicarse con los administradores) y en su primer login vincula su app autenticadora. PDF no: sus tablas no se pueden leer de forma confiable.
 
 **Super administradores:** fuera de los departamentos; su menú es **Usuarios** (lista y ficha completa: puesto, turno, dar o quitar acceso, restablecer contraseña con una temporal que se muestra una vez y obliga a cambiarla, reiniciar el MFA) y **Registros** (inicios de sesión, intentos fallidos y cambios de los administradores, con fecha, IP y navegador/sistema; filtros, exportar CSV y borrar los anteriores a una fecha). Los cambios piden volver a escribir su contraseña (vale 5 minutos). Sus cuentas no van en el repositorio: se definen en la variable de entorno `SUPERADMINS` (ver Despliegue). La MAC del equipo no se puede obtener desde un navegador.
 
@@ -62,13 +62,12 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 |---|---|---|
 | `POST` | `/api/login` | Paso 1: usuario (correo, alias o número) y contraseña; genera el código |
 | `POST` | `/api/login/verificar` | Paso 2: código de la app autenticadora (5 min, 5 intentos); abre la sesión (cookie) y devuelve el usuario |
-| `GET` | `/api/encargados` | Encargados y los departamentos donde pueden serlo (Registro, sin sesión) |
 | `GET` | `/api/deptos` | Catálogo de departamentos (sin sesión) |
 | `POST` | `/api/departamentos` | Un gerente crea un departamento y queda como quien lo dirige |
 | `POST` | `/api/departamentos/:clave/plantilla` | Cargar la plantilla del departamento (`soloRevisar: true` solo valida) |
 | `GET` | `/api/sesion` | Usuario de la sesión actual (al recargar la página) |
 | `POST` | `/api/logout` | Cerrar sesión |
-| `POST` | `/api/registro` | Crear cuenta (técnico / Ing. Jr eligen encargado; encargados indican su área) |
+| `POST` | `/api/registro` | Registrarse: número y correo deben coincidir con la plantilla del departamento |
 | `POST` | `/api/recuperar` | Validar número de empleado, correo y el código de la app autenticadora (sin app vinculada: la restablece un super administrador); da un permiso de un solo uso. 10 fallos por IP y cuenta bloquean 15 min |
 | `POST` | `/api/recuperar/cambiar` | Contraseña nueva con ese permiso |
 | `GET` | `/api/perfil/:no` | Datos del empleado y días para que venza su contraseña; con `?hoy=&zona=`, su rate de aprobación |
@@ -97,11 +96,13 @@ En **Mis actividades**, "Nueva tarea" agrega una tarea con los datos del emplead
 | `POST` | `/api/reportes` | Actividades de los empleados elegidos entre dos fechas, opcionalmente por turno; Reportes arma con ellas el comparativo por empleado y por líder (`src/reporte.js`) |
 | `GET` | `/api/matriz/:no` | Matriz de seguimiento del equipo con `?desde=&hasta=&hoy=` |
 
-Las rutas de login, registro, recuperar contraseña, `/api/encargados` y `/api/deptos` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
+Las rutas de login, registro, recuperar contraseña, `/api/deptos`, `/api/config`, `/api/salud` y `/api/errores` son públicas; las demás piden sesión (401 si no hay) y el `:no` de la dirección o el `por` del cuerpo debe ser el de la sesión (403 si no).
 
 - `render.yaml` — despliegue en Render.
 
 ## Despliegue en Render
+
+**Cuentas de prueba:** con usuarios reales, en Render agregar `CUENTAS_PRUEBA` = `no` (las de `demo1234` dejan de entrar y se oculta la revisión rápida). Ver la lista completa en [PRUEBAS.md](PRUEBAS.md).
 
 **Super administradores:** en el servicio de Render, *Environment* → agregar `SUPERADMINS` con un JSON (no se sube al repositorio; en local, en un `.env` que git ignora):
 

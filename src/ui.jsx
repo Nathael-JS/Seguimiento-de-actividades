@@ -1,7 +1,24 @@
-import { useId, useState } from 'react'
-import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword } from './comun.js'
+import { Component, useId, useState } from 'react'
+import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
+
+// Si una pantalla falla al dibujarse, en vez de quedar en blanco muestra qué hacer y lo reporta al servidor
+export class SiFalla extends Component {
+  state = { error: null }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error) { reportarError(error) }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <section className="card falla" role="alert">
+        <h1>{t('Algo falló en esta pantalla')}</h1>
+        <p className="muted">{t('Ya se avisó al sistema. Recarga la página; si se repite, avísale a tu administrador.')}</p>
+        <button type="button" className="btn btn-primary" onClick={() => location.reload()}>{t('Recargar')}</button>
+      </section>
+    )
+  }
+}
 
 // Logo: el reloj de turnos de la portada (A, B y C) con una palomita al centro. Es el mismo dibujo que public/favicon.svg
 export function Logo() {

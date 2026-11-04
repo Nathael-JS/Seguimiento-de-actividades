@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/comprimir.js",
     "lint": "oxlint",
     "preview": "vite preview",
     "start": "node server/index.js",

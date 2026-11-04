@@ -6,3 +6,5 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
+    # Render espera a que responda antes de mandarle tráfico (y revisa que la base conteste)
+    healthCheckPath: /api/salud
