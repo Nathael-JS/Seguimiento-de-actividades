@@ -20,6 +20,7 @@ Documento técnico de todo el sistema: para qué sirve, cómo está construido, 
 14. [Pruebas](#14-pruebas)
 15. [Despliegue, variables de entorno y respaldos](#15-despliegue-variables-de-entorno-y-respaldos)
 16. [Límites conocidos](#16-límites-conocidos)
+17. [Problemas resueltos y guía rápida](#17-problemas-resueltos-y-guía-rápida)
 
 ---
 
@@ -476,3 +477,48 @@ Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propó
 - **Cuentas de prueba sin MFA:** entran sin el código de la app para revisiones rápidas. Hay que quitarlas al pasar a usuarios reales.
 - **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.
 - **MAC:** la MAC del equipo no se puede obtener desde un navegador.
+
+## 17. Problemas resueltos y guía rápida
+
+Casos reales que ya pasaron, qué los causaba y cómo se resolvieron, para no repetirlos.
+
+### Paneles encimados en el Inicio del gerente
+- **Síntoma:** en el Inicio del gerente, "Notificaciones recientes" quedaba encima de "Avance por turno".
+- **Causa:** el Inicio del gerente usaba la clase CSS `.tablero`. Esa misma clase la usa el Tablero kanban, con una rejilla de 6 columnas, y por eso su estilo se aplicaba también al Inicio.
+- **Solución:** el Inicio usa su propia clase `.inicio-gerente`.
+- **Regla:** cada pantalla usa nombres de clase propios. Antes de crear una clase nueva, buscar si ya existe (`grep -n "\.nombre" src/index.css`).
+
+### "Se desactivó la cuenta" al abrir dos cuentas en dos pestañas
+- **Síntoma:** con el gerente abierto en una pestaña, en otra se entra como Jr / Técnico, y la del gerente "se desactiva".
+- **Causa:** no es un bloqueo de seguridad. Todas las pestañas de un navegador comparten la cookie de sesión: la segunda pestaña ya abre como gerente, y al cerrar sesión para cambiar de cuenta se cierra la sesión del navegador entero.
+- **Solución:** las pestañas se sincronizan (evento `storage` de `localStorage` y la bandera `otraCuenta` en el 403). Si una pestaña sale, las demás vuelven al login con un aviso; si entra con otra cuenta, las demás pasan a esa cuenta con un aviso.
+- **Para usar dos cuentas a la vez:** una en la ventana normal y la otra en una ventana de **incógnito**, o en otro navegador.
+
+### Columnas nuevas y la base de producción
+- **Riesgo:** una tabla que ya existe en Neon no recibe columnas nuevas con `create table if not exists`, así que guardar fallaría.
+- **Solución:** `conectar()` ejecuta `alter table … add column if not exists` en cada arranque.
+- **Regla:** toda columna nueva en `TABLAS` (server/db.js) debe aceptar null, porque la tabla ya tiene filas.
+
+### Advertencia de SSL de `pg` en el log de Render
+- **Mensaje:** `SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`.
+- **Qué hacer:** solo es una advertencia. En `DATABASE_URL` cambiar `sslmode=require` por `sslmode=verify-full`. El respaldo de GitHub Actions usa `PGSSLROOTCERT=system` para ese modo.
+
+### Revisar que un respaldo diario se puede abrir
+1. Descargar el artefacto en GitHub: *Actions → Respaldo → la ejecución → Artifacts*, y descomprimir el zip.
+2. Abrir **Git Bash** en esa carpeta. Desde PowerShell no funciona: no trae `openssl` ni `gunzip` y daña los datos al pasarlos con `|`.
+3. Escribir el comando a mano o pegarlo con clic derecho / **Shift+Insert**. Con Ctrl+V la terminal agrega `^[[200~` y el comando falla.
+4. Correr:
+   ```bash
+   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in respaldo.sql.gz.enc | gunzip | grep -c "CREATE TABLE"
+   ```
+   Debe responder el número de tablas (10 con `guardadas`). Con `| head -20` aparece "error writing output file": es normal, porque `head` se cierra antes de que termine.
+5. Borrar los archivos descifrados al terminar: traen contraseñas cifradas y secretos del MFA.
+
+### Workflow que no se puede correr a mano
+- **Síntoma:** en GitHub no aparece **Run workflow**.
+- **Causa:** GitHub solo muestra workflows que ya están en `main`, y el botón está en la pestaña **Actions** del repositorio, no en *Settings*.
+
+### Recuperar contraseña ya no deja pasar
+- **Mensajes:** "Escribe el código de 6 dígitos de tu app autenticadora", o "Tu cuenta aún no tiene la app autenticadora".
+- **Causa:** desde que se corrigió la auditoría, recuperar pide el código de la app. Una cuenta sin app vinculada la restablece un super administrador (Usuarios → contraseña temporal).
+
