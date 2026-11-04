@@ -379,6 +379,7 @@ function Guardadas({ lista, usar, quitar }) {
     <details className="card guardadas">
       <summary>
         <Icono nombre="bookmark" />{t('Tareas guardadas')} <span className="mono">{lista.length}</span>
+        <span className="flecha-abajo"><Icono nombre="abajo" /></span>
       </summary>
       {!lista.length ? <p className="meta">{t('Aún no tienes tareas guardadas. En el menú ⋯ de una tarjeta elige "Guardar como tarea".')}</p> : (
         <ul>
