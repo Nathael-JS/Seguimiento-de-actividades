@@ -32,7 +32,7 @@ jobs:
             | gzip -9 | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSWORD -out respaldo.sql.gz.enc
           echo "Tamaño cifrado: $(stat -c %s respaldo.sql.gz.enc) bytes"
           test "$(stat -c %s respaldo.sql.gz.enc)" -gt 1000
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7 # Node 24
         with:
           name: respaldo-${{ github.run_number }}
           path: respaldo.sql.gz.enc
