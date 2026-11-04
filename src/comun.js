@@ -54,6 +54,11 @@ const permitido = (m, user) =>
     : (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : m.solo === 'encargado' && user.encargado)) && m.excepto !== user.role
 export const modulosDe = (user) => MODULOS.filter((m) => permitido(m, user))
 
+// Versión de las fotos de perfil en las direcciones: cambia al subir una nueva y así nadie ve la anterior en caché
+let version = Date.now()
+export const versionFotos = () => version
+export const fotoCambiada = () => { version = Date.now() }
+
 // Errores del navegador al log del servidor (/api/errores): se encuentran en Render sin pedir capturas
 export function reportarError(e) {
   const err = e?.error ?? e?.reason ?? e

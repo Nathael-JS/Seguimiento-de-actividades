@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, consultaRate, depto, iniciales, nombreTurno, rol } from './comun.js'
+import { TURNOS, api, consultaRate, depto, nombreTurno, rol } from './comun.js'
 import { t } from './i18n.js'
-import { Rate } from './ui.jsx'
+import { Avatar, Rate } from './ui.jsx'
 
 // Solo el departamento propio: el servidor no entrega la plantilla de los demás
 export default function Departamentos({ user }) {
@@ -41,7 +41,7 @@ export default function Departamentos({ user }) {
             {lista.map((e) => (
               <tr key={e.no}>
                 <td><span className="chip">{rol(e.role)}</span></td>
-                <td><div className="row" style={{ gap: 10 }}><span className="avatar" style={{ width: 30, height: 30, fontSize: 11 }}>{iniciales(e.name)}</span>{e.name}</div></td>
+                <td><div className="row" style={{ gap: 10 }}><Avatar no={e.no} name={e.name} style={{ width: 30, height: 30, fontSize: 11 }} />{e.name}</div></td>
                 <td className="mono">{e.no}</td>
                 <td className="nowrap">{nombreTurno(e.shift)} <span className="muted mono" style={{ fontSize: 12 }}>{TURNOS[e.shift]}</span></td>
                 <td>{e.area}</td>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api, hoy, iniciales, nombreTurno, rol } from './comun.js'
+import { api, hoy, nombreTurno, rol } from './comun.js'
+import { Avatar } from './ui.jsx'
 import { t } from './i18n.js'
 
 const haceDias = (n) => new Date(Date.now() - n * 86_400_000).toLocaleDateString('en-CA')
@@ -64,7 +65,7 @@ export default function Matriz({ user }) {
                   <tr key={f.no}>
                     <th scope="row">
                       <span className="quien">
-                        <span className="avatar">{iniciales(f.name)}</span>
+                        <Avatar no={f.no} name={f.name} />
                         <span>{f.name}<small>{rol(f.role)} · {nombreTurno(f.shift)}</small></span>
                       </span>
                     </th>

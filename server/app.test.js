@@ -1242,3 +1242,18 @@ test('estado: el técnico lo cambia hasta 5 veces seguidas por actividad; despu�
     mock.timers.reset()
   }
 })
+
+test('foto de perfil: la sube su dueño, la ve quien tenga sesión, se quita', async () => {
+  const app = build()
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  assert.equal((await pedir(app, 'POST', '/api/perfil/10482/foto', { foto: png })).code, 200)
+  assert.equal((await pedir(app, 'POST', '/api/perfil/10482/foto', { foto: 'data:text/html;base64,PGI+' })).code, 400) // solo imágenes
+  const diego = await sesionDe(app, '10230')
+  const r = await conCookie(app, 'GET', '/api/fotos/10482', diego)
+  assert.deepEqual([r.statusCode, r.headers['content-type'], r.rawPayload.length], [200, 'image/png', 70])
+  assert.equal((await conCookie(app, 'GET', '/api/fotos/10482', undefined)).statusCode, 401) // sin sesión no
+  assert.equal((await conCookie(app, 'GET', '/api/fotos/10230', diego)).statusCode, 404) // sin foto: iniciales
+  assert.ok(!('foto' in (await pedir(app, 'GET', '/api/equipo/10230')).body.find((e) => e.no === '10482'))) // no viaja en las listas
+  await pedir(app, 'DELETE', '/api/perfil/10482/foto')
+  assert.equal((await conCookie(app, 'GET', '/api/fotos/10482', diego)).statusCode, 404)
+})

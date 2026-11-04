@@ -1,7 +1,19 @@
 import { Component, useId, useState } from 'react'
-import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError } from './comun.js'
+import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError, versionFotos } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
+
+// Foto de perfil o, si no tiene, sus iniciales (quedan debajo mientras la foto carga)
+export function Avatar({ no, name, className = '', style }) {
+  const src = no && `/api/fotos/${no}?v=${versionFotos()}`
+  const [fallo, setFallo] = useState(null) // la dirección que no tuvo foto
+  return (
+    <span className={`avatar ${className}`} style={style}>
+      {iniciales(name ?? '')}
+      {src && fallo !== src && <img src={src} alt="" loading="lazy" onError={() => setFallo(src)} />}
+    </span>
+  )
+}
 
 // Si una pantalla falla al dibujarse, en vez de quedar en blanco muestra qué hacer y lo reporta al servidor
 export class SiFalla extends Component {
@@ -184,9 +196,9 @@ export function ItemNotificacion({ n, user, recargar, avatar = false }) {
     <li>
       <a className={`notif${n.read ? '' : ' unread'}`} href={`#${destinoDe(n, user)}`} onClick={abrir}>
         <span className={`ndot ${n.kind}`} />
-        {avatar && (
-          <span className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{n.who ? iniciales(n.who) : <Icono nombre="alert" />}</span>
-        )}
+        {avatar && (n.who
+          ? <Avatar no={n.whoNo} name={n.who} style={{ width: 32, height: 32, fontSize: 12 }} />
+          : <span className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}><Icono nombre="alert" /></span>)}
         <div style={{ flex: 1, minWidth: 0 }}>
           <Notificacion n={n} />
           <div className="muted mono" style={{ fontSize: 12, fontWeight: 400 }}>{fechaHora(n.at)}</div>

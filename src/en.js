@@ -753,4 +753,12 @@ export default {
   'Ya cambiaste el estado de esta actividad 5 veces. Espera {min} min para volver a cambiarlo.': 'You already changed this activity status 5 times. Wait {min} min to change it again.',
   'Yield de actividades diarias y urgentes y asistencia de tu equipo en el periodo.': 'Yield of daily and urgent activities and attendance of your team in the period.',
   'Yield: realizadas ÷ asignadas (las de hoy abiertas aún no cuentan). Asistencia (días hábiles con entrada en el checador): hasta ayer.': 'Yield: done ÷ assigned (today\'s open ones do not count yet). Attendance (workdays with a time-clock entry): up to yesterday.',
+  // Foto de perfil
+  'Foto actualizada.': 'Photo updated.',
+  'No se pudo leer la imagen.': 'The image could not be read.',
+  'Foto quitada.': 'Photo removed.',
+  'Subiendo…': 'Uploading…',
+  'Cambiar foto': 'Change photo',
+  'Quitar foto': 'Remove photo',
+  'Sin foto.': 'No photo.',
 }

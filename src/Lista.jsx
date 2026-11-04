@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ESTADOS, PESO_CRITICIDAD, criticidad, dia, estado as nombreEstado, hace, iniciales, nombreTurno, pctRealizadas } from './comun.js'
+import { ESTADOS, PESO_CRITICIDAD, criticidad, dia, estado as nombreEstado, hace, nombreTurno, pctRealizadas } from './comun.js'
 import { t } from './i18n.js'
-import { Anillo, Estado } from './ui.jsx'
+import { Anillo, Avatar, Estado } from './ui.jsx'
 
 // Lista de actividades (como la vista de lista de SharePoint): una fila por actividad, lo urgente y lo más
 // crítico arriba. Con cambiarEstado (Mis actividades) el estado se cambia ahí mismo
@@ -32,7 +32,7 @@ export function ListaActividades({ filas, nombres, conPersona = false, cambiarEs
                 ) : <Estado estado={a.status} />}
               </td>
               {conPersona && (
-                <td><span className="persona"><span className="avatar">{iniciales(a.persona)}</span>{a.persona}</span></td>
+                <td><span className="persona"><Avatar no={a.to} name={a.persona} />{a.persona}</span></td>
               )}
               <td className="nowrap"><span className="mono">{dia(a.date)}</span> · {nombreTurno(a.shift)}</td>
               <td className="nowrap meta" title={new Date(a.at).toLocaleString()}>{hace(a.at)}</td>

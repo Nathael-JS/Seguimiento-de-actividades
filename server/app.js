@@ -834,6 +834,26 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     }
   }))
 
+  // Foto de perfil: la imagen ya viene recortada a 256 px desde el navegador (unos 20 kB, data URL JPEG/PNG/WebP).
+  // Se guarda con el usuario y se sirve aparte (/api/fotos) para no cargarla en cada lista
+  const fotoSchema = { ...porEmpleado, body: objeto(['foto'], { foto: { type: 'string', maxLength: 300_000, pattern: '^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$' } }) }
+  app.post('/api/perfil/:no/foto', { schema: fotoSchema }, conEmpleado((u, req) => {
+    u.foto = req.body.foto
+    return { ok: true }
+  }))
+  app.delete('/api/perfil/:no/foto', { schema: porEmpleado }, conEmpleado((u) => {
+    delete u.foto
+    return { ok: true }
+  }))
+  // Con sesión, cualquiera ve la foto de cualquiera (como su nombre). 404 si no tiene: se muestran sus iniciales.
+  // Unos minutos de caché; quien la cambia la ve al momento porque su navegador pide otra versión (?v=)
+  app.get('/api/fotos/:empleado', { schema: { params: { type: 'object', properties: { empleado: noEmpleado } } } }, async (req, reply) => {
+    const foto = empleado(req.params.empleado)?.foto
+    reply.header('cache-control', 'private, max-age=300')
+    if (!foto) return reply.code(404).send({ error: 'Sin foto.' })
+    const [, tipo, datos] = foto.match(/^data:(image\/\w+);base64,(.+)$/)
+    return reply.type(tipo).send(Buffer.from(datos, 'base64'))
+  })
   app.post('/api/perfil/:no/password', { schema: cambiarPropiaSchema }, conEmpleado(async (u, req, reply) => {
     if (!(await passwordCorrecta(u.password, req.body.actual))) return reply.code(401).send({ error: 'La contraseña actual no es correcta.' })
     if (req.body.nueva === req.body.actual) return reply.code(400).send({ error: 'La nueva contraseña debe ser distinta de la actual.' })
@@ -868,6 +888,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
             id: n.id,
             kind: n.kind,
             who: empleado(n.who)?.name,
+            whoNo: n.who, // para su foto
             actividad: a?.text,
             activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
             urgente: a?.prioridad === 'urgente',

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, hoy, iniciales, nombreTurno, rol } from './comun.js'
+import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, hoy, nombreTurno, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { Estado } from './ui.jsx'
+import { Avatar, Estado } from './ui.jsx'
 import { t } from './i18n.js'
 
 // Tablero por criticidad, semana a semana. Se arrastran las tarjetas o se usa el menú de cada una (teclado y táctil).
@@ -289,7 +289,7 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, edi
         </details>
       </div>
       <div className="tarjeta-pie">
-        <span className="persona"><span className="avatar">{iniciales(a.persona.name)}</span>{a.persona.name.split(' ')[0]}</span>
+        <span className="persona"><Avatar no={a.persona.no} name={a.persona.name} />{a.persona.name.split(' ')[0]}</span>
         <span className="meta mono">{dia(a.date)} · {nombreTurno(a.shift)}</span>
       </div>
       <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>

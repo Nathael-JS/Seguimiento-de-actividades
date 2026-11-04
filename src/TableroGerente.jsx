@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { TURNOS, api, dia, hoy, iniciales, inicioDeHoy, nombreTurno, rol } from './comun.js'
+import { TURNOS, api, dia, hoy, inicioDeHoy, nombreTurno, rol } from './comun.js'
 import { t } from './i18n.js'
 import { resumenArea } from './tablero.js'
-import { Anillo, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
+import { Anillo, Avatar, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
 
 // Singular o plural según la cantidad
 const cuenta = (n, uno, varios) => t(n === 1 ? uno : varios, { n })
@@ -33,7 +33,7 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
                   {r.lideres.map((l) => (
                     <li key={l.no}>
                       <a className="lider" href={`#monitoreo?lider=${l.no}`} aria-label={t('Ver el equipo de {nombre} en Monitoreo', { nombre: l.name })}>
-                        <span className="avatar">{iniciales(l.name)}</span>
+                        <Avatar no={l.no} name={l.name} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <b>{l.name}</b> <span className="meta">· {rol(l.role)} · {cuenta(l.personas, '{n} persona', '{n} personas')}</span>
                           <div className="meta">

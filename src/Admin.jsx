@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, iniciales, rol, turnoLargo } from './comun.js'
+import { TURNOS, api, depto, descargar, descargarCsv, dispositivo, fecha, fechaHora, hoy, rol, turnoLargo } from './comun.js'
+import { Avatar } from './ui.jsx'
 import Icono from './Icono.jsx'
 import { t } from './i18n.js'
 
@@ -122,7 +123,7 @@ export function Usuarios({ user, avisar }) {
               {visibles.map((u) => (
                 <li key={u.no}>
                   <button aria-current={u.no === elegido ? 'true' : undefined} onClick={() => setElegido(u.no)}>
-                    <span className="avatar">{iniciales(u.name)}</span>
+                    <Avatar no={u.no} name={u.name} />
                     <span className="quien">
                       <b>{u.name}</b>
                       <span className="meta">{rol(u.role)} · <span className="mono">{u.no}</span>{u.dept && ` · ${depto(u.dept)}`}</span>
@@ -178,7 +179,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
   return (
     <section className="card ficha" aria-labelledby="ficha-titulo">
       <header className="row" style={{ gap: 14 }}>
-        <span className="avatar" style={{ width: 48, height: 48, fontSize: 16 }}>{iniciales(u.name)}</span>
+        <Avatar no={u.no} name={u.name} style={{ width: 48, height: 48, fontSize: 16 }} />
         <div style={{ minWidth: 0 }}>
           <h2 id="ficha-titulo" className="card-title" style={{ margin: 0 }}>{u.name}</h2>
           <div className="meta">{rol(u.role)} · <span className="mono">{u.no}</span></div>

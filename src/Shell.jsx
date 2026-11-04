@@ -1,7 +1,7 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { api, hoy, iniciales, inicioDeHoy, modulosDe, rol } from './comun.js'
+import { api, hoy, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
+import { Avatar, BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
 import { t } from './i18n.js'
 import Inicio from './Inicio.jsx'
 
@@ -130,7 +130,7 @@ export default function Shell({ user, onLogout, avisoInicial }) {
         </nav>
         <div className="spacer" />
         <a className="me" href="#perfil" data-etq={user.name} onClick={() => setMenuAbierto(false)}>
-          <span className="avatar">{iniciales(user.name)}</span>
+          <Avatar no={user.no} name={user.name} />
           <div className="etq"><b>{user.name}</b><div style={{ opacity: 0.75 }}>{rol(user.role)} · {user.no}</div></div>
         </a>
       </aside>
