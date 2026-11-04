@@ -34,6 +34,7 @@ export function Notificacion({ n }) {
     // Sin who: el aviso es para quien tiene la actividad; con who: para quien la asignó
     return n.who ? <>{quien} {t('tiene atrasada')} “{n.actividad}”</> : <>{t('Tu actividad')} “{n.actividad}” {t('está atrasada')}</>
   }
+  if (n.kind === 'editada') return <>{quien} {t('editó')} “{n.actividad}”</>
   if (n.kind === 'urgente') return <>{quien} {t('marcó como urgente')} “{n.actividad}”</>
   if (n.kind.startsWith('solicitud')) {
     const datos = { actividad: n.actividad, columna: columnaTablero(n.columna) }

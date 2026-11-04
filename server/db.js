@@ -34,6 +34,7 @@ const TABLAS = {
       ['prioridad', 'prioridad', 'text'], ['criticidad', 'criticidad', 'text'], ['cierre_turno', 'cierreTurno', 'timestamptz'], ['cerrada', 'cerrada', 'boolean'],
       ['propia', 'propia', 'boolean'], ['heredada', 'inh', 'boolean'], ['heredada_a', 'handedTo', 'text'], ['herencia', 'herencia', 'integer'],
       ['fijada', 'fijada', 'boolean'], ['pasada_el', 'pasadaEl', 'date'], ['aviso_atraso', 'avisoAtraso', 'boolean'],
+      ['recurrencia', 'recurrencia', 'text'], ['dia_mes', 'diaMes', 'integer'],
     ],
   },
   notificaciones: {
@@ -53,6 +54,13 @@ const TABLAS = {
       ['redirigida_a', 'redirigidaA', 'text'], ['nueva', 'nueva', 'integer'],
     ],
   },
+  guardadas: {
+    pk: ['id'],
+    cols: [
+      ['id', 'id', 'integer'], ['no', 'no', 'text not null'], ['texto', 'texto', 'text not null'], ['criticidad', 'criticidad', 'text not null'],
+      ['comentario', 'comentario', 'text'], ['recurrencia', 'recurrencia', 'text'], ['creada', 'at', 'timestamptz not null'],
+    ],
+  },
   sesiones: {
     pk: ['token'],
     cols: [['token', 'token', 'text'], ['no', 'no', 'text not null'], ['vence', 'vence', 'bigint not null'], ['confirmado', 'confirmado', 'bigint'], ['fallos', 'fallos', 'integer']],
@@ -68,7 +76,7 @@ const TABLAS = {
   // Último número entregado de cada lista: no se repite aunque se borre el último (ver siguienteId en app.js)
   ids: { pk: ['lista'], cols: [['lista', 'lista', 'text'], ['ultimo', 'ultimo', 'integer not null']] },
 }
-const CON_ID = ['actividades', 'notificaciones', 'herencias']
+const CON_ID = ['actividades', 'notificaciones', 'herencias', 'guardadas']
 
 const conocidas = (t) => new Set(TABLAS[t].cols.map(([, p]) => p))
 const aFila = (t, obj) => {
@@ -90,6 +98,7 @@ function filasDe(estado) {
     actividades: estado.actividades,
     notificaciones: estado.notificaciones,
     herencias: estado.herencias,
+    guardadas: estado.guardadas,
     sesiones: [...estado.sesiones].map(([token, s]) => ({ token, ...s })),
     registros: estado.registros,
     checador: estado.checador,
@@ -99,9 +108,11 @@ function filasDe(estado) {
 
 export async function conectar(url) {
   const pool = new pg.Pool({ connectionString: url, max: 4 })
-  // Las tablas se crean si no existen (primer arranque en una base vacía)
+  // Las tablas se crean si no existen (primer arranque en una base vacía) y se les agregan las columnas nuevas
+  // de versiones posteriores (una columna nueva debe aceptar null: la tabla ya tiene filas)
   for (const [t, { pk, cols }] of Object.entries(TABLAS)) {
     await pool.query(`create table if not exists ${t} (${cols.map(([c, , tipo]) => `${c} ${tipo}`).join(', ')}, extra jsonb, primary key (${pk.join(', ')}))`)
+    await pool.query(`alter table ${t} ${[...cols, ['extra', 'extra', 'jsonb']].map(([c, , tipo]) => `add column if not exists ${c} ${tipo}`).join(', ')}`)
   }
   return pool
 }

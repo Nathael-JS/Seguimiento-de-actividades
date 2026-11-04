@@ -21,6 +21,9 @@ const porEmpleado = { params: { type: 'object', properties: { no: noEmpleado } }
 // Criticidad de una actividad diaria; la crítica va debajo de la urgente pero sí se hereda (ver /heredar).
 // 'nueva': recién creada en el Tablero, por clasificar (cuenta como normal al ordenar)
 const criticidad = { enum: ['nueva', 'simple', 'normal', 'alta', 'critica'] }
+// Tarea recurrente: al llegar su siguiente periodo se crea una copia nueva (ver renovarRecurrentes)
+const PERIODOS = ['diaria', 'semanal', 'mensual']
+const recurrencia = { enum: PERIODOS }
 const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critica: 3 }
 // desde: inicio del día local de quien consulta (instante UTC). Con él solo se ven las abiertas y las realizadas hoy
 // hoy: fecha local de quien consulta (AAAA-MM-DD); con ella se generan los avisos de atraso
@@ -138,6 +141,7 @@ const registrarSchema = {
       prioridad: { enum: ['diaria', 'urgente'] },
       criticidad,
       cierre: { type: 'string', format: 'date-time' },
+      recurrencia,
     },
   },
 }
@@ -166,6 +170,31 @@ const propiaSchema = {
     criticidad,
     hoy: { type: 'string', format: 'date' },
     cierre: { type: 'string', format: 'date-time' },
+    recurrencia,
+  }),
+}
+
+// Editar una actividad ya creada. recurrencia 'no' la deja de repetir
+const editarSchema = {
+  params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } },
+  body: objeto(['por'], {
+    por: noEmpleado,
+    texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+    comentario: { type: 'string', maxLength: 500 },
+    fecha: { type: 'string', format: 'date' },
+    turno: { enum: ['A', 'B', 'C'] },
+    recurrencia: { enum: ['no', ...PERIODOS] },
+  }),
+}
+
+// Tarea guardada (plantilla personal para reutilizar), con su criticidad
+const guardadaSchema = {
+  body: objeto(['por', 'texto', 'criticidad'], {
+    por: noEmpleado,
+    texto: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+    criticidad: { enum: ['simple', 'normal', 'alta', 'critica'] },
+    comentario: { type: 'string', maxLength: 500 },
+    recurrencia,
   }),
 }
 
@@ -267,6 +296,20 @@ const diaHabil = (fecha) => new Date(fecha).getUTCDay() % 6 !== 0 // lunes a vie
 // Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
 const sumarDias = (fecha, n) => new Date(Date.parse(fecha) + n * 86_400_000).toISOString().slice(0, 10)
 const diaSiguiente = (fecha) => sumarDias(fecha, 1)
+// Siguiente fecha de una recurrente: diaria = siguiente día hábil; semanal = +7 días; mensual = el mismo día
+// del mes siguiente (diaMes; si ese mes no lo tiene, su último día: 31 → 30 de abril → 31 de mayo)
+export function siguienteFecha(fecha, periodo, diaMes) {
+  if (periodo === 'semanal') return sumarDias(fecha, 7)
+  if (periodo === 'mensual') {
+    const [a, m] = fecha.split('-').map(Number) // m es el mes actual en 1..12 = el siguiente en 0..11
+    const ultimo = new Date(Date.UTC(a, m + 1, 0)).getUTCDate()
+    return new Date(Date.UTC(a, m, Math.min(diaMes, ultimo))).toISOString().slice(0, 10)
+  }
+  let f = diaSiguiente(fecha)
+  while (!diaHabil(f)) f = diaSiguiente(f)
+  return f
+}
+const conRecurrencia = (periodo, fecha) => (periodo ? { recurrencia: periodo, ...(periodo === 'mensual' && { diaMes: Number(fecha.slice(8)) }) } : {})
 const zonaValida = (zona) => {
   try { return !!new Intl.DateTimeFormat('en', { timeZone: zona }) } catch { return false }
 }
@@ -329,6 +372,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   const actividades = cargado?.actividades ?? leer('./actividades.json')
   const notificaciones = cargado?.notificaciones ?? leer('./notificaciones.json')
   const herencias = cargado?.herencias ?? [] // propuestas de herencia: pendientes de validar y su historial
+  const guardadas = cargado?.guardadas ?? [] // tareas guardadas: plantillas personales para reutilizar
   // Los de los mockups y los que crea un gerente, que queda como quien lo dirige
   const departamentos = cargado?.departamentos ?? [
     { clave: 'lc', nombre: 'Liquid Cooling', gerente: '10001' },
@@ -368,6 +412,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   // - contraseña que vence en 15 días o menos → a su dueño (otra vez solo si la cambia y vuelve a acercarse)
   // shortcut: se generan al consultar Inicio porque no hay tareas programadas; pasar a un job con la base de datos
   const generarAvisos = (hoy) => {
+    renovarRecurrentes(hoy)
     for (const a of vigentes()) {
       // Misma regla de "atrasada" que src/tablero.js (Inicio del gerente): si cambia una, cambiar la otra
       if (a.avisoAtraso || (a.status !== 'pending' && a.status !== 'progress') || a.date >= hoy) continue
@@ -380,6 +425,24 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       if (dias > 15 || u.avisoPassword === u.pwdChanged) continue
       u.avisoPassword = u.pwdChanged
       notificar({ for: u.no, kind: 'password', count: Math.max(dias, 0) })
+    }
+  }
+  // Recurrentes: la última copia de cada una lleva la recurrencia. Cuando su siguiente fecha ya llegó, la
+  // recurrencia pasa a una copia nueva pendiente con la fecha más reciente que toca (no se crean las de días
+  // sin entrar al sistema); la anterior queda como una tarea normal (si no se hizo, cuenta como atrasada).
+  // Una heredada (handedTo) sigue renovándose para su dueño. Sin aviso: llega a su lista cada periodo
+  const renovarRecurrentes = (hoy) => {
+    for (const a of actividades.filter((x) => x.recurrencia)) {
+      let fecha = a.date
+      for (let f = siguienteFecha(fecha, a.recurrencia, a.diaMes); f <= hoy; f = siguienteFecha(f, a.recurrencia, a.diaMes)) fecha = f
+      if (fecha === a.date) continue
+      const { to, by, shift, text, mgr, prioridad, criticidad, propia, recurrencia, diaMes } = a
+      actividades.push({
+        id: siguienteId(actividades), to, by, date: fecha, shift, at: ahora(), text, mgr, note: '', pct: 0, status: 'pending',
+        ...(prioridad && { prioridad }), ...(criticidad && { criticidad }), ...(propia && { propia }), recurrencia, ...(diaMes && { diaMes }),
+      })
+      delete a.recurrencia
+      delete a.diaMes
     }
   }
   // Al cambiar la contraseña el aviso de "vence en N días" ya no aplica: se marca como leído, y se cierran
@@ -762,7 +825,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   }))
 
   app.post('/api/actividades', { schema: registrarSchema }, async (req, reply) => {
-    const { por, para, fecha, turno, puntos, comentario = '', prioridad, cierre, criticidad = 'normal' } = req.body
+    const { por, para, fecha, turno, puntos, comentario = '', prioridad, cierre, criticidad = 'normal', recurrencia: periodo } = req.body
     const encargado = empleado(por)
     if (!encargado || !esEncargado(encargado)) {
       return reply.code(403).send({ error: 'Solo los encargados registran actividades.' })
@@ -780,7 +843,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       const a = {
         id: siguienteId(actividades), to: para, by: por, date: fecha, shift: turno, at,
         text: p.texto.trim(), pct: 0, status: 'pending', mgr: comentario.trim(), note: '',
-        ...(prioridad === 'urgente' ? { prioridad, cierreTurno: cierre } : { criticidad }),
+        ...(prioridad === 'urgente' ? { prioridad, cierreTurno: cierre } : { criticidad, ...conRecurrencia(periodo, fecha) }),
       }
       actividades.push(a)
       return a
@@ -791,7 +854,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
 
   // El técnico / Ing. Jr agrega una tarea suya: se toman sus datos tal cual (él mismo, su turno, la fecha de hoy)
   app.post('/api/actividades/propia', { schema: propiaSchema }, async (req, reply) => {
-    const { por, textos, prioridad, hoy, cierre, criticidad = 'normal' } = req.body
+    const { por, textos, prioridad, hoy, cierre, criticidad = 'normal', recurrencia: periodo } = req.body
     const u = empleado(por)
     if (!u || esEncargado(u)) return reply.code(403).send({ error: 'Solo técnicos e Ing. Jr agregan tareas propias.' })
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
@@ -805,7 +868,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       const a = {
         id: siguienteId(actividades), to: u.no, by: u.no, date: hoy, shift: u.shift, at, text: texto.trim(),
         pct: 0, status: 'pending', mgr: '', note: '',
-        propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad }),
+        propia: true, prioridad, ...(prioridad === 'urgente' ? { cierreTurno: cierre } : { criticidad, ...conRecurrencia(periodo, hoy) }),
       }
       actividades.push(a)
       return a
@@ -915,6 +978,58 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
     return { ok: true }
   })
 
+  // Editar: el encargado cambia texto, comentario, fecha, turno y recurrencia de las de su equipo; el técnico /
+  // Ing. Jr, texto, fecha y recurrencia de las que agregó él. Se avisa al otro
+  app.patch('/api/actividades/:id/editar', { schema: editarSchema }, async (req, reply) => {
+    const a = vigentes().find((x) => x.id === req.params.id)
+    if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    const { por, texto, comentario, fecha, turno, recurrencia: periodo } = req.body
+    const encargado = delEquipo(por, a)
+    if (!encargado && !(a.propia && a.to === por)) return reply.code(403).send({ error: 'Solo tu encargado edita esta actividad.' })
+    if (!encargado && (comentario !== undefined || turno !== undefined)) return reply.code(403).send({ error: 'El comentario y el turno los cambia tu encargado.' })
+    if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
+    if (periodo && periodo !== 'no' && a.prioridad === 'urgente') return reply.code(400).send({ error: 'Una urgente no se repite: es para un solo turno.' })
+    if (texto !== undefined) a.text = texto.trim()
+    if (comentario !== undefined) a.mgr = comentario.trim()
+    if (fecha) a.date = fecha
+    if (turno) a.shift = turno
+    if (periodo) {
+      delete a.recurrencia
+      delete a.diaMes
+      if (periodo !== 'no') Object.assign(a, conRecurrencia(periodo, a.date))
+    } else if (fecha && a.recurrencia === 'mensual') a.diaMes = Number(fecha.slice(8))
+    const otro = encargado ? a.to : responsable(a)
+    if (otro && otro !== por) notificar({ for: otro, kind: 'editada', who: por, ref: a.id })
+    return a
+  })
+
+  // ── Tareas guardadas ─────────────────────────────────────────────────────────────────────────────────────
+  // Plantillas personales: cada quien guarda las que repite (texto, criticidad, comentario y recurrencia) y
+  // las usa al crear en el Tablero. Mismo texto = se actualiza la que ya estaba
+  const MAX_GUARDADAS = 100
+  app.get('/api/guardadas/:no', { schema: porEmpleado }, conEmpleado((u) =>
+    guardadas.filter((g) => g.no === u.no)
+      .sort((x, y) => PESO_CRITICIDAD[y.criticidad] - PESO_CRITICIDAD[x.criticidad] || x.texto.localeCompare(y.texto))))
+  app.post('/api/guardadas', { schema: guardadaSchema }, async (req, reply) => {
+    const { por, texto, criticidad, comentario = '', recurrencia: periodo } = req.body
+    const datos = { texto: texto.trim(), criticidad, comentario: comentario.trim(), ...(periodo && { recurrencia: periodo }) }
+    const igual = guardadas.find((g) => g.no === por && g.texto.toLowerCase() === datos.texto.toLowerCase())
+    if (igual) {
+      delete igual.recurrencia
+      return Object.assign(igual, datos)
+    }
+    if (guardadas.filter((g) => g.no === por).length >= MAX_GUARDADAS) return reply.code(409).send({ error: 'Tienes 100 tareas guardadas: elimina alguna para guardar otra.' })
+    const g = { id: siguienteId(guardadas), no: por, ...datos, at: ahora() }
+    guardadas.push(g)
+    return reply.code(201).send(g)
+  })
+  app.delete('/api/guardadas/:id', { schema: { params: heredarSchema.params, body: objeto(['por'], { por: noEmpleado }) } }, async (req, reply) => {
+    const i = guardadas.findIndex((g) => g.id === req.params.id && g.no === req.body.por)
+    if (i < 0) return reply.code(404).send({ error: 'Tarea guardada no encontrada.' })
+    guardadas.splice(i, 1)
+    return { ok: true }
+  })
+
   // ── Herencia ─────────────────────────────────────────────────────────────────────────────────────────────
   // Un encargado (Ing. Full o superior) propone heredar una actividad pendiente o incompleta de su equipo, con
   // motivo, a alguien de cualquier departamento. La valida el encargado directo de quien la recibe: acepta,
@@ -945,6 +1060,9 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
       ...(a.criticidad === 'critica' && { pasadaEl: hoy }),
     }
     delete nueva.herencia
+    // La recurrencia se queda con su dueño: la heredada es una sola vez
+    delete nueva.recurrencia
+    delete nueva.diaMes
     actividades.push(nueva)
     a.handedTo = para
     delete a.herencia
@@ -1261,7 +1379,7 @@ export function build({ superadmins = [], estado: cargado, guardar, ...opts } = 
   })
 
   // Lo que se guarda en PostgreSQL (server/db.js)
-  app.decorate('estado', { usuarios, actividades, notificaciones, herencias, departamentos, checador, registros, sesiones, ultimosIds })
+  app.decorate('estado', { usuarios, actividades, notificaciones, herencias, guardadas, departamentos, checador, registros, sesiones, ultimosIds })
 
   if (existsSync(dist)) {
     app.register(fastifyStatic, {

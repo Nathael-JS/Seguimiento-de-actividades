@@ -18,6 +18,8 @@ export const clavesDeptos = () => [...Object.keys(DEPARTAMENTOS), ...Object.keys
 export const ACCESOS = { gerencia: ['gte', 'sr', 'full'], operativo: ['jr', 'tec'] }
 export const estado = (k) => t(ESTADOS[k])
 export const criticidad = (k) => t(CRITICIDADES[k ?? 'normal'])
+// Cada cuándo se repite una tarea recurrente (al llegar el periodo se crea una copia nueva)
+export const PERIODOS = { diaria: 'Cada día hábil', semanal: 'Cada semana', mensual: 'Cada mes' }
 // Columnas del tablero: la criticidad, Urgente o Por clasificar (las recién creadas)
 export const columnaTablero = (c) => (c === 'urgente' ? t('Urgente') : c === 'nueva' ? t('Por clasificar') : criticidad(c))
 export const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critica: 3 }
