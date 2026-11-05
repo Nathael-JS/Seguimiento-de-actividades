@@ -12,6 +12,29 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #26] 2026-11-05: Inicio desde 0 y dependencias al día
+
+### Agregado
+- **Plantillas → Nuevo gerente** (super administrador, `POST /api/admin/gerentes`, pide confirmación):
+  - El gerente queda por registrar.
+  - El departamento se crea si no existe; a uno que ya tiene gerente no se le quita.
+  - Después, el gerente se registra en la app y carga la plantilla de su gente.
+
+### Cambiado
+- **Inicio desde 0:** `server/datos/inicio` ya no trae usuarios ni departamentos (se quitaron Laura y Jorge). *Vaciar datos* deja solo a los super administradores.
+- **`@fastify/static` 10.1.10:** con `npm audit fix`, los avisos de `glob` y `minimatch` pasan a 0 vulnerabilidades.
+
+### Corregido
+- **Menú lateral:** el nombre y el puesto ya no se cortan (antes salía "Super administrador · 900…").
+
+### Advertencias
+- **Volver a vaciar producción:** tras el merge, correr *Vaciar datos* otra vez para quitar a Laura y Jorge, reiniciar Render y dar de alta al gerente desde Plantillas.
+
+### Archivos
+`server/app.js`, `server/vaciar.js`, `server/datos/inicio/*.json`, `server/app.test.js`, `server/db.test.js`, `src/Admin.jsx`, `src/en.js`, `src/index.css`, `package-lock.json`, `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`, `CHANGELOG.md`
+
+---
+
 ## [PR #25] 2026-11-05: Turnos 1-4, foto de perfil, asistencia al entrar, inicio limpio y Reportes en PDF
 
 ### Agregado

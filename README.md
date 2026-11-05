@@ -7,7 +7,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 
 - `src/` — frontend React + Vite: login con verificación en 2 pasos, registro, recuperar contraseña, menú según el rol, Inicio, Tablero (crear y clasificar actividades), Herencias, Actividades asignadas, Monitoreo, Reportes (exportar a Excel/PDF), Buzón, Departamentos y Perfil.
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
-- `server/datos/inicio/` — **inicio limpio**: con lo que arranca una base vacía (Laura Méndez, gerente, y Jorge Salinas, técnico, **por registrar**, y el departamento Liquid Cooling).
+- `server/datos/inicio/` — **inicio desde 0**: una base vacía arranca sin usuarios ni departamentos; solo entran los super administradores de `SUPERADMINS`.
 - `server/datos/pruebas/` — datos de los mockups, solo para las pruebas automáticas (`DATOS_SEMILLA=pruebas`).
 
 **Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, después de cada petición que cambia algo (no las consultas `GET`) guarda solo lo que cambió, en una transacción, antes de responder. La primera vez, con la base vacía, se llena con el inicio limpio de `server/datos/inicio/`. Para volver a ese inicio en producción: *Actions → Vaciar datos* (escribe VACIAR; antes hace un respaldo). Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar.
@@ -103,7 +103,7 @@ Las rutas de login, registro, recuperar contraseña, `/api/deptos`, `/api/config
 
 ## Despliegue en Render
 
-**Primer acceso:** Laura (`10001`, laura.mendez@empresa.com) y Jorge (`10482`, jorge.salinas@empresa.com) entran a **Crear cuenta** con su número y correo, eligen su contraseña y vinculan su app autenticadora. Ver la lista completa en [PRUEBAS.md](PRUEBAS.md).
+**Primer acceso (desde 0):** el super administrador entra y en **Plantillas → Nuevo gerente** da de alta al gerente (nombre, número, correo, turno y departamento, que se crea si no existe). El gerente entra a **Crear cuenta** con su número y correo, elige su contraseña, vincula su app y carga la plantilla de su gente en Ajustes; cada persona se registra igual. Ver [PRUEBAS.md](PRUEBAS.md).
 
 **Super administradores:** en el servicio de Render, *Environment* → agregar `SUPERADMINS` con un JSON (no se sube al repositorio; en local, en un `.env` que git ignora):
 
@@ -116,7 +116,7 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
 2. Render ejecuta `npm install && npm run build` y luego `npm start`.
-3. Elige el acceso, regístrate con un número y correo de la plantilla (al inicio: Laura o Jorge) y vincula tu app autenticadora con el QR.
+3. El super administrador da de alta al primer gerente (Plantillas → Nuevo gerente); el gerente se registra y vincula su app autenticadora con el QR.
 
 **Base de datos en Neon:**
 

@@ -5,12 +5,11 @@ Lista para probar la app en Render antes de abrirla a usuarios reales. Cómo usa
 2. Cuando algo falle, anota en *Notas* qué hiciste y qué viste. Si el mensaje trae un **código** (por ejemplo `a1b2c3d4`), anótalo: con él se encuentra el error en el log de Render.
 3. Pásame solo las ❌.
 
-Cuentas del inicio limpio (por registrar: cada una elige su contraseña en **Crear cuenta** y vincula su app autenticadora):
-
-| Número | Correo | Rol |
-|---|---|---|
-| `10001` | laura.mendez@empresa.com | Laura Méndez, Gerente (Turno 4 · Administrativo) |
-| `10482` | jorge.salinas@empresa.com | Jorge Salinas, Técnico (Turno 1 · Matutino), a cargo de Laura |
+Inicio desde 0: la base no tiene usuarios ni departamentos, solo tus super administradores (`SUPERADMINS`). El orden para empezar:
+1. **Super administrador:** entra (Gerencia, correo y contraseña, código de la app) → **Plantillas → Nuevo gerente** (nombre, número, correo, turno, departamento).
+2. **Gerente:** Gerencia → **Registrarse** con ese número y correo → elige contraseña → entra y vincula su app.
+3. **Gerente:** Ajustes → carga la plantilla de Excel con su gente.
+4. **Cada persona de la plantilla:** Registrarse con su número y correo.
 
 Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incógnito** (ver incidente [I-02](DOCUMENTACION.md#i-02-se-desactivó-la-cuenta-al-abrir-dos-cuentas-en-dos-pestañas)).
 
@@ -20,8 +19,9 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
+| A0 | Nuevo gerente | Super administrador → Plantillas → Nuevo gerente → Dar de alta (pide tu contraseña) | Aparece en *Por registrar* con su departamento | | |
 | A1 | Portada | Abrir la app | Presentación, luego elegir Gerencia o Jr / Técnico | | |
-| A2 | Entrar como gerente | Gerencia → `10001` y su contraseña → código de la app | Entra al Inicio del gerente y dice "Bienvenido, Laura: asistencia checada a las …" (solo la primera vez del día) | | |
+| A2 | Entrar como gerente | Gerencia → su número y contraseña → código de la app | Entra al Inicio del gerente y dice "Bienvenido, Laura: asistencia checada a las …" (solo la primera vez del día) | | |
 | A3 | Acceso equivocado | Gerencia → `10482` | "Esta cuenta es de Jr / Técnico: entra por ese acceso." | | |
 | A4 | Contraseña mala ×10 | 10 intentos con contraseña mala | El 11.º dice "Demasiados intentos. Espera 15 minutos." | | |
 | A9 | Registro rechazado | Jr / Técnico → Registrarse con un número de la plantilla y un correo equivocado | "Tus datos no coinciden con la plantilla… Comunícate con los administradores" | | |
@@ -31,7 +31,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | A7 | Cerrar sesión con otra pestaña abierta | Abrir 2 pestañas y cerrar sesión en una | La otra vuelve al login con "Se cerró la sesión en otra pestaña" | | |
 | A8 | Idioma y tema | Botones ES/EN y luna/sol | Cambian textos y colores, y se recuerdan | | |
 
-## B. Gerente / encargado (`10001`)
+## B. Gerente / encargado
 
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
@@ -103,8 +103,8 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 Hazlo en este orden cuando todas las pruebas estén en ✅:
 
 1. [ ] **Super administradores:** `SUPERADMINS` en Render con las cuentas reales; entrar y vincular la app autenticadora.
-2. [ ] **Inicio limpio:** GitHub → Actions → **Vaciar datos** → Run workflow → escribir `VACIAR`. Respalda, deja solo a Laura y Jorge (por registrar) y Liquid Cooling, y conserva a los super administradores. Después: Render → Manual Deploy → **Restart service**.
-3. [ ] **Laura y Jorge se registran** (Crear cuenta con su número y correo) y vinculan su app.
+2. [ ] **Inicio desde 0:** GitHub → Actions → **Vaciar datos** → Run workflow → escribir `VACIAR`. Respalda y deja solo a los super administradores. Después: Render → Manual Deploy → **Restart service**.
+3. [ ] **Primer gerente:** Plantillas → Nuevo gerente; el gerente se registra y vincula su app.
 4. [ ] **Departamentos y personas:** el gerente crea o renombra departamentos (Ajustes) y carga la plantilla de Excel; cada persona se registra sola.
 5. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
 6. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
