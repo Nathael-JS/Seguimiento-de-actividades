@@ -109,11 +109,11 @@ export function finTurno(turno, ahora = new Date()) {
   if (fin <= ahora) fin.setDate(fin.getDate() + 1)
   return fin
 }
-const horas = (txt) => { const [h, m] = txt.split(':').map(Number); return h + m / 60 }
+const aHoras = (txt) => { const [h, m] = txt.split(':').map(Number); return h + m / 60 }
 // Inicio y fin de cada turno en horas; el 3 (C) cruza la medianoche. El administrativo (D) se cruza con los otros:
 // el reloj lo dibuja aparte y "el turno de ahora" es siempre uno de los tres rotativos
 export const RANGOS = Object.fromEntries(Object.entries(TURNOS).filter(([k]) => k !== 'D').map(([k, v]) => {
-  const [a, b] = v.split('–').map(horas)
+  const [a, b] = v.split('–').map(aHoras)
   return [k, [a, b < a ? b + 24 : b]]
 }))
 export const turnoDe = (h) => Object.keys(RANGOS).find((k) => { const [a, b] = RANGOS[k]; return (h >= a && h < b) || (h + 24 >= a && h + 24 < b) })
@@ -124,6 +124,8 @@ export function cierreTurno(fecha, turno) {
   if (turno === 'C') fin.setDate(fin.getDate() + 1)
   return fin
 }
+// 90 → "1:30"
+export const horas = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
 export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 

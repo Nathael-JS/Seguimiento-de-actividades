@@ -182,7 +182,13 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
   - **PDF real** (`src/pdf.js`, con jsPDF): encabezado con logo y filtros, recuadros de resumen, comparativo y detalle con el estado en color, y en el pie quién lo generó, cuándo y el número de página. En escritorio se abre una **vista previa** con *Descargar PDF*; en celular se descarga directo.
 - **Matriz de seguimiento:** por persona y periodo, muestra:
   - el yield de diarias y de urgentes (realizadas ÷ las que cuentan);
-  - la asistencia, según el checador. El tiempo extra se quitó por ahora y se implementará después.
+  - el **tiempo extra** validado y, debajo, el registrado ("13:00 h · de 16:30 h registradas");
+  - la asistencia, según el checador.
+  - Se ordena tocando el encabezado de cada columna. En celular cada persona es una tarjeta con sus cuatro indicadores.
+- **Checador (entrada, salida y tiempo extra):**
+  - **Entrada:** la primera vez del día que la persona abre la app (aviso "Bienvenido…").
+  - **Salida:** desde 30 min antes del fin del turno aparecen en la barra de arriba **Tiempo extra** y **Marcar salida**; siguen ahí hasta marcarla. El turno 3 marca su salida a la mañana siguiente sobre la jornada de la noche anterior.
+  - **Tiempo extra:** primero se **registra** cuánto se quedará (de 30 min a 6 h; se puede corregir hasta marcar la salida). Al marcar la salida se valida solo: cuenta si salió **más de 15 min** después del fin del turno, y cuenta lo que se quedó de verdad, **hasta lo registrado**. Sin registro o sin salida marcada no cuenta.
 - **Jerarquía:** árbol de quién reporta a quién.
 - **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
 - **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
@@ -321,7 +327,9 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET | `/api/perfil/:no` · POST `/api/perfil/:no/password` | Propio | Perfil y cambio de contraseña |
 | GET | `/api/inicio/:no?desde&hoy` | Propio | Indicadores y notificaciones; con `hoy` genera avisos y renueva recurrentes |
 | POST | `/api/notificaciones/:no/leidas` · `/:no/:id/leida` | Propio | Marcar como leídas |
-| POST | `/api/asistencia/:no` | Propio | `{ hoy, hora }`: la primera vez del día que abre la app queda su entrada en el checador (`nueva: true`) |
+| POST | `/api/asistencia/:no` | Propio | `{ hoy, hora }`: la primera vez del día que abre la app queda su entrada en el checador (`nueva: true`). Devuelve la jornada `{ fecha, entrada, salida, extraPlan }` |
+| POST | `/api/extra/:no` | Propio | `{ hoy, minutos }` (30–720): registra el tiempo extra que se quedará en la jornada abierta |
+| POST | `/api/salida/:no` | Propio | `{ hoy, hora }`: marca la salida y devuelve `extra`, los minutos que contaron. 409 si no hay entrada o ya la marcó |
 | POST · DELETE | `/api/perfil/:no/foto` | Propio | Subir (data URL de 256 px, JPEG/PNG/WebP) o quitar la foto de perfil |
 | GET | `/api/fotos/:empleado` | Sesión | La foto de perfil (404 si no tiene: se muestran las iniciales); caché de 5 min |
 | PATCH · DELETE | `/api/departamentos/:clave` | Gerente que lo dirige | Renombrar; borrar si no tiene personas |
@@ -382,7 +390,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | `departamentos` | `clave`, `nombre`, `gerente` |
 | `sesiones` (Sesión) | `token`, `no`, `vence`, `confirmado`, `fallos` |
 | `registros` (Registro) | `id`, `at`, `evento`, `no`, `usuario`, `ip`, `agente`, `ok`, `detalle`, `por` |
-| `checador` | `no`, `date`, `entrada`, `salida` (llave: `no` + `fecha`) |
+| `checador` | `no`, `date`, `entrada`, `salida` (llave: `no` + `fecha`); `extraPlan` (minutos registrados) va en `extra` (jsonb) |
 | `ids` | `lista`, `ultimo` (último número por lista; la fila `instancia` marca qué servidor es el dueño de la base) |
 
 Todo campo que no tenga columna propia se guarda en `extra` (jsonb), así ningún dato se pierde.
@@ -507,7 +515,8 @@ Se marcan en el código con comentarios `shortcut:` (decisiones tomadas a propó
 - **IP real:** se toma del segundo salto de `X-Forwarded-For`. Si Render cambia su proxy, hay que revisarlo.
 - **Registros:** se conservan los últimos 5000.
 - **Notificaciones:** cada persona conserva sus últimas 200.
-- **Checador simulado:** las entradas y salidas de `checador.json` son de prueba (lunes a viernes, oct–dic 2026). Hay que conectarlo al checador real.
+- **Checador por la app:** la entrada es al abrir la app y la salida con el botón; la hora es la del equipo de la persona. Si más adelante hay un checador físico, se conecta a `/api/asistencia` y `/api/salida`. El `checador.json` de las pruebas automáticas es simulado.
+- **Render plan gratis (decisión: se queda así):** se duerme tras 15 min sin uso y la primera visita tarda hasta un minuto en despertar. Si eso estorba en planta, pasar a Starter.
 - **Cuentas de prueba sin MFA:** entran sin el código de la app para revisiones rápidas. Hay que quitarlas al pasar a usuarios reales.
 - **MFA sin códigos de respaldo:** si alguien pierde el teléfono, un super administrador le reinicia el MFA.
 - **MAC:** la MAC del equipo no se puede obtener desde un navegador.

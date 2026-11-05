@@ -55,7 +55,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B19 | Turnos | Ver Perfil, Monitoreo y el selector de turno al crear | "Turno 1 · Matutino 07:00–15:00" … "Turno 4 · Administrativo 08:00–17:30" | | |
 | B20 | Editar / borrar departamento | Ajustes → lápiz → nuevo nombre → Guardar; papelera en uno vacío | Se renombra; uno con personas no se puede borrar | | |
 | B21 | Foto de perfil | Perfil → Cambiar foto | Sale en el menú, en Perfil y en las listas del equipo | | |
-| B22 | Matriz | Matriz de seguimiento | Yield y asistencia (sin tiempo extra por ahora) | | |
+| B22 | Matriz | Matriz de seguimiento; tocar el encabezado *Tiempo extra* | Yield, tiempo extra ("1:00 h · de 1:00 h registradas") y asistencia; se ordena de mayor a menor (otro toque, al revés). En celular, una tarjeta por persona | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |
 
 ## C. Jr / Técnico (`10482` o `10490`)
@@ -69,6 +69,8 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | C5 | Editar la suya | ⋯ → Editar en una que agregó | Puede cambiar texto, fecha y Repetir (no turno ni comentario) | | |
 | C6 | No edita las asignadas | ⋯ en una que le asignaron | No aparece Editar | | |
 | C8 | Límite de cambios de estado | Cambiar el estado de una misma actividad 6 veces | La 6.ª: "Ya cambiaste el estado de esta actividad 5 veces. Espera 10 min…" | | |
+| C9 | Tiempo extra y salida | 30 min antes del fin de tu turno: arriba **Tiempo extra** → 1:00 h → Registrar; después del fin del turno + 15 min, **Marcar salida** | "Tiempo extra registrado…"; al salir: "Salida marcada a las … Tiempo extra: 1:00 h." (si sales antes de 15 min: "no cuenta"). Al día siguiente aparece en la Matriz del encargado | | |
+| C10 | Salida sin tiempo extra | Marcar salida sin registrar tiempo extra | "Salida marcada a las …"; el botón desaparece y no vuelve ese día | | |
 | C7 | Tarea urgente | Actividades asignadas → Nueva tarea → Urgente | Se crea; se cierra al terminar el turno | | |
 
 ## D. Super administrador (cuentas de `SUPERADMINS`)
@@ -108,7 +110,7 @@ Hazlo en este orden cuando todas las pruebas estén en ✅:
 4. [ ] **Departamentos y personas:** el gerente crea o renombra departamentos (Ajustes) y carga la plantilla de Excel; cada persona se registra sola.
 5. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
 6. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
-7. [ ] **Plan de Render:** el plan gratis se duerme tras 15 min sin uso (la primera visita tarda hasta un minuto). Para uso diario en planta, pasar a un plan de pago (Starter).
+7. [x] **Plan de Render:** se queda en el plan gratis (decidido). Se duerme tras 15 min sin uso y la primera visita tarda hasta un minuto; si eso estorba en planta, pasar a Starter.
 8. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
 9. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
 

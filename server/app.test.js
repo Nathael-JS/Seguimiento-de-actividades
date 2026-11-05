@@ -35,7 +35,7 @@ async function sesionDe(app, no) {
 }
 // Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
 async function pedir(app, method, url, payload) {
-  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas|asistencia)\/(\d{5})/)?.[1]
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas|asistencia|salida|extra)\/(\d{5})/)?.[1]
   const enviar = async () => {
     const cookie = no && await sesionDe(app, no)
     return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
@@ -706,8 +706,9 @@ test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checado
     assert.equal(code, 200)
     assert.deepEqual(body.map((f) => f.no), ['10490', '10482']) // su rama, por puesto
     const jorge = body.find((f) => f.no === '10482')
-    // 29 oct: 4 diarias, 1 realizada. Hasta ayer: 6 de 6 días hábiles (sin tiempo extra por ahora)
-    assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.extra, jorge.asistencia], [[1, 4], [0, 0], undefined, [6, 6]])
+    // 29 oct: 4 diarias, 1 realizada. Hasta ayer: el tiempo extra que pasa de 15 min tras las 15:00; 6 de 6 días hábiles
+    assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.asistencia], [[1, 4], [0, 0], [6, 6]])
+    assert.ok(Number.isInteger(jorge.extra) && jorge.extra >= 0)
     const maria = body.find((f) => f.no === '10490')
     assert.deepEqual(maria.asistencia, [5, 6]) // faltó el 30 oct
     // Una urgente abierta aún no cuenta; al cerrar el turno sí
@@ -1264,8 +1265,8 @@ test('asistencia: la primera vez del día al abrir la app; las siguientes no cam
   const ch = app.estado.checador // los datos de prueba traen el checador simulado: se quita el de hoy
   ch.splice(0, ch.length, ...ch.filter((r) => !(r.no === '10482' && r.date === HOY_REAL)))
   const checar = (cuerpo) => pedir(app, 'POST', '/api/asistencia/10482', { hoy: HOY_REAL, hora: '07:02', ...cuerpo })
-  assert.deepEqual((await checar()).body, { nueva: true, entrada: '07:02' })
-  assert.deepEqual((await checar({ hora: '09:15' })).body, { nueva: false, entrada: '07:02' })
+  assert.deepEqual((await checar()).body, { nueva: true, fecha: HOY_REAL, entrada: '07:02', salida: null, extraPlan: 0 })
+  assert.deepEqual((await checar({ hora: '09:15' })).body, { nueva: false, fecha: HOY_REAL, entrada: '07:02', salida: null, extraPlan: 0 })
   assert.equal((await checar({ hoy: '2030-01-01' })).code, 400) // reloj del equipo mal puesto
   assert.equal((await checar({ hora: '25:00' })).code, 400)
   assert.equal(app.estado.checador.filter((r) => r.no === '10482' && r.date === HOY_REAL).length, 1)
@@ -1287,4 +1288,34 @@ test('desde 0: el super administrador da de alta al gerente, el gerente se regis
   const nora = cookieDe(await entrar('50001', CLAVE, app))
   const fila = { no: '50010', name: 'Iván Paz', email: 'ivan.paz@empresa.com', role: 'tec', shift: 'A', area: '', boss: '50001' }
   assert.equal((await conCookie(app, 'POST', `/api/departamentos/${d.clave}/plantilla`, nora, { por: '50001', filas: [fila] })).json().creados, 1)
+})
+
+test('salida y tiempo extra: se registra antes de salir y cuenta solo si pasa de 15 min tras el fin del turno', async () => {
+  const app = build()
+  const ch = app.estado.checador
+  ch.splice(0, ch.length) // sin el checador simulado
+  const marcar = (url, no, hora, hoy = HOY_REAL) => pedir(app, 'POST', `/api/${url}/${no}`, { hoy, hora })
+  const registrar = (no, minutos) => pedir(app, 'POST', `/api/extra/${no}`, { hoy: HOY_REAL, minutos })
+  assert.equal((await marcar('salida', '10482', '15:00')).code, 409) // sin entrada
+  assert.equal((await registrar('10482', 60)).code, 409)
+  await marcar('asistencia', '10482', '06:55') // Jorge: turno 1, termina a las 15:00
+  assert.equal((await registrar('10482', 10)).code, 400) // mínimo 30 min
+  assert.equal((await registrar('10482', 60)).body.extraPlan, 60)
+  assert.equal((await marcar('salida', '10482', '15:10')).body.extra, 0) // 10 min: no cuenta aunque registró 60
+  assert.equal((await marcar('salida', '10482', '15:40')).body.error, 'Ya marcaste tu salida de hoy.')
+  assert.equal((await registrar('10482', 60)).body.error, 'Ya marcaste tu salida de hoy.')
+  await marcar('asistencia', '10490', '06:50') // María: turno 1
+  await registrar('10490', 30)
+  assert.equal((await marcar('salida', '10490', '15:40')).body.extra, 30) // se quedó 40, registró 30: cuentan 30
+  await marcar('asistencia', '10533', '06:50')
+  assert.equal((await marcar('salida', '10533', '16:00')).body.extra, 0) // se quedó 60 sin registrar: no cuenta
+  // Turno 3 (nocturno): entra en la noche y marca la salida a la mañana siguiente; esa mañana no abre otra jornada
+  const u = app.estado.usuarios.find((x) => x.no === '10511')
+  u.shift = 'C'
+  const ayer = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+  ch.push({ no: '10511', date: ayer, entrada: '22:20', salida: '' })
+  assert.deepEqual((await marcar('asistencia', '10511', '06:58')).body, { nueva: false, fecha: ayer, entrada: '22:20', salida: null, extraPlan: 0 })
+  await registrar('10511', 120)
+  assert.equal((await marcar('salida', '10511', '07:30')).body.extra, 30)
+  assert.equal(ch.filter((r) => r.no === '10511').length, 1)
 })
