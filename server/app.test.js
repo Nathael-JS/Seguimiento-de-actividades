@@ -1270,3 +1270,21 @@ test('asistencia: la primera vez del día al abrir la app; las siguientes no cam
   assert.equal((await checar({ hora: '25:00' })).code, 400)
   assert.equal(app.estado.checador.filter((r) => r.no === '10482' && r.date === HOY_REAL).length, 1)
 })
+
+test('desde 0: el super administrador da de alta al gerente, el gerente se registra y carga su plantilla', async () => {
+  const { app, adm, confirmar } = await conSA()
+  const alta = (cambios) => adm('POST', '/api/admin/gerentes', { por: '90001', no: '50001', name: 'Nora Ríos', email: 'nora.rios@empresa.com', shift: 'D', departamento: 'Calidad', ...cambios })
+  assert.equal((await alta()).body.confirmar, true) // pide la contraseña del super administrador
+  await confirmar()
+  const g = (await alta()).body
+  assert.deepEqual([g.role, g.porRegistrar, g.shift], ['gte', true, 'D'])
+  assert.equal((await alta({ no: '50002', email: 'otra@empresa.com' })).body.error, 'Ese departamento ya tiene gerente.')
+  assert.equal((await alta({ no: '10001', email: 'x@empresa.com', departamento: 'Otro' })).code, 409) // número ya usado
+  const d = (await pedir(app, 'GET', '/api/deptos')).body.find((x) => x.nombre === 'Calidad')
+  assert.equal(d.gerente, '50001')
+  // Se registra, entra y carga su plantilla
+  assert.equal((await app.inject({ method: 'POST', url: '/api/registro', payload: { no: '50001', email: 'nora.rios@empresa.com', password: CLAVE } })).statusCode, 201)
+  const nora = cookieDe(await entrar('50001', CLAVE, app))
+  const fila = { no: '50010', name: 'Iván Paz', email: 'ivan.paz@empresa.com', role: 'tec', shift: 'A', area: '', boss: '50001' }
+  assert.equal((await conCookie(app, 'POST', `/api/departamentos/${d.clave}/plantilla`, nora, { por: '50001', filas: [fila] })).json().creados, 1)
+})

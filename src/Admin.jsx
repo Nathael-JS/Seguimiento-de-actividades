@@ -255,7 +255,7 @@ const EVENTOS = {
   'password-cambiada': 'Cambió su contraseña', 'password-recuperada': 'Recuperó su contraseña',
   'admin-confirmacion': 'Confirmó su contraseña', 'admin-confirmacion-fallida': 'Confirmación fallida',
   'admin-usuario': 'Cambio de cuenta', 'admin-password': 'Contraseña restablecida', 'admin-mfa': 'MFA reiniciado', 'admin-respaldo': 'Respaldo descargado',
-  'registro-rechazado': 'Registro rechazado', 'admin-plantilla': 'Plantilla corregida', 'error-servidor': 'Error del servidor', 'error-navegador': 'Error en el navegador',
+  'registro-rechazado': 'Registro rechazado', 'admin-plantilla': 'Plantilla corregida', 'admin-gerente': 'Gerente dado de alta', 'error-servidor': 'Error del servidor', 'error-navegador': 'Error en el navegador',
   'registros-purgados': 'Registros borrados',
 }
 const CAMPOS = { shift: 'Turno', role: 'Puesto', activo: 'Acceso' }
@@ -411,6 +411,8 @@ export function Plantillas({ user, avisar }) {
         <p>{t('Quién viene en la plantilla de su departamento y si ya se registró. Corrige el número o el correo de quien no pudo registrarse.')}</p>
       </div>
 
+      <NuevoGerente user={user} conConfirmacion={conConfirmacion} alCrear={(g) => { avisar(t('{nombre} quedó por registrar como gerente: ya puede crear su cuenta.', { nombre: g.name })); cargar() }} />
+
       <div className="chips" role="group" aria-label={t('Filtrar plantillas')}>
         {[['por-registrar', t('Por registrar ({n})', { n: porRegistrar })], ['registradas', t('Registradas ({n})', { n: datos.personas.length - porRegistrar })], ['todas', t('Todas')]].map(([k, nombre]) => (
           <button key={k} aria-pressed={filtro === k} onClick={() => setFiltro(k)}>{nombre}</button>
@@ -478,6 +480,48 @@ export function Plantillas({ user, avisar }) {
         )}
       </section>
     </>
+  )
+}
+
+// Alta del gerente de un departamento (el primero de todos, o uno que se quedó sin gerente): queda por registrar y
+// se registra en la app con su número y correo; el departamento se crea si no existe
+function NuevoGerente({ user, conConfirmacion, alCrear }) {
+  const vacio = { name: '', no: '', email: '', shift: 'D', departamento: '' }
+  const [d, setD] = useState(vacio)
+  const [error, setError] = useState('')
+  const set = (campo) => (e) => setD({ ...d, [campo]: e.target.value })
+  async function crear(e) {
+    e.preventDefault()
+    if (d.name.trim().length < 3 || !/^\d{4,10}$/.test(d.no.trim()) || !/^\S+@\S+\.\S+$/.test(d.email.trim()) || d.departamento.trim().length < 3) {
+      return setError(t('Escribe nombre, número (4 a 10 dígitos), correo y departamento.'))
+    }
+    setError('')
+    try {
+      const g = await conConfirmacion(() => api('/api/admin/gerentes', { method: 'POST', body: { por: user.no, ...d, no: d.no.trim(), email: d.email.trim() } }))
+      setD(vacio)
+      alCrear(g)
+    } catch (err) {
+      if (!err.cancelado) setError(err.message)
+    }
+  }
+  return (
+    <details className="card nuevo-gerente">
+      <summary><Icono nombre="user" />{t('Nuevo gerente')}</summary>
+      <form className="filters" onSubmit={crear} noValidate>
+        <label className="field"><span>{t('Nombre completo')}</span><input value={d.name} maxLength={100} onChange={set('name')} /></label>
+        <label className="field"><span>{t('Número de empleado')}</span><input inputMode="numeric" maxLength={10} value={d.no} onChange={set('no')} /></label>
+        <label className="field"><span>{t('Correo electrónico')}</span><input type="email" maxLength={100} value={d.email} onChange={set('email')} /></label>
+        <label className="field">
+          <span>{t('Turno')}</span>
+          <select value={d.shift} onChange={set('shift')}>
+            {Object.entries(TURNOS).map(([k, v]) => <option key={k} value={k}>{turnoLargo(k)} · {v}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>{t('Departamento')}</span><input maxLength={60} placeholder={t('Se crea si no existe')} value={d.departamento} onChange={set('departamento')} /></label>
+        <button className="btn btn-primary" type="submit">{t('Dar de alta')}</button>
+        {error && <p className="error wide" role="alert">{error}</p>}
+      </form>
+    </details>
   )
 }
 

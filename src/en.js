@@ -753,4 +753,12 @@ export default {
   'Quitar foto': 'Remove photo',
   'Sin foto.': 'No photo.',
   'Bienvenido, {nombre}: asistencia checada a las {hora}.': 'Welcome, {nombre}: attendance checked in at {hora}.',
+  // Nuevo gerente (super administrador)
+  '{nombre} quedó por registrar como gerente: ya puede crear su cuenta.': '{nombre} is pending registration as manager: they can now create their account.',
+  'Gerente dado de alta': 'Manager added',
+  'Escribe nombre, número (4 a 10 dígitos), correo y departamento.': 'Enter name, number (4 to 10 digits), email and department.',
+  'Nuevo gerente': 'New manager',
+  'Se crea si no existe': 'Created if it does not exist',
+  'Dar de alta': 'Add',
+  'Ese departamento ya tiene gerente.': 'That department already has a manager.',
 }

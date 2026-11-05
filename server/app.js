@@ -729,6 +729,13 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   })
 
   // Un gerente crea un departamento y queda como quien lo dirige
+  // Clave legible a partir del nombre ("Calidad de Proceso" → calidad-de-proce), única
+  const claveNueva = (nombre) => {
+    const base = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'depto'
+    let clave = base
+    for (let i = 2; departamentos.some((d) => d.clave === clave); i++) clave = `${base.slice(0, 16)}-${i}`
+    return clave
+  }
   app.post('/api/departamentos', { schema: crearDeptoSchema }, async (req, reply) => {
     const yo = empleado(req.body.por)
     if (yo?.role !== 'gte') return reply.code(403).send({ error: 'Solo un gerente crea departamentos.' })
@@ -736,13 +743,9 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (departamentos.some((d) => d.nombre.toLowerCase() === nombre.toLowerCase())) {
       return reply.code(409).send({ error: 'Ya existe un departamento con ese nombre.' })
     }
-    // Clave legible a partir del nombre ("Calidad de Proceso" → calidad-de-proce), única
-    const base = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'depto'
-    let clave = base
-    for (let i = 2; departamentos.some((d) => d.clave === clave); i++) clave = `${base.slice(0, 16)}-${i}`
-    const d = { clave, nombre, gerente: yo.no }
+    const d = { clave: claveNueva(nombre), nombre, gerente: yo.no }
     departamentos.push(d)
-    return reply.code(201).send({ clave, nombre })
+    return reply.code(201).send({ clave: d.clave, nombre })
   })
 
   // Editar el nombre o borrar un departamento: solo el gerente que lo dirige. Se borra vacío (sin personas) y nunca el
@@ -1494,6 +1497,33 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     personas: usuarios.filter((u) => u.role !== 'sa').map(vistaUsuario).sort((a, b) => b.porRegistrar - a.porRegistrar || a.name.localeCompare(b.name)),
     rechazados: registros.filter((r) => r.evento === 'registro-rechazado').slice(-100).reverse(),
   }))
+  // Nuevo gerente: con la base vacía (o un departamento sin gerente) el super administrador lo da de alta por
+  // registrar; el gerente se registra en la app con su número y correo y carga la plantilla de su gente. El
+  // departamento se crea si no existe; uno que ya tiene gerente no se le quita
+  const gerenteSchema = {
+    body: objeto(['por', 'no', 'name', 'email', 'shift', 'departamento'], {
+      por: noEmpleado, no: noEmpleado, name: { type: 'string', minLength: 3, maxLength: 100, pattern: '\\S' },
+      email: { type: 'string', format: 'email', maxLength: 100 }, shift: { enum: ['A', 'B', 'C', 'D'] },
+      departamento: { type: 'string', minLength: 3, maxLength: 60, pattern: '\\S' },
+    }),
+  }
+  app.post('/api/admin/gerentes', { schema: gerenteSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const { no, shift } = req.body
+    const name = req.body.name.trim().replace(/\s+/g, ' ')
+    const email = req.body.email.trim().toLowerCase()
+    const nombre = req.body.departamento.trim().replace(/\s+/g, ' ')
+    if (empleado(no)) return reply.code(409).send({ error: 'Ese número de empleado ya está registrado.' })
+    if (usuarios.some((u) => u.email === email)) return reply.code(409).send({ error: 'Ese correo ya está registrado.' })
+    let d = departamentos.find((x) => x.nombre.toLowerCase() === nombre.toLowerCase())
+    if (d?.gerente && empleado(d.gerente)) return reply.code(409).send({ error: 'Ese departamento ya tiene gerente.' })
+    if (!d) departamentos.push(d = { clave: claveNueva(nombre), nombre, gerente: null })
+    d.gerente = no
+    usuarios.push({ no, name, email, role: 'gte', dept: d.clave, boss: null, shift, area: 'Gerencia', pwdChanged: ahora(), password: null, porRegistrar: true })
+    registrar(req, 'admin-gerente', { no, por: req.sesion.no, detalle: `${name} · ${nombre}` })
+    return reply.code(201).send(vistaUsuario(empleado(no)))
+  })
+
   // Solo filas por registrar: una cuenta ya registrada se cambia en Usuarios. Un número se corrige mientras nada lo
   // use aún (actividades, avisos); sus subordinados en la plantilla pasan al número nuevo
   const porRegistrar = (req, reply) => {
