@@ -12,6 +12,19 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #28] 2026-11-05: Marca de autoría
+
+### Agregado
+- **Marca de autoría** "© Copyright 2026 IT Team GDL / MICHELL TOVAR Test Engineer Jr. All Rights Reserved.":
+  - al pie de la portada, del inicio de sesión, del cambio de contraseña obligatorio y de cada pantalla de la app;
+  - en el pie de cada página de los PDF de Reportes.
+- Es igual en ambos idiomas.
+
+### Archivos
+- `src/comun.js` (`COPYRIGHT`), `src/ui.jsx` (`Firma`), `src/Shell.jsx`, `src/Login.jsx`, `src/CambioObligatorio.jsx`, `src/pdf.js`, `src/index.css`
+
+---
+
 ## [PR #27] 2026-11-05: Salida, tiempo extra registrado y Matriz mejorada
 
 ### Agregado

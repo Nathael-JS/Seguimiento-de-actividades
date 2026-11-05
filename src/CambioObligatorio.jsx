@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, passwordValida } from './comun.js'
-import { BotonIdioma, BotonTema, Campo, PasswordNueva } from './ui.jsx'
+import { BotonIdioma, BotonTema, Campo, Firma, PasswordNueva } from './ui.jsx'
 import { t } from './i18n.js'
 
 // Entró con la contraseña temporal que le dio un super administrador: antes de seguir crea la suya
@@ -40,6 +40,7 @@ export default function CambioObligatorio({ user, onListo, onSalir }) {
           <p className="error" role="alert">{error}</p>
           <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>{t(enviando ? 'Guardando…' : 'Guardar y entrar')}</button>
         </form>
+        <Firma />
       </main>
     </div>
   )

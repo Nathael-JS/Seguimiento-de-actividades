@@ -4,7 +4,7 @@ import Dial from './Dial.jsx'
 import Icono from './Icono.jsx'
 import Recuperar from './Recuperar.jsx'
 import Registro from './Registro.jsx'
-import { BotonIdioma, BotonTema, Campo, Logo } from './ui.jsx'
+import { BotonIdioma, BotonTema, Campo, Firma, Logo } from './ui.jsx'
 import { t } from './i18n.js'
 
 // Portada (slides → elegir acceso) y luego el login de ese acceso: 'login' → 'codigo' (2 pasos), o 'registro' /
@@ -47,6 +47,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
         {pantalla === 'registro' && <Registro volver={volver} />}
         {pantalla === 'recuperar' && <Recuperar volver={volver} />}
+        <Firma />
       </main>
     </div>
   )
@@ -141,6 +142,7 @@ function Portada({ aviso, saltar, onElegir }) {
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setI(SLIDES.length)}>{t('Saltar')}</button>
         </footer>
       )}
+      <Firma />
     </div>
   )
 }
