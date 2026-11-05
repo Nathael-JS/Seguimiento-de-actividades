@@ -34,7 +34,7 @@ jobs:
           path: respaldo.sql.gz.enc
           retention-days: 30
           if-no-files-found: error
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 22
