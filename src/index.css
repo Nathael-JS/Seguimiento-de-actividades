@@ -343,6 +343,9 @@ tbody tr:hover td{background:var(--surface-000)}
   .dl{grid-template-columns:1fr;gap:2px}.dl dd{margin-bottom:10px}
 }
 
+/* Marca de autoría: discreta, al fondo de la pantalla */
+.firma{margin:auto 0 0;padding:16px 32px 20px;font:400 11px/16px var(--font-sans);color:var(--ink-muted);text-align:center;text-wrap:balance}
+.portada .firma{padding:0;color:color-mix(in srgb,var(--on-ink-deep) 62%,transparent)}
 .auth-top{display:flex;justify-content:flex-end;align-items:center;gap:8px}
 .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--surface-100)}
 .seg button{border:0;background:transparent;color:var(--ink);padding:0 12px;min-height:34px;font:500 13px var(--font-sans);cursor:pointer}

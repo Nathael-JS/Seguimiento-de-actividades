@@ -126,6 +126,8 @@ export function cierreTurno(fecha, turno) {
 }
 // 90 → "1:30"
 export const horas = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`
+// Marca de autoría: al pie de cada pantalla y de cada PDF (igual en ambos idiomas)
+export const COPYRIGHT = '© Copyright 2026 IT Team GDL / MICHELL TOVAR Test Engineer Jr. All Rights Reserved.'
 // Medianoche local de hoy como instante UTC: el servidor la usa para "lo realizado hoy"
 export const inicioDeHoy = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 

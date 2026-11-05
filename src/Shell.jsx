@@ -1,7 +1,7 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { api, cierreTurno, horas, hoy, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { Avatar, BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
+import { Avatar, BotonIdioma, BotonTema, Firma, Logo, SiFalla } from './ui.jsx'
 import { t } from './i18n.js'
 import Inicio from './Inicio.jsx'
 
@@ -213,6 +213,7 @@ export default function Shell({ user, onLogout, avisoInicial }) {
             </Suspense>
           </SiFalla>
         </main>
+        <Firma />
       </div>
 
       <div className="toast" role="status">{aviso && <><Icono nombre="check" />{aviso}</>}</div>

@@ -12,6 +12,27 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #28] 2026-11-05: Marca de autoría y plantilla con el turno 4
+
+### Agregado
+- **Marca de autoría** "© Copyright 2026 IT Team GDL / MICHELL TOVAR Test Engineer Jr. All Rights Reserved.":
+  - al pie de la portada, del inicio de sesión, del cambio de contraseña obligatorio y de cada pantalla de la app;
+  - en el pie de cada página de los PDF de Reportes.
+- Es igual en ambos idiomas.
+
+### Cambiado
+- **Plantilla de ejemplo (.xlsx):**
+  - turnos 1 a 4 (antes A/B/C con los horarios viejos), con una persona de ejemplo en el turno 4;
+  - el menú desplegable del turno ofrece 1, 2, 3 y 4;
+  - instrucciones al día: horarios nuevos, las personas se registran con *Registrarse* y ya no se menciona a Laura.
+- **Vista previa de la plantilla:** muestra "Turno 4 · Administrativo" en lugar de la clave interna (D).
+
+### Archivos
+- `public/plantilla-departamento.xlsx`, `src/Ajustes.jsx`
+- `src/comun.js` (`COPYRIGHT`), `src/ui.jsx` (`Firma`), `src/Shell.jsx`, `src/Login.jsx`, `src/CambioObligatorio.jsx`, `src/pdf.js`, `src/index.css`
+
+---
+
 ## [PR #27] 2026-11-05: Salida, tiempo extra registrado y Matriz mejorada
 
 ### Agregado

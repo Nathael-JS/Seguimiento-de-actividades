@@ -1,5 +1,5 @@
 import { Component, useId, useState } from 'react'
-import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError, versionFotos } from './comun.js'
+import { COPYRIGHT, CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError, versionFotos } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
 
@@ -33,6 +33,8 @@ export class SiFalla extends Component {
 }
 
 // Logo: el reloj de turnos de la portada (A, B y C) con una palomita al centro. Es el mismo dibujo que public/favicon.svg
+export const Firma = () => <p className="firma">{COPYRIGHT}</p>
+
 export function Logo() {
   return (
     <svg className="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
