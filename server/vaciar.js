@@ -1,7 +1,7 @@
 // Inicio desde 0: deja la base con server/datos/inicio (sin usuarios ni departamentos) y conserva a los super
 // administradores tal como están (con su app vinculada). Borra todo lo demás. Después, el super administrador da
 // de alta al primer gerente en Plantillas → Nuevo gerente.
-// Lo corre el workflow "Vaciar datos" de GitHub, que antes hace un respaldo. Después hay que reiniciar Render.
+// Lo corre el workflow "Vaciar datos" de GitHub (o, en planta, a mano tras un respaldo). Después hay que reiniciar la app.
 //   DATABASE_URL=postgresql://… node server/vaciar.js VACIAR
 import { build } from './app.js'
 import { cargar, conectar, respaldo, restaurar } from './db.js'
@@ -18,7 +18,7 @@ try {
   const app = build()
   app.estado.usuarios.push(...superadmins)
   await restaurar(pool, respaldo(app.estado))
-  console.log(`Base vaciada: ${app.estado.usuarios.length} usuarios (${superadmins.length} super administradores). Reinicia el servicio en Render.`)
+  console.log(`Base vaciada: ${app.estado.usuarios.length} usuarios (${superadmins.length} super administradores). Reinicia la app (Render: Restart service; planta: systemctl restart seguimiento).`)
 } finally {
   await pool.end()
 }

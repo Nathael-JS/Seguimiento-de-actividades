@@ -100,6 +100,22 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 
 ---
 
+## F. Servidor de planta (Rocky Linux 10)
+
+Ver [DESPLIEGUE_PLANTA.md](DESPLIEGUE_PLANTA.md), sección 8.
+
+| # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
+|---|---|---|---|---|---|
+| F1 | Salud | `curl -k https://<nombre interno>/api/salud` | `{"ok":true}` | | |
+| F2 | Redirección | Abrir `http://<nombre interno>` | Pasa a `https://` | | |
+| F3 | Certificado | Abrir la app desde un celular en el wifi de planta | Sin aviso de certificado | | |
+| F4 | Entrar | Gerente y técnico con contraseña y código | Ven sus actividades; la sesión sigue tras recargar | | |
+| F5 | IP real | Super administrador → Registros | La IP del celular, no `127.0.0.1` | | |
+| F6 | App cerrada a la red | Desde otra PC: `http://<servidor>:3000` | No responde | | |
+| F7 | Respaldo | `sudo systemctl start seguimiento-respaldo` | Archivo nuevo en la carpeta de red | | |
+| F8 | Sin internet | Navegador → DevTools → Network al abrir la app | Ninguna petición fuera del servidor (ni Google Fonts) | | |
+| F9 | Volver atrás | Instalar un paquete nuevo y apuntar `actual` a la versión anterior | La app vuelve a la versión anterior al reiniciar | | |
+
 ## Lista para el deploy completo (usuarios reales)
 
 Hazlo en este orden cuando todas las pruebas estén en ✅:
@@ -108,9 +124,10 @@ Hazlo en este orden cuando todas las pruebas estén en ✅:
 2. [ ] **Inicio desde 0:** GitHub → Actions → **Vaciar datos** → Run workflow → escribir `VACIAR`. Respalda y deja solo a los super administradores. Después: Render → Manual Deploy → **Restart service**.
 3. [ ] **Primer gerente:** Plantillas → Nuevo gerente; el gerente se registra y vincula su app.
 4. [ ] **Departamentos y personas:** el gerente crea o renombra departamentos (Ajustes) y carga la plantilla de Excel; cada persona se registra sola.
-5. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
-6. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
-7. [x] **Plan de Render:** se queda en el plan gratis (decidido). Se duerme tras 15 min sin uso y la primera visita tarda hasta un minuto; si eso estorba en planta, pasar a Starter.
-8. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
-9. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
+5. [ ] **Build de Render:** *Settings → Build Command* = `npm ci && npm run build`, si el servicio no se creó como Blueprint.
+6. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
+7. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
+8. [x] **Plan de Render:** se queda en el plan gratis (decidido). Se duerme tras 15 min sin uso y la primera visita tarda hasta un minuto; si eso estorba en planta, pasar a Starter.
+9. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
+10. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
 

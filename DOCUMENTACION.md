@@ -89,12 +89,17 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 ├── index.html              Página base: aplica el tema guardado antes de pintar
 ├── vite.config.js          Configuración de Vite (plugin de React)
 ├── render.yaml             Blueprint de Render (build y start)
+├── DESPLIEGUE_PLANTA.md    Instalación en el servidor de planta (Rocky Linux 10 + NGINX, sin internet)
+├── deploy/                 Servidor de planta: NGINX, servicios systemd, respaldo, variables, instalar.sh
+├── scripts/paquete.sh      Arma el paquete para planta (npm run paquete)
 ├── package.json            Dependencias y scripts
 ├── public/
 │   ├── favicon.svg         Logo (reloj de turnos con palomita)
 │   └── plantilla-departamento.xlsx   Ejemplo de plantilla de departamento
 ├── .github/workflows/
-│   └── respaldo.yml        Respaldo diario cifrado de la base
+│   ├── ci.yml              Revisión de cada PR: npm ci, audit, lint, build, pruebas con PostgreSQL
+│   ├── respaldo.yml        Respaldo diario cifrado de la base (Neon)
+│   └── vaciar.yml          Inicio limpio de la base (Neon)
 ├── server/
 │   ├── index.js            Arranque: SUPERADMINS, conexión a la BD, carga y listen
 │   ├── app.js              build(): toda la API, reglas de negocio y seguridad
@@ -477,7 +482,16 @@ Código en `server/db.js`.
 
 ## 15. Despliegue, variables de entorno y respaldos
 
-**Render** (`render.yaml`): `npm install && npm run build`, luego `npm start` (escucha en `PORT`, en `0.0.0.0`, con `trustProxy`).
+**Render** (`render.yaml`): `npm ci && npm run build`, luego `npm start` (escucha en `PORT`, en `0.0.0.0`, con `trustProxy`).
+
+**Control de versiones de las dependencias:**
+- **Lockfile:** `package-lock.json` manda. Render, la CI y los workflows instalan con `npm ci`, que falla si el lockfile no coincide con `package.json`.
+- **Versiones exactas:** `package.json` sin `^`; `.npmrc` con `save-exact=true`. Node 22 (`engines`).
+- **CI** (`.github/workflows/ci.yml`, en cada PR y en `main`): `npm ci`, `npm audit --audit-level=high`, lint, build y pruebas con un PostgreSQL de servicio.
+- **Dependabot** (`.github/dependabot.yml`):
+  - un PR semanal de npm (menores y parches agrupados; las mayores, aparte);
+  - las GitHub Actions, cada mes;
+  - las alertas de seguridad llegan en cuanto salen.
 
 | Variable | Dónde | Para qué |
 |---|---|---|
@@ -505,6 +519,17 @@ Código en `server/db.js`.
 - **Salud:** `render.yaml` tiene `healthCheckPath: /api/salud`, así que Render no manda tráfico a una versión que no responde o no llega a la base.
 - **Carga diferida:** en `Shell.jsx` las páginas, salvo Inicio, se descargan al abrirlas (`React.lazy`). El JS inicial bajó de 409 a 262 kB (81 kB con gzip).
 - **Precomprimido:** `npm run build` corre `scripts/comprimir.js`, que guarda `.br` y `.gz` de cada archivo. `@fastify/static` (`preCompressed`) entrega la versión que acepta el navegador: el JS principal viaja en unos 70 kB. Los archivos con hash se guardan en caché un año.
+
+### Servidor de planta (Rocky Linux 10, sin internet)
+
+Paso a paso en [DESPLIEGUE_PLANTA.md](DESPLIEGUE_PLANTA.md). Cómo queda:
+- **NGINX 1.26** (`deploy/nginx-seguimiento.conf`): HTTPS en 443 con TLS 1.2/1.3 y HSTS; el 80 redirige. Reenvía todo a `127.0.0.1:3000` con `X-Forwarded-Proto` (cookie `Secure`) y `X-Forwarded-For = $remote_addr`, que reemplaza lo que mande el navegador (IP real en Registros, sin falsificar).
+- **App** (`deploy/seguimiento.service`): usuario `seguimiento` sin privilegios, `HOST=127.0.0.1`, variables en `/etc/seguimiento.env`. Disco de solo lectura (`ProtectSystem=strict`): la app guarda todo en PostgreSQL.
+- **PostgreSQL 16 local:** `DATABASE_URL` a `localhost` sin `sslmode` (la base no sale del servidor).
+- **Respaldo diario** (`deploy/respaldo.sh` + `seguimiento-respaldo.timer`, 02:30): `pg_dump` comprimido y cifrado a la carpeta de red; borra los de más de 30 días.
+- **Paquete** (`npm run paquete`): app compilada + dependencias de producción exactas, armado en una PC con internet. `deploy/instalar.sh` lo instala en `/opt/seguimiento/versiones/` y apunta `actual` a él; volver atrás = apuntar a la anterior.
+- **Fuentes:** IBM Plex va dentro de la app (`@fontsource`, subconjunto latino); ya no se pide nada a Google Fonts.
+- **Migración desde Render:** respaldo JSON del super administrador + `server/restaurar.js` (no depende de la versión de PostgreSQL).
 
 ## 16. Límites conocidos
 

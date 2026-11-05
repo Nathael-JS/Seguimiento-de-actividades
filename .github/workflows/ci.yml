@@ -1,0 +1,36 @@
+# Revisión de cada PR (y de main): mismas dependencias que producción (npm ci), sin vulnerabilidades altas, lint,
+# pruebas (con PostgreSQL de verdad) y build. Si algo falla, el PR queda en rojo antes de fusionarlo.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Vulnerabilidades (altas o críticas)
+        run: npm audit --audit-level=high
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test

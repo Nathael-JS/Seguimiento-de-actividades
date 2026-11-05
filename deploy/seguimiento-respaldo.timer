@@ -1,0 +1,10 @@
+# Respaldo diario a las 02:30. Persistent: si el servidor estaba apagado a esa hora, corre al encender
+[Unit]
+Description=Respaldo diario de Seguimiento de Actividades
+
+[Timer]
+OnCalendar=*-*-* 02:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

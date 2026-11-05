@@ -28,3 +28,6 @@ dist-ssr
 
 # Variables locales (SUPERADMINS y otras claves)
 .env
+
+# Paquetes para el servidor de planta (npm run paquete)
+seguimiento-*.tar.gz

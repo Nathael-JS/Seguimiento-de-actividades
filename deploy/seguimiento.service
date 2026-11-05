@@ -1,0 +1,24 @@
+# Servicio de la app. instalar.sh lo copia a /etc/systemd/system/
+[Unit]
+Description=Seguimiento de Actividades
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=seguimiento
+Group=seguimiento
+WorkingDirectory=/opt/seguimiento/actual
+# DATABASE_URL, SUPERADMINS, CUENTAS_PRUEBA, HOST, PORT (ver seguimiento.env.ejemplo)
+EnvironmentFile=/etc/seguimiento.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+# La app no escribe en disco: todo lo guarda en PostgreSQL
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
