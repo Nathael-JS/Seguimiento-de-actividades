@@ -1,5 +1,5 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { api, hoy, inicioDeHoy, modulosDe, rol } from './comun.js'
+import { api, cierreTurno, horas, hoy, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { Avatar, BotonIdioma, BotonTema, Logo, SiFalla } from './ui.jsx'
 import { t } from './i18n.js'
@@ -25,6 +25,9 @@ const PAGINAS = {
   perfil: lazy(() => import('./Perfil.jsx')),
 }
 
+const horaActual = () => new Date().toTimeString().slice(0, 5) // "14:05", hora local
+const OPCIONES_EXTRA = Array.from({ length: 12 }, (_, i) => (i + 1) * 30) // de 30 min a 6 h
+
 // #monitoreo?lider=10112 → 'monitoreo' (lo que va después de ? lo lee la página)
 const rutaDe = (hash) => hash.slice(1).split('?')[0] || 'inicio'
 
@@ -45,7 +48,10 @@ export default function Shell({ user, onLogout, avisoInicial }) {
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState(avisoInicial ?? '')
   const [dia, setDia] = useState(hoy)
+  const [ahora, setAhora] = useState(Date.now)
+  const [jornada, setJornada] = useState(null) // { fecha, entrada, salida, extraPlan } de hoy (o de anoche, turno 3)
   const salir = useRef(null)
+  const extra = useRef(null)
   const temporizador = useRef(null)
 
   useEffect(() => {
@@ -78,6 +84,7 @@ export default function Shell({ user, onLogout, avisoInicial }) {
       if (document.visibilityState !== 'visible') return
       recargar()
       setDia(hoy()) // si la pestaña sigue abierta al día siguiente, se vuelve a marcar la asistencia
+      setAhora(Date.now()) // el botón de salida aparece solo cuando toca
     }, 30_000)
     return () => clearInterval(id)
   }, [recargar])
@@ -97,12 +104,37 @@ export default function Shell({ user, onLogout, avisoInicial }) {
   // Asistencia: al abrir la app (y al cambiar el día con la pestaña abierta), la primera vez del día queda la entrada
   useEffect(() => {
     if (user.role === 'sa') return
-    const ahora = new Date()
-    const hora = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
-    api(`/api/asistencia/${user.no}`, { method: 'POST', body: { hoy: dia, hora } })
-      .then((r) => r.nueva && avisar(t('Bienvenido, {nombre}: asistencia checada a las {hora}.', { nombre: user.name.split(' ')[0], hora: r.entrada })))
+    api(`/api/asistencia/${user.no}`, { method: 'POST', body: { hoy: dia, hora: horaActual() } })
+      .then((r) => {
+        setJornada(r.fecha ? r : null)
+        if (r.nueva) avisar(t('Bienvenido, {nombre}: asistencia checada a las {hora}.', { nombre: user.name.split(' ')[0], hora: r.entrada }))
+      })
       .catch(() => { /* sin red: se marca la próxima vez que abra la app */ })
   }, [user, avisar, dia])
+
+  // Salida: el botón aparece 30 min antes del fin del turno y sigue ahí hasta marcarla
+  const puedeSalir = jornada && !jornada.salida && ahora >= cierreTurno(jornada.fecha, user.shift) - 30 * 60_000
+  const marcarSalida = () => {
+    api(`/api/salida/${user.no}`, { method: 'POST', body: { hoy: hoy(), hora: horaActual() } })
+      .then((r) => {
+        setJornada(r)
+        avisar(r.extra ? t('Salida marcada a las {hora}. Tiempo extra: {h} h.', { hora: r.salida, h: horas(r.extra) })
+          : r.extraPlan ? t('Salida marcada a las {hora}. El tiempo extra no cuenta: saliste antes de 15 min después del fin del turno.', { hora: r.salida })
+          : t('Salida marcada a las {hora}.', { hora: r.salida }))
+      })
+      .catch((e) => avisar(e.message))
+  }
+  const registrarExtra = (e) => {
+    e.preventDefault()
+    const minutos = Number(new FormData(e.target).get('minutos'))
+    api(`/api/extra/${user.no}`, { method: 'POST', body: { hoy: hoy(), minutos } })
+      .then((r) => {
+        setJornada(r)
+        extra.current.close()
+        avisar(t('Tiempo extra registrado: {h} h. Cuenta si marcas tu salida más de 15 min después del fin del turno.', { h: horas(minutos) }))
+      })
+      .catch((err) => avisar(err.message))
+  }
 
   async function cerrarSesion() {
     // Aunque falle la red se sale de la pantalla; la cookie se borra en la siguiente salida o al cerrar el navegador
@@ -158,6 +190,14 @@ export default function Shell({ user, onLogout, avisoInicial }) {
             <Icono nombre="menu" />
           </button>
           <div className="spacer" />
+          {puedeSalir && (
+            <div className="salida">
+              <button className="btn btn-ghost" onClick={() => extra.current.showModal()}>
+                <Icono nombre="clock" />{jornada.extraPlan ? t('Tiempo extra · {h} h', { h: horas(jornada.extraPlan) }) : t('Tiempo extra')}
+              </button>
+              <button className="btn btn-primary" onClick={marcarSalida}><Icono nombre="logout" />{t('Marcar salida')}</button>
+            </div>
+          )}
           <BotonIdioma />
           <BotonTema />
           <a className="iconbtn" href="#buzon" aria-label={t('Notificaciones')}>
@@ -176,6 +216,22 @@ export default function Shell({ user, onLogout, avisoInicial }) {
       </div>
 
       <div className="toast" role="status">{aviso && <><Icono nombre="check" />{aviso}</>}</div>
+
+      <dialog ref={extra} className="card modal" aria-labelledby="extra-titulo">
+        <form onSubmit={registrarExtra} style={{ display: 'contents' }}>
+          <h2 id="extra-titulo" className="card-title" style={{ margin: 0 }}>{t('¿Cuánto tiempo extra te quedarás?')}</h2>
+          <p className="muted">{t('Queda registrado. Al marcar tu salida cuenta lo que te quedaste de verdad (hasta lo registrado), solo si pasa de 15 min después del fin del turno.')}</p>
+          <label className="field"><span>{t('Tiempo extra')}</span>
+            <select name="minutos" key={jornada?.extraPlan} defaultValue={jornada?.extraPlan || 60}>
+              {OPCIONES_EXTRA.map((m) => <option key={m} value={m}>{horas(m)} h</option>)}
+            </select>
+          </label>
+          <div className="row end">
+            <button type="button" className="btn btn-ghost" onClick={() => extra.current.close()}>{t('Cancelar')}</button>
+            <button className="btn btn-primary">{t('Registrar')}</button>
+          </div>
+        </form>
+      </dialog>
 
       <dialog ref={salir} className="card modal" aria-labelledby="salir-titulo">
         <span className="warn-ic"><Icono nombre="alert" /></span>

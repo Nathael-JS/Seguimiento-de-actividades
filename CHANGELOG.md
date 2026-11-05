@@ -12,6 +12,27 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #27] 2026-11-05: Salida, tiempo extra registrado y Matriz mejorada
+
+### Agregado
+- **Marcar salida:** desde 30 min antes del fin del turno, en la barra de arriba (`POST /api/salida/:no`). El turno 3 la marca a la mañana siguiente sin abrir otra jornada.
+- **Tiempo extra registrado:** junto a la salida, **Tiempo extra** pide cuánto se quedará (30 min a 6 h, `POST /api/extra/:no`). Al marcar la salida se valida solo:
+  - cuenta si salió más de 15 min después del fin del turno;
+  - cuenta lo que se quedó de verdad, hasta lo registrado;
+  - sin registro no cuenta.
+- **Matriz:** vuelve la columna de tiempo extra (validado y, debajo, lo registrado); columnas ordenables; en celular, una tarjeta por persona.
+
+### Advertencias
+- **Render:** se queda en el plan gratis (se duerme tras 15 min sin uso).
+- El tiempo extra solo cuenta desde hoy: las jornadas anteriores no tienen registro.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `server/datos/pruebas/checador.json` (registros de prueba)
+- `src/Shell.jsx`, `src/Matriz.jsx`, `src/comun.js` (`horas`), `src/Icono.jsx` (`clock`), `src/index.css`, `src/en.js`
+- `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 ## [PR #26] 2026-11-05: Inicio desde 0 y dependencias al día
 
 ### Agregado

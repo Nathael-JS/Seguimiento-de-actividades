@@ -286,6 +286,17 @@ const passwordTemporal = () => `Tmp-${aBase32(randomBytes(5))}!${randomInt(10, 1
 // Turnos (en pantalla Turno 1 a 4): A matutino 07:00–15:00, B vespertino 15:00–22:30, C nocturno 22:30–07:00 y D
 // administrativo 08:00–17:30. Tras el C viene el A del día siguiente; el administrativo sigue con el administrativo
 const SIGUIENTE_TURNO = { A: 'B', B: 'C', C: 'A', D: 'D' }
+// Fin de cada turno en minutos desde la medianoche del día en que empieza (el C termina al día siguiente)
+const FIN_TURNO = { A: 15 * 60, B: 22 * 60 + 30, C: 31 * 60, D: 17 * 60 + 30 }
+const minutos = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))
+const UMBRAL_EXTRA = 15
+// Tiempo extra: solo el que el empleado registró antes de salir, y solo si se quedó más de 15 min después del fin
+// del turno; cuenta lo que se quedó de verdad, hasta lo registrado. La salida antes de la entrada es del día siguiente
+const tiempoExtra = ({ entrada, salida, extraPlan }, turno) => {
+  if (!salida || !extraPlan) return 0
+  const real = minutos(salida) + (salida < entrada ? 1440 : 0) - FIN_TURNO[turno]
+  return real > UMBRAL_EXTRA ? Math.min(real, extraPlan) : 0
+}
 const diaHabil = (fecha) => new Date(fecha).getUTCDay() % 6 !== 0 // lunes a viernes
 // Fechas AAAA-MM-DD se leen como medianoche UTC, así que sumar 24 h nunca salta ni repite un día
 const sumarDias = (fecha, n) => new Date(Date.parse(fecha) + n * 86_400_000).toISOString().slice(0, 10)
@@ -905,10 +916,37 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const { hoy, hora } = req.body
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
     if (u.role === 'sa') return { nueva: false }
+    // Turno 3 (nocturno): al abrir la app en la mañana para marcar su salida sigue en la jornada de ayer
+    const abierta = jornadaAbierta(u, hoy)
+    if (abierta && abierta.date < hoy && hora < '12:00') return { nueva: false, ...jornada(abierta) }
     const marca = checador.find((r) => r.no === u.no && r.date === hoy)
-    if (marca) return { nueva: false, entrada: marca.entrada }
-    checador.push({ no: u.no, date: hoy, entrada: hora, salida: '' }) // salida: la pondrá el checador real
-    return { nueva: true, entrada: hora }
+    if (marca) return { nueva: false, ...jornada(marca) }
+    const nueva = { no: u.no, date: hoy, entrada: hora, salida: '' } // la salida la marca con el botón
+    checador.push(nueva)
+    return { nueva: true, ...jornada(nueva) }
+  }))
+  const jornada = (r) => ({ fecha: r.date, entrada: r.entrada, salida: r.salida || null, extraPlan: r.extraPlan ?? 0 })
+  // La jornada sin salida más reciente (de hoy, o de ayer si es del turno nocturno)
+  const jornadaAbierta = (u, hoy) => checador.findLast((r) => r.no === u.no && !r.salida && (r.date === hoy || (u.shift === 'C' && r.date === sumarDias(hoy, -1))))
+  // Salida: el botón "Marcar salida" (desde 30 min antes del fin del turno). Devuelve el tiempo extra que contó
+  app.post('/api/salida/:no', { schema: asistenciaSchema }, conEmpleado((u, req, reply) => {
+    const { hoy, hora } = req.body
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    const r = jornadaAbierta(u, hoy)
+    if (!r) return reply.code(409).send({ error: sinJornada(u, hoy) })
+    r.salida = hora
+    return { ...jornada(r), extra: tiempoExtra(r, u.shift) }
+  }))
+  const sinJornada = (u, hoy) => (checador.some((x) => x.no === u.no && x.date === hoy) ? 'Ya marcaste tu salida de hoy.' : 'No hay entrada de hoy: abre la app al llegar para marcarla.')
+  // Tiempo extra que el empleado se quedará (se puede corregir hasta marcar la salida)
+  const extraSchema = { ...porEmpleado, body: objeto(['hoy', 'minutos'], { hoy: { type: 'string', format: 'date' }, minutos: { type: 'integer', minimum: 30, maximum: 720 } }) }
+  app.post('/api/extra/:no', { schema: extraSchema }, conEmpleado((u, req, reply) => {
+    const { hoy, minutos } = req.body
+    if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
+    const r = jornadaAbierta(u, hoy)
+    if (!r) return reply.code(409).send({ error: sinJornada(u, hoy) })
+    r.extraPlan = minutos
+    return jornada(r)
   }))
 
   app.post('/api/notificaciones/:no/leidas', { schema: porEmpleado }, conEmpleado((u) => {
@@ -1367,8 +1405,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   // Matriz de seguimiento del equipo entre dos fechas (hasta hoy):
   // - yield de diarias y de urgentes: realizadas ÷ las que cuentan. Las de hoy abiertas y las urgentes aún sin
   //   cerrar no cuentan todavía; una heredada cuenta una vez, en quien la recibió
-  // - asistencia según el checador, hasta ayer (la salida de hoy aún no ocurre). El tiempo extra se quitó por ahora:
-  //   se implementará después con sus reglas
+  // - tiempo extra en minutos (validado, ver tiempoExtra, y el registrado) y asistencia según el checador, hasta
+  //   ayer (la salida de hoy aún no ocurre)
   app.get('/api/matriz/:no', { schema: matrizSchema }, conEmpleado((u, req, reply) => {
     if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven a su equipo.' })
     const { desde, hoy } = req.query
@@ -1389,6 +1427,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
           no, name, role, shift, boss,
           diarias: yieldDe(suyas.filter((a) => a.prioridad !== 'urgente' && (a.status === 'done' || a.date < hoy))),
           urgentes: yieldDe(suyas.filter((a) => a.prioridad === 'urgente' && (a.status === 'done' || a.cerrada))),
+          extra: marcas.reduce((suma, r) => suma + tiempoExtra(r, shift), 0),
+          extraPlan: marcas.reduce((suma, r) => suma + (r.extraPlan ?? 0), 0),
           asistencia: [marcas.filter((r) => diaHabil(r.date)).length, habiles],
         }
       })
