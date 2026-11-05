@@ -1,6 +1,6 @@
 # Seguimiento-de-actividades
 
-> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md). Cambios de cada versión: [CHANGELOG.md](CHANGELOG.md). Pruebas manuales y lista para el deploy: [PRUEBAS.md](PRUEBAS.md).
+> Documentación técnica completa (arquitectura, librerías, módulos, API, modelo de datos, base de datos, seguridad y despliegue): [DOCUMENTACION.md](DOCUMENTACION.md). Cambios de cada versión: [CHANGELOG.md](CHANGELOG.md). Pruebas manuales y lista para el deploy: [PRUEBAS.md](PRUEBAS.md). Instalación en el servidor de planta (Rocky Linux 10, NGINX, sin internet): [DESPLIEGUE_PLANTA.md](DESPLIEGUE_PLANTA.md).
 apliacion enfocada al registro y monitoreo de actividades empresariales
 
 ## Estructura
@@ -9,6 +9,7 @@ apliacion enfocada al registro y monitoreo de actividades empresariales
 - `server/` — API con Fastify; en producción también sirve el frontend compilado (`dist/`).
 - `server/datos/inicio/` — **inicio desde 0**: una base vacía arranca sin usuarios ni departamentos; solo entran los super administradores de `SUPERADMINS`.
 - `server/datos/pruebas/` — datos de los mockups, solo para las pruebas automáticas (`DATOS_SEMILLA=pruebas`).
+- `deploy/` — servidor de planta: NGINX, servicios de systemd, respaldo diario, variables de ejemplo e `instalar.sh` (ver [DESPLIEGUE_PLANTA.md](DESPLIEGUE_PLANTA.md)).
 
 **Base de datos (PostgreSQL / Neon):** con la variable `DATABASE_URL` el servidor crea sus tablas (`usuarios`, `actividades`, `notificaciones`, `herencias`, `departamentos`, `sesiones`, `registros`, `checador`, `ids`), carga todo al arrancar y, después de cada petición a `/api/`, después de cada petición que cambia algo (no las consultas `GET`) guarda solo lo que cambió, en una transacción, antes de responder. La primera vez, con la base vacía, se llena con el inicio limpio de `server/datos/inicio/`. Para volver a ese inicio en producción: *Actions → Vaciar datos* (escribe VACIAR; antes hace un respaldo). Sin `DATABASE_URL` (en local) todo vive en memoria y se pierde al reiniciar.
 
@@ -101,6 +102,10 @@ Las rutas de login, registro, recuperar contraseña, `/api/deptos`, `/api/config
 
 - `render.yaml` — despliegue en Render.
 
+## Despliegue en el servidor de planta
+
+Rocky Linux 10.2 con NGINX 1.26 (HTTPS), Node 22 y PostgreSQL 16, sin salida a internet. El paquete se arma en una PC con internet (`npm run paquete`) y se instala con `deploy/instalar.sh`. Paso a paso, migración desde Render y operación: [DESPLIEGUE_PLANTA.md](DESPLIEGUE_PLANTA.md).
+
 ## Despliegue en Render
 
 **Primer acceso (desde 0):** el super administrador entra y en **Plantillas → Nuevo gerente** da de alta al gerente (nombre, número, correo, turno y departamento, que se crea si no existe). El gerente entra a **Crear cuenta** con su número y correo, elige su contraseña, vincula su app y carga la plantilla de su gente en Ajustes; cada persona se registra igual. Ver [PRUEBAS.md](PRUEBAS.md).
@@ -153,3 +158,4 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 - `npm start` — levanta Fastify (puerto `PORT`, 3000 por defecto).
 - `npm test` — pruebas de la API, de la plantilla y de las traducciones (todo texto de interfaz del código y del servidor debe tener su inglés en `src/en.js`). La de PostgreSQL corre solo con `TEST_DATABASE_URL` apuntando a una base de pruebas (borra sus tablas).
 - `npm run lint` — oxlint.
+- `npm run paquete` — arma `seguimiento-AAAAMMDD-commit.tar.gz` para el servidor de planta (app compilada + dependencias de producción).

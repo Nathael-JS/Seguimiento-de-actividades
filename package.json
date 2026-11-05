@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "start": "node server/index.js",
     "restaurar": "node server/restaurar.js",
-    "test": "node --test server/*.test.js src/*.test.js"
+    "test": "node --test server/*.test.js src/*.test.js",
+    "paquete": "bash scripts/paquete.sh"
   },
   "dependencies": {
     "@fastify/static": "10.1.10",
@@ -24,6 +25,8 @@
     "read-excel-file": "9.3.14"
   },
   "devDependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",

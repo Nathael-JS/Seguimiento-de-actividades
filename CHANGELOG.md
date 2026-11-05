@@ -12,23 +12,37 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
-## [PR #29] 2026-11-05: Control de versiones de las dependencias
-
-### Cambiado
-- **Versiones exactas:** `package.json` sin `^` (las mismas del lockfile) y `.npmrc` con `save-exact=true`. Node 22.
-- **Render:** construye con `npm ci && npm run build`, que instala exactamente el `package-lock.json`.
+## [PR #29] 2026-11-05: Control de versiones y servidor de planta
 
 ### Agregado
+- **Servidor de planta** (Rocky Linux 10.2, NGINX 1.26.3, PostgreSQL 16.15, Node 22, sin internet). Guía paso a paso en `DESPLIEGUE_PLANTA.md`. En `deploy/`:
+  - NGINX: HTTPS (TLS 1.2/1.3, HSTS), redirección de 80 y encabezados del proxy;
+  - servicio de systemd de la app, con usuario sin privilegios y disco de solo lectura;
+  - respaldo diario cifrado a una carpeta de red, con su timer;
+  - variables de ejemplo;
+  - `instalar.sh`, con versiones lado a lado para volver atrás.
+- **`npm run paquete`:** arma el `.tar.gz` para el servidor (app compilada + dependencias de producción exactas).
 - **CI en cada PR** (`.github/workflows/ci.yml`): `npm ci`, `npm audit` (altas y críticas), lint, build y pruebas con PostgreSQL.
 - **Dependabot:** cada lunes un PR con las actualizaciones de npm y cada mes las de GitHub Actions; las de seguridad, en cuanto salen.
+
+### Cambiado
+- **Fuentes dentro de la app:** IBM Plex sale de `@fontsource` (subconjunto latino); ya no se pide a Google Fonts. La app abre sin internet.
+- **`HOST`:** nueva variable para elegir dónde escucha la app (`127.0.0.1` en planta; sigue `0.0.0.0` por defecto para Render).
+- **Versiones exactas:** `package.json` sin `^` (las mismas del lockfile) y `.npmrc` con `save-exact=true`. Node 22.
+- **Render:** construye con `npm ci && npm run build`, que instala exactamente el `package-lock.json`.
+- **`restaurar.js` y `vaciar.js`:** sus mensajes ya no suponen Render.
 
 ### Advertencias
 - **En tu equipo:** instala con `npm ci`, no con `npm install`. Con el lockfile del repositorio, `npm audit` da 0 vulnerabilidades; si un `npm install` muestra otras, viene de versiones distintas a las del lockfile.
 - **Render:** si el servicio no se creó como Blueprint, cambiar a mano *Settings → Build Command* a `npm ci && npm run build`.
 - **GitHub:** en *Settings → Code security* activar *Dependabot alerts* y *Dependabot security updates*.
+- **Migración:** usar el respaldo JSON (Usuarios → Descargar respaldo); el `pg_dump` de Neon puede venir de una versión de PostgreSQL más nueva que la 16.
+- **NGINX solo IPv4:** si la red de planta usa IPv6, agregar las líneas `listen [::]` (nota en el archivo).
 
 ### Archivos
-- `package.json`, `package-lock.json`, `.npmrc`, `render.yaml`, `.github/workflows/ci.yml`, `.github/dependabot.yml`
+- `deploy/` (nuevo), `scripts/paquete.sh`, `DESPLIEGUE_PLANTA.md`
+- `package.json`, `package-lock.json`, `.npmrc`, `.gitignore`, `render.yaml`, `.github/workflows/ci.yml`, `.github/dependabot.yml`
+- `index.html`, `src/main.jsx`, `server/index.js`, `server/restaurar.js`, `server/vaciar.js`
 - `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
 
 ---

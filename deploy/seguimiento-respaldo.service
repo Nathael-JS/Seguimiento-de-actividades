@@ -1,0 +1,11 @@
+# Respaldo de la base; lo dispara seguimiento-respaldo.timer. A mano: systemctl start seguimiento-respaldo
+[Unit]
+Description=Respaldo de Seguimiento de Actividades
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=seguimiento
+Group=seguimiento
+EnvironmentFile=/etc/seguimiento.env
+ExecStart=/opt/seguimiento/actual/deploy/respaldo.sh

@@ -100,6 +100,22 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 
 ---
 
+## F. Servidor de planta (Rocky Linux 10)
+
+Ver [DESPLIEGUE_PLANTA.md](DESPLIEGUE_PLANTA.md), sección 8.
+
+| # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
+|---|---|---|---|---|---|
+| F1 | Salud | `curl -k https://<nombre interno>/api/salud` | `{"ok":true}` | | |
+| F2 | Redirección | Abrir `http://<nombre interno>` | Pasa a `https://` | | |
+| F3 | Certificado | Abrir la app desde un celular en el wifi de planta | Sin aviso de certificado | | |
+| F4 | Entrar | Gerente y técnico con contraseña y código | Ven sus actividades; la sesión sigue tras recargar | | |
+| F5 | IP real | Super administrador → Registros | La IP del celular, no `127.0.0.1` | | |
+| F6 | App cerrada a la red | Desde otra PC: `http://<servidor>:3000` | No responde | | |
+| F7 | Respaldo | `sudo systemctl start seguimiento-respaldo` | Archivo nuevo en la carpeta de red | | |
+| F8 | Sin internet | Navegador → DevTools → Network al abrir la app | Ninguna petición fuera del servidor (ni Google Fonts) | | |
+| F9 | Volver atrás | Instalar un paquete nuevo y apuntar `actual` a la versión anterior | La app vuelve a la versión anterior al reiniciar | | |
+
 ## Lista para el deploy completo (usuarios reales)
 
 Hazlo en este orden cuando todas las pruebas estén en ✅:
