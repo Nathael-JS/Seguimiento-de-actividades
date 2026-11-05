@@ -1,5 +1,6 @@
-// Inicio limpio: deja la base con los datos de server/datos/inicio (Laura y Jorge por registrar, Liquid Cooling)
-// y conserva a los super administradores tal como están (con su app vinculada). Borra todo lo demás.
+// Inicio desde 0: deja la base con server/datos/inicio (sin usuarios ni departamentos) y conserva a los super
+// administradores tal como están (con su app vinculada). Borra todo lo demás. Después, el super administrador da
+// de alta al primer gerente en Plantillas → Nuevo gerente.
 // Lo corre el workflow "Vaciar datos" de GitHub, que antes hace un respaldo. Después hay que reiniciar Render.
 //   DATABASE_URL=postgresql://… node server/vaciar.js VACIAR
 import { build } from './app.js'

@@ -100,7 +100,7 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 │   ├── app.js              build(): toda la API, reglas de negocio y seguridad
 │   ├── db.js               PostgreSQL: tablas, carga, guardado por diferencias, respaldo/restauración
 │   ├── restaurar.js        Script: restaurar un respaldo JSON (npm run restaurar)
-│   ├── datos/inicio/       Inicio limpio: Laura y Jorge por registrar, Liquid Cooling (base vacía)
+│   ├── datos/inicio/       Inicio desde 0: sin usuarios ni departamentos (entran los super administradores)
 │   ├── datos/pruebas/      Datos de los mockups, solo para las pruebas automáticas
 │   ├── vaciar.js           Script: inicio limpio en producción (workflow Vaciar datos)
 │   ├── actividades.json    Datos de prueba: actividades
@@ -211,6 +211,7 @@ Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mi
   - poner una contraseña temporal (se muestra una sola vez);
   - reiniciar el MFA;
   - descargar el **respaldo** completo.
+- **Nuevo gerente:** en Plantillas, el super administrador da de alta al gerente de un departamento (el primero de todos al empezar desde 0). Queda por registrar y se registra con su número y correo.
 - **Plantillas:** quién viene en cada plantilla y si ya se registró. Permite corregir el número o el correo de una fila por registrar, o quitarla. También lista los intentos de registro rechazados, con lo que escribió la persona y con quién coincide ("El número es de Rosa; en la plantilla su correo es…").
 - **Registros:** inicios de sesión, intentos fallidos y cambios de los administradores, con IP y navegador/sistema. Tiene filtros, exportación a CSV y borrado de los registros anteriores a una fecha.
 - Las acciones piden volver a escribir la contraseña del super administrador (la confirmación vale 5 min).
@@ -347,6 +348,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET · PATCH | `/api/admin/usuarios` · `/:empleado` | Super admin | Listar y editar puesto, turno y acceso |
 | POST | `/api/admin/usuarios/:empleado/password` · `/mfa` | Super admin | Contraseña temporal y reinicio del MFA |
 | POST | `/api/admin/respaldo` | Super admin | Respaldo JSON de toda la base (sin sesiones) |
+| POST | `/api/admin/gerentes` | Super admin | Dar de alta a un gerente por registrar (nombre, número, correo, turno y departamento, que se crea si no existe; uno con gerente no se le quita). Pide confirmación |
 | GET | `/api/admin/plantillas` | Super admin | Personas de las plantillas (por registrar / registradas) e intentos de registro rechazados |
 | PATCH · DELETE | `/api/admin/plantillas/:empleado` | Super admin | Corregir número o correo, o quitar, una fila por registrar (pide confirmación) |
 | GET | `/api/admin/registros` · POST `/purgar` | Super admin | Auditoría y borrar los anteriores a una fecha |
