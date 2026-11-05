@@ -51,7 +51,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B14 | Monitoreo | Monitoreo → lista y % de realizadas | Datos del equipo, detalle desplegable | | |
 | B15 | Reportes | Reportes → fechas → Exportar Excel; Exportar PDF | CSV correcto; el PDF abre **vista previa** (en celular se descarga) y *Descargar PDF* baja el archivo con logo, resumen, comparativo y detalle | | |
 | B16 | Matriz y Jerarquía | Abrir ambas | Cargan sin error | | |
-| B17 | Ajustes (solo gerente) | Cargar plantilla de ejemplo (.xlsx) | Vista previa; al cargar, las personas nuevas quedan **por registrar** (ver D7) | | |
+| B17 | Ajustes (solo gerente) | Descargar ejemplo (.xlsx), cambiar `10001` por tu número y cargarlo | Vista previa con "Turno 1 · Matutino" … "Turno 4 · Administrativo"; al cargar, las personas nuevas quedan **por registrar** (ver D7) | | |
 | B19 | Turnos | Ver Perfil, Monitoreo y el selector de turno al crear | "Turno 1 · Matutino 07:00–15:00" … "Turno 4 · Administrativo 08:00–17:30" | | |
 | B20 | Editar / borrar departamento | Ajustes → lápiz → nuevo nombre → Guardar; papelera en uno vacío | Se renombra; uno con personas no se puede borrar | | |
 | B21 | Foto de perfil | Perfil → Cambiar foto | Sale en el menú, en Perfil y en las listas del equipo | | |

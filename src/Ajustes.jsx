@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, depto, registrarDeptos, rol } from './comun.js'
+import { api, depto, registrarDeptos, rol, turnoLargo } from './comun.js'
 import Icono from './Icono.jsx'
 import { filasDePlantilla } from './plantilla.js'
 import { t } from './i18n.js'
@@ -221,7 +221,7 @@ function Plantilla({ user, deptos, alCargar, avisar }) {
                     <td className="mono">{f.fila.no}</td>
                     <td>{f.fila.name}</td>
                     <td>{f.fila.role ? rol(f.fila.role) : '—'}</td>
-                    <td>{f.fila.shift}</td>
+                    <td>{turnoLargo(f.fila.shift)}</td>
                     <td className="mono">{f.fila.boss}</td>
                     <td>{f.error ? <span className="txt-incompleta">{t(f.error)}</span> : t(f.accion === 'crear' ? 'Nueva' : 'Se actualiza')}</td>
                   </tr>
