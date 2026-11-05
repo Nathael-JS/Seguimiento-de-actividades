@@ -4,7 +4,8 @@ services:
     name: seguimiento-de-actividades
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build
+    # npm ci instala exactamente lo del package-lock.json (y falla si no coincide con package.json)
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     # Render espera a que responda antes de mandarle tráfico (y revisa que la base conteste)
     healthCheckPath: /api/salud

@@ -108,9 +108,10 @@ Hazlo en este orden cuando todas las pruebas estén en ✅:
 2. [ ] **Inicio desde 0:** GitHub → Actions → **Vaciar datos** → Run workflow → escribir `VACIAR`. Respalda y deja solo a los super administradores. Después: Render → Manual Deploy → **Restart service**.
 3. [ ] **Primer gerente:** Plantillas → Nuevo gerente; el gerente se registra y vincula su app.
 4. [ ] **Departamentos y personas:** el gerente crea o renombra departamentos (Ajustes) y carga la plantilla de Excel; cada persona se registra sola.
-5. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
-6. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
-7. [x] **Plan de Render:** se queda en el plan gratis (decidido). Se duerme tras 15 min sin uso y la primera visita tarda hasta un minuto; si eso estorba en planta, pasar a Starter.
-8. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
-9. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
+5. [ ] **Build de Render:** *Settings → Build Command* = `npm ci && npm run build`, si el servicio no se creó como Blueprint.
+6. [ ] **Revisar las variables:** `DATABASE_URL` con `sslmode=verify-full` y `SUPERADMINS`.
+7. [ ] **Respaldo antes de abrir:** Actions → Respaldo → Run workflow, y comprobar que se abre ([I-08](DOCUMENTACION.md#i-08-errores-al-revisar-un-respaldo-en-windows)).
+8. [x] **Plan de Render:** se queda en el plan gratis (decidido). Se duerme tras 15 min sin uso y la primera visita tarda hasta un minuto; si eso estorba en planta, pasar a Starter.
+9. [ ] **Registro:** solo se registra quien viene en la plantilla. Revisar en **Plantillas** que no queden intentos rechazados sin atender.
+10. [ ] **Dominio propio** (opcional): Render → Settings → Custom Domains.
 

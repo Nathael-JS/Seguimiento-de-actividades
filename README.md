@@ -115,7 +115,7 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 
 
 1. En Render: **New → Blueprint** y elige este repositorio (usa `render.yaml`).
-2. Render ejecuta `npm install && npm run build` y luego `npm start`.
+2. Render ejecuta `npm ci && npm run build` y luego `npm start`. Si el servicio se creó a mano y no como Blueprint, revisa en *Settings → Build Command* que diga `npm ci && npm run build`.
 3. El super administrador da de alta al primer gerente (Plantillas → Nuevo gerente); el gerente se registra y vincula su app autenticadora con el QR.
 
 **Base de datos en Neon:**
@@ -136,6 +136,16 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
   ```bash
   DATABASE_URL=postgresql://… npm run restaurar -- respaldo_2026-11-04.json
   ```
+
+## Dependencias y versiones
+
+- **Instalar:** `npm ci`, no `npm install`. Instala exactamente lo del `package-lock.json`, igual que Render y la CI.
+- **Versiones exactas:** en `package.json` van sin `^`, y `.npmrc` (`save-exact`) hace que `npm install <paquete>` también las guarde así.
+- **Node:** 22.
+- **CI** (`.github/workflows/ci.yml`): cada PR pasa por `npm ci`, `npm audit` (altas y críticas), lint, build y pruebas con PostgreSQL. Si algo falla, el PR queda en rojo.
+- **Dependabot** (`.github/dependabot.yml`): cada lunes abre un PR con las actualizaciones; las de seguridad llegan en cuanto salen. Se fusionan cuando la CI está en verde.
+- **Actualizar a mano una dependencia:** `npm install paquete@versión`, luego `npm test` y `npm run build`, y se suben juntos `package.json` y `package-lock.json`.
+- **No usar `npm audit fix --force`:** puede subir de versión mayor y romper el build.
 
 ## Scripts
 

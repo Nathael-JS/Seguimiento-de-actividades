@@ -12,6 +12,27 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #29] 2026-11-05: Control de versiones de las dependencias
+
+### Cambiado
+- **Versiones exactas:** `package.json` sin `^` (las mismas del lockfile) y `.npmrc` con `save-exact=true`. Node 22.
+- **Render:** construye con `npm ci && npm run build`, que instala exactamente el `package-lock.json`.
+
+### Agregado
+- **CI en cada PR** (`.github/workflows/ci.yml`): `npm ci`, `npm audit` (altas y críticas), lint, build y pruebas con PostgreSQL.
+- **Dependabot:** cada lunes un PR con las actualizaciones de npm y cada mes las de GitHub Actions; las de seguridad, en cuanto salen.
+
+### Advertencias
+- **En tu equipo:** instala con `npm ci`, no con `npm install`. Con el lockfile del repositorio, `npm audit` da 0 vulnerabilidades; si un `npm install` muestra otras, viene de versiones distintas a las del lockfile.
+- **Render:** si el servicio no se creó como Blueprint, cambiar a mano *Settings → Build Command* a `npm ci && npm run build`.
+- **GitHub:** en *Settings → Code security* activar *Dependabot alerts* y *Dependabot security updates*.
+
+### Archivos
+- `package.json`, `package-lock.json`, `.npmrc`, `render.yaml`, `.github/workflows/ci.yml`, `.github/dependabot.yml`
+- `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 ## [PR #28] 2026-11-05: Marca de autoría y plantilla con el turno 4
 
 ### Agregado

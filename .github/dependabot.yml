@@ -1,0 +1,17 @@
+# Actualizaciones vigiladas: cada lunes un PR con las dependencias nuevas (menores y parches juntos; las mayores,
+# cada una aparte). La CI las prueba antes de fusionar. Las de seguridad llegan en cuanto salen.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      menores:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

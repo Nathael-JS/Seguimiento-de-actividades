@@ -477,7 +477,16 @@ Código en `server/db.js`.
 
 ## 15. Despliegue, variables de entorno y respaldos
 
-**Render** (`render.yaml`): `npm install && npm run build`, luego `npm start` (escucha en `PORT`, en `0.0.0.0`, con `trustProxy`).
+**Render** (`render.yaml`): `npm ci && npm run build`, luego `npm start` (escucha en `PORT`, en `0.0.0.0`, con `trustProxy`).
+
+**Control de versiones de las dependencias:**
+- **Lockfile:** `package-lock.json` manda. Render, la CI y los workflows instalan con `npm ci`, que falla si el lockfile no coincide con `package.json`.
+- **Versiones exactas:** `package.json` sin `^`; `.npmrc` con `save-exact=true`. Node 22 (`engines`).
+- **CI** (`.github/workflows/ci.yml`, en cada PR y en `main`): `npm ci`, `npm audit --audit-level=high`, lint, build y pruebas con un PostgreSQL de servicio.
+- **Dependabot** (`.github/dependabot.yml`):
+  - un PR semanal de npm (menores y parches agrupados; las mayores, aparte);
+  - las GitHub Actions, cada mes;
+  - las alertas de seguridad llegan en cuanto salen.
 
 | Variable | Dónde | Para qué |
 |---|---|---|
