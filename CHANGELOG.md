@@ -14,6 +14,16 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Ajuste] 2026-11-06: Reloj del inicio de sesión centrado
+
+### Corregido
+- **Reloj del panel de inicio de sesión:** estaba colocado para salirse del panel por la derecha y se veía cortado. Ahora va centrado en su panel, entre la marca y el texto de acceso, y su tamaño se ajusta al ancho y al alto de la ventana.
+
+### Archivos
+- `src/index.css`
+
+---
+
 ## [v0.0.1 · Fase 4] 2026-11-06: Árbol de jerarquía interactivo
 
 ### Agregado

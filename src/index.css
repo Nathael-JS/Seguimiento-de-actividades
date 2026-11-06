@@ -570,7 +570,8 @@ dialog.modal.detalle{max-width:640px;max-height:calc(100dvh - 48px)}
 .dial-aguja line{stroke:var(--on-ink-deep);stroke-width:3;stroke-linecap:round}
 .dial-aguja circle{fill:var(--on-ink-deep)}
 .dial-eje{fill:var(--on-ink-deep)}
-.auth-art .dial-lateral{position:absolute;right:-140px;top:84px;width:400px;opacity:.9;pointer-events:none}
+/* Centrado en su panel, entre la marca y el texto; cabe a lo ancho y a lo alto (ventanas bajas) */
+.auth-art .dial-lateral{align-self:center;width:min(360px,82%,52vh);margin:24px 0;opacity:.9;pointer-events:none}
 
 .accesos{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:12px}
 .accesos button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;border-radius:var(--radius-lg);
