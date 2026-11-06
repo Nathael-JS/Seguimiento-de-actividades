@@ -938,3 +938,27 @@ dialog.modal.vista-pdf{max-width:1100px;width:calc(100% - 48px);height:calc(100d
 @media (prefers-reduced-motion:reduce){.emergente-tarjeta{animation:none}}
 @media (max-width:560px){.emergente{top:64px;left:16px;right:16px;width:auto}}
 @media print{.emergente{display:none}}
+
+/* Árbol interactivo (gerente): arrastrar a otro encargado, "Mover a…" y ficha al pasar el cursor */
+.nodo{position:relative}
+.nodo[draggable=true]{cursor:grab}
+.nodo[draggable=true]:active{cursor:grabbing}
+.nodo .asa{display:inline-flex;color:var(--ink-muted);margin:0 -6px 0 -4px}
+.nodo .asa svg{width:14px;height:14px;transform:rotate(90deg)}
+.nodo .mover-a-btn{width:30px;height:30px;margin-right:-6px}
+.nodo .mover-a-btn svg{width:15px;height:15px}
+.nodo.arrastrado{opacity:.45}
+.arrastrando-arbol .nodo.destino-no{opacity:.4;filter:saturate(.4)}
+.arrastrando-arbol .nodo.destino-ok{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.nodo.destino-ok.encima{background:var(--brand-soft);box-shadow:0 0 0 2px var(--brand)}
+/* Ayudantes de un líder: borde punteado y rama punteada */
+.arbol li.ayudante>.nodo{border-style:dashed;background:var(--surface-000)}
+.arbol ul>li.ayudante::after{border-top-style:dashed}
+.ayudante-chip{background:var(--status-pending-soft);color:var(--status-pending)}
+/* Ficha: aparece debajo del nodo al pasar el cursor o con el foco dentro */
+.nodo-ficha{position:absolute;left:0;top:calc(100% + 6px);z-index:30;min-width:240px;display:none;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-100);box-shadow:var(--shadow-pop);font-size:13px;line-height:18px;white-space:nowrap}
+.nodo-ficha .muted{display:inline-block;min-width:150px;font-size:12px}
+.nodo:hover>.nodo-ficha,.nodo:has(:focus-visible)>.nodo-ficha{display:flex}
+.arrastrando-arbol .nodo-ficha{display:none!important}
+@media (hover:none){.nodo-ficha{display:none!important}}
+@media (prefers-reduced-motion:no-preference){.nodo{transition:opacity .15s,box-shadow .15s,border-color .15s,background .15s}}

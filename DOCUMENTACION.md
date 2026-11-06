@@ -203,7 +203,11 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
   - **Entrada:** la primera vez del día que la persona abre la app (aviso "Bienvenido…").
   - **Salida:** desde 30 min antes del fin del turno aparecen en la barra de arriba **Tiempo extra** y **Marcar salida**; siguen ahí hasta marcarla. El turno 3 marca su salida a la mañana siguiente sobre la jornada de la noche anterior.
   - **Tiempo extra:** primero se **registra** cuánto se quedará (de 30 min a 6 h; se puede corregir hasta marcar la salida). Al marcar la salida se valida solo: cuenta si salió **más de 15 min** después del fin del turno, y cuenta lo que se quedó de verdad, **hasta lo registrado**. Sin registro o sin salida marcada no cuenta.
-- **Jerarquía:** árbol de quién reporta a quién.
+- **Jerarquía:** árbol de quién reporta a quién, con los **ayudantes** de cada líder (borde punteado).
+  - **El gerente lo reorganiza:** arrastra a una persona sobre su nuevo encargado (Full, Senior o gerente que pueda tenerla a su cargo), o usa **Mover a…** (teclado y celular, solo destinos válidos). Mientras arrastra, los destinos válidos se marcan y los demás se atenúan.
+  - **Técnico ↔ Ing. Jr:** soltar uno sobre el otro lo deja como **ayudante** (no cambia su encargado).
+  - **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y cuántos ayudantes tiene.
+  - A la persona movida le llega el aviso "… te movió: ahora reportas a …".
 - **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
 - **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
   - **Plantilla del departamento:** la plantilla cargada, con estado (registrada o por registrar). **Agregar persona** (alguien que faltó en el Excel) y **Editar** mandan una fila por la misma carga de plantilla: mismas reglas. La persona nueva queda por registrar.
@@ -264,7 +268,7 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | `Monitoreo.jsx` | `Monitoreo`, `Detalle` | Monitoreo del equipo |
 | `Reportes.jsx` | `Reportes`, `Comparativo` | Reportes y comparativo |
 | `Matriz.jsx` | `Matriz`, `Celda`, `Extra` | Matriz de seguimiento |
-| `Jerarquia.jsx` | `Jerarquia`, `Rama`, `Nodo` | Árbol del equipo |
+| `Jerarquia.jsx` | `Jerarquia`, `Rama`, `Nodo`, `Ficha`, `MoverA` | Árbol del equipo; el gerente lo reorganiza (arrastrar o Mover a…) |
 | `Departamentos.jsx` | `Departamentos` | Plantilla y rate |
 | `Ajustes.jsx` | `Ajustes`, `NuevoDepto`, `Plantilla` | Departamentos del gerente |
 | `Buzon.jsx` | `Buzon` | Notificaciones por grupo y día |
@@ -352,6 +356,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | PATCH · DELETE | `/api/departamentos/:clave` | Gerente que lo dirige | Renombrar; borrar si no tiene personas |
 | DELETE | `/api/notificaciones/:no` | Propio | Borrar el historial de notificaciones (los avisos automáticos no vuelven) |
 | GET | `/api/equipo/:no` | Encargado | Su gente con sus actividades vigentes y los `ayudantes` de cada líder (el gerente viene primero, él mismo) |
+| PATCH | `/api/jerarquia/:empleado` | Gerente | `{ por, a }`: lo pone bajo `a` (alguien de su gente o él mismo) si `lidera`; entre técnico e Ing. Jr lo deja como ayudante. Nunca debajo de su propia rama. Pasa al departamento de su encargado. Avisa a quien se mueve |
 | PUT | `/api/lideres/:lider/ayudantes` | Quien tiene al líder a su cargo | `{ por, ayudantes: [no] }`: la lista completa de ayudantes (técnicos e Ing. Jr de sus departamentos). Avisa a quien entra |
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |

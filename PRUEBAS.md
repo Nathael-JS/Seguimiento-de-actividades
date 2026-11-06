@@ -64,6 +64,10 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B21 | Foto de perfil | Perfil → Cambiar foto | Sale en el menú, en Perfil y en las listas del equipo | | |
 | B22 | Matriz | Matriz de seguimiento; tocar el encabezado *Tiempo extra* | Yield, tiempo extra ("1:00 h · de 1:00 h registradas") y asistencia; se ordena de mayor a menor (otro toque, al revés). En celular, una tarjeta por persona | | |
 | B30 | Aviso emergente | Con dos cuentas: el gerente asigna algo; en la otra cuenta esperar hasta 30 s o cambiar de pantalla | Aparece "Nueva notificación" arriba a la derecha (en celular, arriba); al tocarla abre la actividad | | |
+| B31 | Árbol: mover | Jerarquía → arrastrar a un técnico sobre otro Full | Se marca dónde se puede soltar; queda bajo el nuevo Full; al técnico le llega el aviso | | |
+| B32 | Árbol: ayudante | Arrastrar a un técnico sobre un Ing. Jr | Aparece con borde punteado bajo el Jr, con la etiqueta Ayudante | | |
+| B33 | Árbol: no válido | Arrastrar a un Full sobre otro Full | Ese destino se ve atenuado y no se acepta | | |
+| B34 | Árbol: ficha y celular | Pasar el cursor sobre alguien; en celular, botón ⇄ → Mover a… | Ficha con encargado, líder y actividades; en celular, solo destinos válidos | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |
 
 ## C. Jr / Técnico (`10482` o `10490`)

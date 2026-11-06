@@ -235,6 +235,28 @@ test('kanban: el encargado cambia el estado de las actividades de su gente y se 
   assert.deepEqual([aviso.for, aviso.kind, aviso.who], ['10482', 'progress', '10230'])
 })
 
+test('árbol: el gerente mueve a su gente bajo otro encargado; técnico sobre Jr = ayudante; sin ciclos', async () => {
+  const app = build()
+  const mover = (por, no, a) => pedir(app, 'PATCH', `/api/jerarquia/${no}`, { por, a })
+  const u = (no) => app.estado.usuarios.find((x) => x.no === no)
+  assert.equal((await mover('10230', '10482', '10251')).code, 403) // solo un gerente
+  assert.equal((await mover('10001', '10604', '10230')).code, 403) // Ricardo no es de Laura
+  // Jorge (técnico de Diego) pasa con Sofía (Full): cambia su encargado y se le avisa
+  assert.equal((await mover('10001', '10482', '10251')).body.boss, '10251')
+  assert.equal(u('10482').boss, '10251')
+  assert.ok(app.estado.notificaciones.some((n) => n.for === '10482' && n.kind === 'jerarquia' && n.nuevo === '10251'))
+  // Un Full no puede quedar a cargo de otro Full; un Senior no puede ir debajo de su propia rama
+  assert.equal((await mover('10001', '10230', '10251')).code, 400)
+  assert.equal((await mover('10001', '10112', '10230')).code, 400)
+  // Técnico sobre Ing. Jr: queda como su ayudante, sin cambiar su encargado
+  const r = await mover('10001', '10511', '10490')
+  assert.deepEqual(r.body, { no: '10511', ayudanteDe: '10490' })
+  assert.equal(u('10511').boss, '10251')
+  assert.deepEqual(u('10490').ayudantes, ['10511'])
+  // Un Full pasa directo con la gerente
+  assert.equal((await mover('10001', '10230', '10001')).body.boss, '10001')
+})
+
 test('registrar crea una actividad por punto, pendiente, y notifica al ejecutor', async () => {
   const app = build()
   const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar())

@@ -918,6 +918,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
             whoNo: n.who, // para su foto
             actividad: a?.text ?? n.texto, // una eliminada ya no existe: el aviso guarda su texto
             motivo: n.motivo,
+            nuevo: n.nuevo && empleado(n.nuevo)?.name, // jerarquía: su nuevo encargado
             activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
             urgente: a?.prioridad === 'urgente',
             count: n.count,
@@ -1019,6 +1020,37 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     for (const no of ayudantes) if (!lider.ayudantes?.includes(no)) notificar({ for: no, kind: 'ayudante', who: lider.no })
     lider.ayudantes = ayudantes
     return ayudantesDe(lider).map(({ no, name, role, shift }) => ({ no, name, role, shift }))
+  })
+
+  // Árbol de jerarquía: el gerente mueve a alguien de su gente bajo otro encargado (Full, Senior o gerente que pueda
+  // tenerlo a su cargo). Entre técnico e Ing. Jr no hay encargado: soltar uno sobre el otro lo deja como su ayudante.
+  // Nunca debajo de su propia rama (ciclo). Se le avisa a quien se mueve
+  const moverSchema = {
+    params: { type: 'object', properties: { empleado: noEmpleado } },
+    body: objeto(['por', 'a'], { por: noEmpleado, a: noEmpleado }),
+  }
+  app.patch('/api/jerarquia/:empleado', { schema: moverSchema }, async (req, reply) => {
+    const { por, a } = req.body
+    const yo = empleado(por)
+    if (yo.role !== 'gte') return reply.code(403).send({ error: 'Solo un gerente reorganiza la jerarquía.' })
+    const u = empleado(req.params.empleado)
+    const suya = equipo(por)
+    if (!u || !suya.some((e) => e.no === u.no)) return reply.code(403).send({ error: 'Esa persona no está a tu cargo.' })
+    const destino = a === por ? yo : suya.find((e) => e.no === a)
+    if (!destino || destino.no === u.no) return reply.code(400).send({ error: 'Elige a alguien de tu equipo.' })
+    if (equipo(u.no).some((e) => e.no === destino.no)) return reply.code(400).send({ error: 'No puede quedar debajo de alguien de su propio equipo.' })
+    if (RANGO[u.role] === 3 && RANGO[destino.role] === 3) {
+      if (!destino.ayudantes?.includes(u.no)) destino.ayudantes = [...(destino.ayudantes ?? []), u.no]
+      notificar({ for: u.no, kind: 'ayudante', who: destino.no })
+      return { no: u.no, ayudanteDe: destino.no }
+    }
+    if (!lidera(destino.role, u.role)) return reply.code(400).send({ error: 'Ese puesto no puede tenerlo a su cargo: un Full lleva técnicos e Ing. Jr; un Senior, además Full; un gerente, a todos.' })
+    if (u.boss === destino.no) return { no: u.no, boss: u.boss }
+    u.boss = destino.no
+    // Pasa al departamento de su encargado (un gerente puede dirigir varios: se queda en el suyo si es de él)
+    if (!(destino.role === 'gte' && deptosDe(destino.no).includes(u.dept))) u.dept = destino.dept
+    notificar({ for: u.no, kind: 'jerarquia', who: por, nuevo: destino.no })
+    return { no: u.no, boss: u.boss }
   })
 
   app.post('/api/actividades', { schema: registrarSchema }, async (req, reply) => {

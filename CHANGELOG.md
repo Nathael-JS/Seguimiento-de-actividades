@@ -14,6 +14,23 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Fase 4] 2026-11-06: Árbol de jerarquía interactivo
+
+### Agregado
+- **Jerarquía interactiva (gerente):**
+  - arrastra a una persona sobre su nuevo encargado (Full, Senior o gerente que pueda tenerla a su cargo);
+  - mientras arrastra, los destinos válidos se marcan y los demás se atenúan;
+  - **Mover a…** hace lo mismo con teclado y en celular, con solo destinos válidos;
+  - soltar un técnico sobre un Ing. Jr (o al revés) lo deja como su **ayudante**;
+  - la persona movida pasa al departamento de su encargado y recibe un aviso (`PATCH /api/jerarquia/:empleado`).
+- **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y ayudantes.
+- **Ayudantes en el árbol:** con borde punteado bajo su líder.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Jerarquia.jsx`, `src/ui.jsx`, `src/index.css`, `src/en.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 ## [v0.0.1 · Fase 3] 2026-11-06: Aviso emergente de notificaciones
 
 ### Agregado
