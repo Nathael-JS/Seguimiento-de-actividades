@@ -72,7 +72,7 @@ export function Notificacion({ n }) {
   if (n.kind === 'urgente') return <>{quien} {t('marcó como urgente')} “{n.actividad}”</>
   if (n.kind.startsWith('solicitud')) {
     const datos = { actividad: n.actividad, columna: columnaTablero(n.columna) }
-    const texto = { solicitud: 'pide mover “{actividad}” a {columna}: valídalo en el Tablero', 'solicitud-ok': 'aprobó mover “{actividad}” a {columna}', 'solicitud-no': 'no aprobó mover “{actividad}” a {columna}' }[n.kind]
+    const texto = { solicitud: 'pide mover “{actividad}” a {columna}: valídalo en el Kanban', 'solicitud-ok': 'aprobó mover “{actividad}” a {columna}', 'solicitud-no': 'no aprobó mover “{actividad}” a {columna}' }[n.kind]
     return <>{quien} {t(texto, datos)}</>
   }
   if (n.kind === 'herencia-pendiente') return <>{quien} {t('propone heredar')} “{n.actividad}” {t('a alguien de tu equipo: valídala')}</>

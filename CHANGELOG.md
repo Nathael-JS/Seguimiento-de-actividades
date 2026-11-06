@@ -26,6 +26,10 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 - **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y ayudantes.
 - **Ayudantes en el árbol:** con borde punteado bajo su líder.
 
+### Corregido
+- **Aviso de solicitud de criticidad:** decía "valídalo en el Tablero" y el menú ahora dice Kanban; ahora dice "valídalo en el Kanban".
+- **Traducciones sin uso:** se quitaron las seis del Tablero por criticidad.
+
 ### Archivos
 - `server/app.js`, `server/app.test.js`, `src/Jerarquia.jsx`, `src/ui.jsx`, `src/index.css`, `src/en.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
 
