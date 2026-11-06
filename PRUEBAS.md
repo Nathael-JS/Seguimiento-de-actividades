@@ -86,6 +86,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | D8 | Intento rechazado | (después de A9) Plantillas → Intentos rechazados | Fila con número y correo escritos y la coincidencia ("El número es de…; en la plantilla su correo es…") | | |
 | D9 | Corregir plantilla | Corregir el correo de esa persona → Guardar (pide tu contraseña) | Ya puede registrarse con el correo corregido | | |
 | D10 | Errores en Registros | Registros → filtro "Error del servidor" / "Error en el navegador" | Si hubo errores, aparecen con su código | | |
+| D11 | Cuentas de prueba | Usuarios → Cuentas de prueba (pide tu contraseña) | Aviso con 80001, 80002 y 80003; entran con `demo1234` sin código. Con `CUENTAS_PRUEBA=no`: "Las cuentas de prueba están apagadas…" | | |
 | D6 | Respaldo | Usuarios → Descargar respaldo | Descarga un JSON; queda en Registros | | |
 
 ## E. Producción (Render y Neon)

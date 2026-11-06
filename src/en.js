@@ -638,6 +638,10 @@ export default {
   'aprobó mover “{actividad}” a {columna}': 'approved moving “{actividad}” to {columna}',
   'no aprobó mover “{actividad}” a {columna}': 'did not approve moving “{actividad}” to {columna}',
   'Respaldo descargado. Guárdalo en un lugar seguro: trae contraseñas cifradas y secretos del MFA.': 'Backup downloaded. Keep it somewhere safe: it contains hashed passwords and MFA secrets.',
+  'Cuentas de prueba': 'Test accounts',
+  'Cuentas de prueba listas: 80001 gerente, 80002 técnico y 80003 Ing. Jr, contraseña demo1234.': 'Test accounts ready: 80001 manager, 80002 technician and 80003 Jr. Eng., password demo1234.',
+  'Las cuentas de prueba están apagadas: quita CUENTAS_PRUEBA=no en el servidor y reinícialo.': 'Test accounts are turned off: remove CUENTAS_PRUEBA=no on the server and restart it.',
+  'Un número o correo de las cuentas de prueba ya es de una cuenta real.': 'A test account number or email already belongs to a real account.',
   'Descargar respaldo': 'Download backup',
   'agregó {n} tareas, entre ellas': 'added {n} tasks, including',
   // Recurrentes, edición y tareas guardadas
