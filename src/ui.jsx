@@ -67,6 +67,7 @@ export function Notificacion({ n }) {
   }
   if (n.kind === 'editada') return <>{quien} {t('editó')} “{n.actividad}”</>
   if (n.kind === 'eliminada') return <>{quien} {t('eliminó')} “{n.actividad}”: {n.motivo}</>
+  if (n.kind === 'urgente-reabierta') return <>{quien} {t('reabrió tu urgente')} “{n.actividad}”: {n.motivo}</>
   if (n.kind === 'jerarquia') return <>{quien} {t('te movió: ahora reportas a')} {n.nuevo}</>
   if (n.kind === 'ayudante') return <>{quien} {t('te tiene como ayudante: ya puede asignarte actividades')}</>
   if (n.kind === 'urgente') return <>{quien} {t('marcó como urgente')} “{n.actividad}”</>

@@ -30,10 +30,10 @@ export default function Jerarquia({ user, avisar }) {
   const rama = (no, vistos = new Set([no])) => hijos(no).filter((e) => !vistos.has(e.no))
     .flatMap((e) => { vistos.add(e.no); return [e, ...rama(e.no, vistos)] })
   const liderDe = (no) => equipo.find((e) => e.ayudantes?.includes(no))
-  // Dónde se puede soltar a alguien: no en sí mismo ni en su rama; técnico ↔ Ing. Jr = ayudante; si no, la regla de puesto
+  // Dónde se puede soltar a alguien: no en sí mismo ni en su rama; técnico ↔ Ing. Jr = ayudante (no uno del otro); si no, la regla de puesto
   const puedeSoltar = (p, destino) => p && destino && p.no !== destino.no && p.boss !== destino.no &&
     !rama(p.no).some((e) => e.no === destino.no) &&
-    ((p.role === 'tec' || p.role === 'jr') && (destino.role === 'tec' || destino.role === 'jr') ? !destino.ayudantes?.includes(p.no) : lidera(destino.role, p.role))
+    ((p.role === 'tec' || p.role === 'jr') && (destino.role === 'tec' || destino.role === 'jr') ? !destino.ayudantes?.includes(p.no) && !p.ayudantes?.includes(destino.no) : lidera(destino.role, p.role))
 
   async function mover(p, destino) {
     setArrastrado(null)

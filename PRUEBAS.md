@@ -70,6 +70,12 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B33 | Árbol: no válido | Arrastrar a un Full sobre otro Full | Ese destino se ve atenuado y no se acepta | | |
 | B36 | Árbol: revertir | Mover a alguien → Revertir | Vuelve con su encargado anterior; la barra desaparece | | |
 | B37 | Organigrama | Jerarquía en una pantalla ancha; tocar "N directos" | De arriba abajo con conectores; la rama se pliega y despliega | | |
+| B38 | Pantalla ancha | Abrir Inicio, Kanban y Monitoreo en un monitor ancho | Las páginas llenan el ancho, sin franja vacía a la derecha | | |
+| B39 | Crear urgente | Kanban → + → Criticidad: Urgente | Aparece la nota de cómo funcionan; sin Repetir; la tarjeta sale con la etiqueta Urgente | | |
+| B40 | Revisar urgente vencida | Con 80001: tarjeta "Reparar fuga en la válvula V-3" en Incompleta → motivo → Reabrir / Dejar cerrada / Eliminar | Reabrir: vuelve a Pendiente y le llega el aviso al técnico. Eliminar: sale del tablero y aparece tachada en Historial | | |
+| B41 | Historial | Monitoreo → Historial | Realizadas, cerradas y eliminadas de los últimos 30 días | | |
+| B42 | Conversación | Monitoreo → Lista → tocar el título de una actividad → escribir y Ctrl + Enter | El mensaje queda a la derecha; al técnico y a su encargado les llega el aviso | | |
+| B43 | Ayudantes cruzados | Jerarquía: soltar al técnico sobre el junior y luego al junior sobre el técnico | El segundo no se permite (no se marca como destino) | | |
 | B34 | Árbol: ficha y celular | Pasar el cursor sobre alguien; en celular, botón ⇄ → Mover a… | Ficha con encargado, líder y actividades; en celular, solo destinos válidos | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |
 

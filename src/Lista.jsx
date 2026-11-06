@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { ESTADOS, PESO_CRITICIDAD, criticidad, dia, estado as nombreEstado, hace, nombreTurno, pctRealizadas } from './comun.js'
 import { t } from './i18n.js'
 import { Anillo, Avatar, Estado } from './ui.jsx'
+import Icono from './Icono.jsx'
 
 // Lista de actividades (como la vista de lista de SharePoint): una fila por actividad, lo urgente y lo más
 // crítico arriba. Con cambiarEstado (Mis actividades) el estado se cambia ahí mismo
 const peso = (a) => (a.prioridad === 'urgente' && !a.cerrada ? 10 : PESO_CRITICIDAD[a.criticidad ?? 'normal'])
 const orden = (x, y) => (x.status === 'done') - (y.status === 'done') || peso(y) - peso(x) || x.date.localeCompare(y.date) || x.id - y.id
 
-export function ListaActividades({ filas, nombres, conPersona = false, cambiarEstado }) {
+// abrir: con él, el título de cada actividad abre su panel con la conversación
+export function ListaActividades({ filas, nombres, conPersona = false, cambiarEstado, abrir }) {
   const COLUMNAS = ['Actividad', 'Prioridad', 'Estado', ...(conPersona ? ['Asignada a'] : []), 'Fecha', 'Creada', 'Creada por']
   if (!filas.length) return <section className="card empty">{t('No hay actividades en esta vista.')}</section>
   return (
@@ -19,7 +21,9 @@ export function ListaActividades({ filas, nombres, conPersona = false, cambiarEs
           {[...filas].sort(orden).map((a) => (
             <tr key={a.id} className={a.status === 'done' ? 'hecha' : ''}>
               <th scope="row">
-                <span className="titulo">{a.text}</span>
+                {abrir
+                  ? <button type="button" className="titulo enlace" onClick={() => abrir(a)}>{a.text}{a.comentarios?.length > 0 && <span className="conv-cuenta" title={t('Comentarios')}><Icono nombre="chat" />{a.comentarios.length}</span>}</button>
+                  : <span className="titulo">{a.text}</span>}
                 {a.mgr && <span className="meta">{a.mgr}</span>}
               </th>
               <td><Prioridad a={a} /></td>
