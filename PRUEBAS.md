@@ -39,7 +39,8 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B2 | Minimizar paneles | Flecha de "Notificaciones recientes" y recargar | Queda solo la barra con su nombre, también tras recargar | | |
 | B3 | Crear en el Kanban | Kanban → + (Pendiente) → empleado, 2 renglones → Crear 2 | Aparecen 2 tarjetas en Pendiente con la etiqueta "Por clasificar"; al empleado le llega el aviso | | |
 | B23 | Mover de estado | Arrastrar una tarjeta a En proceso (o ⋯ → Mover a) | Queda en En proceso; al empleado le llega el aviso | | |
-| B24 | Filtro de criticidad | Chips arriba del Kanban → Alta | Solo las de criticidad Alta | | |
+| B24 | Filtro de criticidad | Desplegable Criticidad arriba del Kanban → Alta | Solo las de criticidad Alta | | |
+| B35 | Nuevas actividades | Kanban → + → crear → ⋯ → Criticidad → Alta | Nace en Nuevas actividades; al clasificarla pasa a Pendiente | | |
 | B25 | Asignarse una tarea | Kanban → + → elegirse a sí mismo | Se crea; no llega aviso a sí mismo | | |
 | B26 | Eliminar con motivo | ⋯ → Eliminar → escribir el motivo → Sí, eliminar | Al empleado le llega "… eliminó «…»: motivo" | | |
 | B27 | Ayudantes | Inicio → Avance por líder → Asignar ayudante → marcar un técnico → Guardar | El botón dice "1 ayudante"; el líder lo ve en Monitoreo y le puede asignar; al técnico le llega el aviso | | |
@@ -67,6 +68,8 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B31 | Árbol: mover | Jerarquía → arrastrar a un técnico sobre otro Full | Se marca dónde se puede soltar; queda bajo el nuevo Full; al técnico le llega el aviso | | |
 | B32 | Árbol: ayudante | Arrastrar a un técnico sobre un Ing. Jr | Aparece con borde punteado bajo el Jr, con la etiqueta Ayudante | | |
 | B33 | Árbol: no válido | Arrastrar a un Full sobre otro Full | Ese destino se ve atenuado y no se acepta | | |
+| B36 | Árbol: revertir | Mover a alguien → Revertir | Vuelve con su encargado anterior; la barra desaparece | | |
+| B37 | Organigrama | Jerarquía en una pantalla ancha; tocar "N directos" | De arriba abajo con conectores; la rama se pliega y despliega | | |
 | B34 | Árbol: ficha y celular | Pasar el cursor sobre alguien; en celular, botón ⇄ → Mover a… | Ficha con encargado, líder y actividades; en celular, solo destinos válidos | | |
 | B18 | Buzón | Marcar todo como leído; Borrar historial → Sí | Contador en 0; Buzón vacío | | |
 
@@ -98,7 +101,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | D8 | Intento rechazado | (después de A9) Plantillas → Intentos rechazados | Fila con número y correo escritos y la coincidencia ("El número es de…; en la plantilla su correo es…") | | |
 | D9 | Corregir plantilla | Corregir el correo de esa persona → Guardar (pide tu contraseña) | Ya puede registrarse con el correo corregido | | |
 | D10 | Errores en Registros | Registros → filtro "Error del servidor" / "Error en el navegador" | Si hubo errores, aparecen con su código | | |
-| D11 | Cuentas de prueba | Usuarios → Cuentas de prueba (pide tu contraseña) | Aviso con 80001, 80002 y 80003; entran con `demo1234` sin código. Con `CUENTAS_PRUEBA=no`: "Las cuentas de prueba están apagadas…" | | |
+| D11 | Cuentas de prueba | Usuarios → Cuentas de prueba (pide tu contraseña) | Aviso con 80001, 80004, 80002 y 80003 (el Full a cargo del técnico y el junior, con actividades de muestra); entran con `demo1234` sin código. Con `CUENTAS_PRUEBA=no`: "Las cuentas de prueba están apagadas…" | | |
 | D6 | Respaldo | Usuarios → Descargar respaldo | Descarga un JSON; queda en Registros | | |
 
 ## E. Producción (Render y Neon)

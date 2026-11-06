@@ -253,6 +253,11 @@ test('árbol: el gerente mueve a su gente bajo otro encargado; técnico sobre Jr
   assert.deepEqual(r.body, { no: '10511', ayudanteDe: '10490' })
   assert.equal(u('10511').boss, '10251')
   assert.deepEqual(u('10490').ayudantes, ['10511'])
+  // Se revierte quitándolo de los ayudantes del Jr (lo que hace "Revertir" en el árbol)
+  assert.deepEqual((await pedir(app, 'PUT', '/api/lideres/10490/ayudantes', { por: '10001', ayudantes: [] })).body, [])
+  assert.deepEqual(u('10490').ayudantes, [])
+  // Y un cambio de encargado se revierte moviéndolo de vuelta
+  assert.equal((await mover('10001', '10482', '10230')).body.boss, '10230')
   // Un Full pasa directo con la gerente
   assert.equal((await mover('10001', '10230', '10001')).body.boss, '10001')
 })
@@ -1371,10 +1376,13 @@ test('cuentas de prueba: el super administrador las crea o reactiva; entran con 
   const crear = () => adm('POST', '/api/admin/cuentas-prueba', { por: '90001' })
   assert.equal((await crear()).body.confirmar, true)
   await confirmar()
-  assert.deepEqual((await crear()).body.map((u) => [u.no, u.role, u.boss, u.prueba]), [['80001', 'gte', null, true], ['80002', 'tec', '80001', true], ['80003', 'jr', '80001', true]])
-  assert.equal((await crear()).code, 200) // otra vez: se reactivan, sin duplicar
-  assert.equal(app.estado.usuarios.filter((u) => u.no.startsWith('8000')).length, 3)
-  for (const no of ['80001', '80002', '80003']) assert.ok((await login({ usuario: no, password: 'demo1234' }, app)).json().name)
+  assert.deepEqual((await crear()).body.map((u) => [u.no, u.role, u.boss, u.prueba]), [['80001', 'gte', null, true], ['80004', 'full', '80001', true], ['80002', 'tec', '80004', true], ['80003', 'jr', '80004', true]])
+  const muestra = () => app.estado.actividades.filter((a) => a.to.startsWith('8000')).length
+  assert.equal(muestra(), 5) // actividades de muestra para ver el Kanban con datos
+  assert.equal((await crear()).code, 200) // otra vez: se reactivan, sin duplicar cuentas ni actividades
+  assert.equal(app.estado.usuarios.filter((u) => u.no.startsWith('8000')).length, 4)
+  assert.equal(muestra(), 5)
+  for (const no of ['80001', '80004', '80002', '80003']) assert.ok((await login({ usuario: no, password: 'demo1234' }, app)).json().name)
   // Apagadas por el servidor: no se crean
   const off = build({ superadmins: [SA], cuentasPrueba: false })
   const sa = cookieDe(await entrar(SA.email, SA.password, off))

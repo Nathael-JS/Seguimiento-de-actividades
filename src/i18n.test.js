@@ -10,7 +10,8 @@ const IGUALES = new Set(['Liquid Cooling', 'SMT', 'Laura Méndez', 'Jorge Salina
   // Navegadores y sistemas (registros) y el área de los super administradores (dato, no interfaz)
   'Edge', 'Opera', 'Firefox', 'Chrome', 'Safari', 'Windows', 'Android', 'Linux', 'Administración',
   // Cuentas de prueba (datos)
-  'Gerente Prueba', 'Técnico Prueba', 'Junior Prueba', 'Pruebas'])
+  'Gerente Prueba', 'Full Prueba', 'Técnico Prueba', 'Junior Prueba', 'Pruebas', 'Revisar indicadores del turno',
+  'Revisar presión del circuito de enfriamiento', 'Cambiar filtro de la estación 2', 'Actualizar la hoja de WIP', 'Prueba de fuga en la unidad de muestra'])
 
 // Todo texto entre comillas que parezca de interfaz en español: empieza con mayúscula (o ¿ ¡) y tiene palabras.
 // Así entran también los de constantes (SLIDES, FILTROS…), los de condiciones (t(a ? 'x' : 'y')) y los errores

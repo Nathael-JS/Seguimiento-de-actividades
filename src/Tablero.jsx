@@ -11,6 +11,9 @@ import { t } from './i18n.js'
 //   las solicitudes de cambio de criticidad de su equipo.
 // - Técnico / Ing. Jr: ve solo las suyas, las agrega y cambia su estado; la criticidad la pide a su encargado
 const COLUMNAS = ['pending', 'progress', 'done', 'incomplete'] // los estados
+// Primera columna: Nuevas actividades (se crean con +). Guarda las pendientes que aún no tienen criticidad; al
+// clasificarlas pasan a Pendiente
+const columnaKanban = (a) => (a.status === 'pending' && columnaDe(a) === 'nueva' ? 'nueva' : a.status)
 const CRITICIDADES_TABLERO = ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente']
 const NIVELES = ['simple', 'normal', 'alta', 'critica'] // criticidades de una tarea guardada
 const columnaDe = (a) => (a.prioridad === 'urgente' ? 'urgente' : a.criticidad ?? 'normal')
@@ -212,18 +215,18 @@ export default function Tablero({ user, recargar, avisar }) {
         </span>
       </div>
       <p className="meta">{dia(semana)} – {dia(domingo)} · {t(deLaSemana.length === 1 ? '{n} actividad' : '{n} actividades', { n: deLaSemana.length })}</p>
-      <div className="filtro-crit" role="group" aria-label={t('Filtrar por criticidad')}>
-        {['', ...CRITICIDADES_TABLERO].map((c) => (
-          <button key={c || 'todas'} type="button" className="chip-col" data-crit={c || undefined} aria-pressed={filtro === c} onClick={() => setFiltro(c)}>
-            {c ? nombreColumna(c) : t('Todas')}
-          </button>
-        ))}
-      </div>
+      <label className="filtro-crit">
+        <span>{t('Criticidad')}</span>
+        <select value={filtro} onChange={(e) => setFiltro(e.target.value)} data-crit={filtro || undefined}>
+          <option value="">{t('Todas')}</option>
+          {CRITICIDADES_TABLERO.map((c) => <option key={c} value={c}>{nombreColumna(c)}</option>)}
+        </select>
+      </label>
       <Guardadas lista={guardadas} usar={(g) => setUsar({ g, n: Date.now() })} quitar={quitarGuardada} />
 
       <div className="tablero">
-        {COLUMNAS.map((c) => {
-          const tarjetas = deLaSemana.filter((a) => a.status === c).sort(orden)
+        {['nueva', ...COLUMNAS].map((c) => {
+          const tarjetas = deLaSemana.filter((a) => columnaKanban(a) === c).sort(orden)
           return (
             <section key={c} className={`columna col-${c}${encima === c ? ' encima' : ''}`} aria-labelledby={`col-${c}`}
               onDragOver={(e) => { e.preventDefault(); setEncima(c) }} onDragLeave={() => setEncima(null)}
@@ -231,11 +234,12 @@ export default function Tablero({ user, recargar, avisar }) {
                 e.preventDefault()
                 setEncima(null)
                 const a = acts.find((x) => x.id === Number(e.dataTransfer.getData('text/plain')))
-                if (a) cambiarEstado(a, c)
+                // Soltar en Nuevas actividades le quita la criticidad (solo a una pendiente); en las demás, cambia el estado
+                if (a && c === 'nueva') { if (a.status === 'pending') mover(a, 'nueva') } else if (a) cambiarEstado(a, c)
               }}>
               <header>
-                <h2 id={`col-${c}`}>{nombreEstado(c)} <span className="mono">{tarjetas.length}</span></h2>
-                {c === 'pending' && (
+                <h2 id={`col-${c}`}>{c === 'nueva' ? t('Nuevas actividades') : nombreEstado(c)} <span className="mono">{tarjetas.length}</span></h2>
+                {c === 'nueva' && (
                   <NuevasActividades key={usar?.n ?? 0} inicial={usar?.g} guardadas={guardadas} equipo={equipo} semana={semana} user={user}
                     alCrear={(n) => {
                       setUsar(null)
@@ -250,7 +254,7 @@ export default function Tablero({ user, recargar, avisar }) {
               <ul>
                 {tarjetas.map((a) => <Tarjeta key={a.id} a={a} encargado={encargado} mover={mover} cambiarEstado={cambiarEstado} fijar={fijar} eliminar={eliminar} responder={responder} editar={editar} guardarComo={guardarComo} />)}
               </ul>
-              {!tarjetas.length && <p className="vacia">{t(c === 'pending' ? 'Crea actividades con +.' : 'Arrastra una tarjeta aquí.')}</p>}
+              {!tarjetas.length && <p className="vacia">{t(c === 'nueva' ? 'Crea actividades con +; luego dales su criticidad o arrástralas a su estado.' : 'Arrastra una tarjeta aquí.')}</p>}
             </section>
           )
         })}

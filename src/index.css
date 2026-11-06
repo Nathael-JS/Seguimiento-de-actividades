@@ -731,7 +731,7 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .semana button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .agregar-semana{display:inline-flex;gap:6px;align-items:center;margin-left:auto}
 .agregar-semana input{min-height:32px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:0 8px;font:inherit;font-size:13px;background:var(--surface-100);color:var(--ink)}
-.tablero{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+.tablero{display:grid;grid-template-columns:minmax(230px,1.15fr) repeat(4,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
 .columna{background:var(--surface-200);border-radius:var(--radius-lg);padding:12px;min-height:420px;display:flex;flex-direction:column;gap:10px;transition:background .15s,box-shadow .15s}
 .columna.encima{background:var(--brand-soft);box-shadow:inset 0 0 0 2px var(--brand)}
 .columna header{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -771,7 +771,7 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 .nueva-col input,.nueva-col select{min-height:34px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:0 8px;font:inherit;font-size:13px;background:var(--surface-100);color:var(--ink);width:100%}
 /* Al moverse de columna, la tarjeta viaja con la misma curva que el resto de la app */
 ::view-transition-group(*){animation-duration:.32s;animation-timing-function:var(--ease-salida)}
-@media (max-width:860px){.agregar-semana{margin-left:0}.tablero{grid-template-columns:repeat(4,minmax(240px,82vw));scroll-snap-type:x mandatory}.columna{scroll-snap-align:start}}
+@media (max-width:860px){.agregar-semana{margin-left:0}.tablero{grid-template-columns:repeat(5,minmax(240px,82vw));scroll-snap-type:x mandatory}.columna{scroll-snap-align:start}}
 
 /* Vista de lista (Monitoreo y Mis actividades) y su selector */
 .barra-vista{flex-wrap:wrap;gap:12px;align-items:center}
@@ -820,15 +820,20 @@ tr.con-error td{background:var(--status-incomplete-soft)}
 @media (prefers-reduced-motion:reduce){.pct-detalle,.pct-boton .flecha{transition:none}.pct-detalle .barra i{animation:none}}
 
 /* Panel Por clasificar: donde nacen las actividades; borde punteado = aún sin lugar */
-/* Criticidad: etiqueta en la tarjeta y chips del filtro y del menú, con el color que tenían sus carriles */
+/* Criticidad: etiqueta en la tarjeta, con el color que tenían sus carriles */
 .tag.crit{background:var(--surface-200);color:var(--ink)}
 .tag.crit[data-crit=nueva]{background:none;box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--ink-muted)}
-.tag.crit[data-crit=normal],.chip-col[data-crit=normal][aria-pressed=true]{background:var(--brand-soft);color:var(--brand)}
-.tag.crit[data-crit=alta],.chip-col[data-crit=alta][aria-pressed=true]{background:var(--status-pending-soft);color:var(--status-pending)}
-.tag.crit[data-crit=critica],.tag.crit[data-crit=urgente],.chip-col[data-crit=critica][aria-pressed=true],.chip-col[data-crit=urgente][aria-pressed=true]{background:var(--status-incomplete-soft);color:var(--status-incomplete)}
+.tag.crit[data-crit=normal]{background:var(--brand-soft);color:var(--brand)}
+.tag.crit[data-crit=alta]{background:var(--status-pending-soft);color:var(--status-pending)}
+.tag.crit[data-crit=critica],.tag.crit[data-crit=urgente]{background:var(--status-incomplete-soft);color:var(--status-incomplete)}
 .tag.crit[data-crit=urgente]{font-weight:600}
-.filtro-crit{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
-.chip-col[aria-pressed=true]{background:var(--ink);color:var(--surface-100);border-color:var(--ink)}
+.filtro-crit{display:inline-flex;align-items:center;gap:8px;margin:4px 0 12px;font:500 13px/18px var(--font-sans);color:var(--ink-muted)}
+.filtro-crit select{min-height:36px;border:1px solid var(--line-strong);border-radius:var(--radius-md);background:var(--surface-100);color:var(--ink);font:500 13px/18px var(--font-sans);padding:0 10px}
+.filtro-crit select[data-crit]{border-color:var(--ink)}
+/* Nuevas actividades: carril punteado donde se crean y esperan su criticidad */
+.columna.col-nueva{background:var(--surface-000);outline:1.5px dashed var(--line-strong);outline-offset:-1.5px}
+.columna.col-nueva.encima{outline-color:var(--brand);background:var(--brand-soft)}
+.col-nueva h2::before{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-muted)}
 .nueva-col textarea{min-height:84px;border:1px solid var(--line-strong);border-radius:var(--radius-md);padding:6px 8px;font:inherit;font-size:13px;line-height:18px;background:var(--surface-100);color:var(--ink);resize:vertical;width:100%}
 .nueva-col .dos{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:6px}
 .nueva-col :is(input,select,textarea):focus-visible{outline:2px solid var(--focus);outline-offset:1px}
@@ -963,3 +968,43 @@ dialog.modal.vista-pdf{max-width:1100px;width:calc(100% - 48px);height:calc(100d
 .arrastrando-arbol .nodo-ficha{display:none!important}
 @media (hover:none){.nodo-ficha{display:none!important}}
 @media (prefers-reduced-motion:no-preference){.nodo{transition:opacity .15s,box-shadow .15s,border-color .15s,background .15s}}
+
+/* Revertir movimientos del árbol */
+.notice.revertir{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.notice.revertir>span{flex:1;min-width:0}
+/* Plegar una rama desde su chip de directos */
+.chip-rama{cursor:pointer;border:0;font:500 12px/16px var(--font-sans);color:var(--ink);background:var(--surface-200);white-space:nowrap;gap:4px}
+.chip-rama:hover{background:var(--brand-soft);color:var(--brand)}
+.chip-rama svg{width:12px;height:12px;transition:transform .2s var(--ease-salida)}
+.chip-rama[aria-expanded=false] svg{transform:rotate(-90deg)}
+.chip-rama:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.arbol li>.nodo{vertical-align:top}
+
+/* Organigrama (de arriba abajo) en pantallas anchas; en angostas queda la lista vertical de .arbol */
+@media (min-width:900px){
+  .organigrama-marco{overflow-x:auto;padding:24px 16px 40px}
+  .arbol.organigrama{display:flex;justify-content:center;width:max-content;min-width:100%;margin:0}
+  .arbol.organigrama ul{display:flex;justify-content:center;padding:24px 0 0;position:relative}
+  .arbol.organigrama li{display:flex;flex-direction:column;align-items:center;position:relative;padding:24px 8px 0}
+  /* Conectores: medio tramo horizontal a cada lado y la bajada a la tarjeta */
+  .arbol.organigrama li::before,.arbol.organigrama li::after{content:'';position:absolute;top:0;right:50%;left:auto;bottom:auto;width:50%;height:24px;background:none;border-top:2px solid var(--line-strong)}
+  .arbol.organigrama li::after{right:auto;left:50%;border-left:2px solid var(--line-strong)}
+  .arbol.organigrama li:only-child::before,.arbol.organigrama li:only-child::after{display:none}
+  .arbol.organigrama li:only-child{padding-top:0}
+  .arbol.organigrama li:first-child::before,.arbol.organigrama li:last-child::after{border:0 none}
+  .arbol.organigrama li:last-child::before{border-right:2px solid var(--line-strong);border-radius:0 8px 0 0}
+  .arbol.organigrama li:first-child::after{border-radius:8px 0 0 0}
+  .arbol.organigrama>li{padding-top:0}
+  .arbol.organigrama li>ul::before{content:'';position:absolute;top:0;left:50%;height:24px;border-left:2px solid var(--line-strong)}
+  /* Ayudantes: su tramo punteado */
+  .arbol.organigrama li.ayudante::before,.arbol.organigrama li.ayudante::after{border-top-style:dashed}
+  .arbol.organigrama li.ayudante::after{border-left-style:dashed}
+  /* Tarjeta de la persona: vertical, con la franja de su puesto arriba */
+  .arbol.organigrama .nodo{flex-direction:column;gap:6px;width:196px;padding:16px 12px 12px;text-align:center;border-top:4px solid var(--rol);box-shadow:var(--shadow-card)}
+  .arbol.organigrama .nodo .avatar{width:44px;height:44px;font-size:14px}
+  .arbol.organigrama .nodo-txt{align-items:center}
+  .arbol.organigrama .nodo-txt b{font-size:14px;line-height:18px}
+  .arbol.organigrama .nodo .asa{position:absolute;top:8px;left:12px;margin:0}
+  .arbol.organigrama .nodo .mover-a-btn{position:absolute;top:6px;right:6px;margin:0}
+  .arbol.organigrama .nodo-ficha{left:50%;transform:translateX(-50%)}
+}
