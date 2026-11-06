@@ -17,7 +17,7 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 ## [v0.0.1 · Ajustes 2] 2026-11-06: Organigrama, revertir movimientos, Nuevas actividades y datos de prueba
 
 ### Agregado
-- **Jerarquía como organigrama:** de arriba abajo, con tarjetas por persona (franja del color de su puesto) y conectores; los de ayudante, punteados.
+- **Jerarquía como organigrama:** de arriba abajo, con tarjetas por persona (el color de su puesto en el anillo del avatar) y conectores; los de ayudante, punteados.
   - Si no cabe, se desplaza a lo ancho. En pantallas angostas (menos de 900 px) queda la lista vertical.
   - Las ramas se pliegan desde el chip "N directos".
 - **Revertir movimientos:** después de mover a alguien en el árbol aparece "Último cambio: … · Revertir". Revierte en orden todos los de la visita: regresa a su encargado anterior, o lo quita de ayudante.

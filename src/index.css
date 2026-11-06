@@ -999,8 +999,8 @@ dialog.modal.vista-pdf{max-width:1100px;width:calc(100% - 48px);height:calc(100d
   /* Ayudantes: su tramo punteado */
   .arbol.organigrama li.ayudante::before,.arbol.organigrama li.ayudante::after{border-top-style:dashed}
   .arbol.organigrama li.ayudante::after{border-left-style:dashed}
-  /* Tarjeta de la persona: vertical, con la franja de su puesto arriba */
-  .arbol.organigrama .nodo{flex-direction:column;gap:6px;width:196px;padding:16px 12px 12px;text-align:center;border-top:4px solid var(--rol);box-shadow:var(--shadow-card)}
+  /* Tarjeta de la persona: vertical; su puesto se ve en el anillo de color del avatar */
+  .arbol.organigrama .nodo{flex-direction:column;gap:6px;width:196px;padding:16px 12px 12px;text-align:center;box-shadow:var(--shadow-card)}
   .arbol.organigrama .nodo .avatar{width:44px;height:44px;font-size:14px}
   .arbol.organigrama .nodo-txt{align-items:center}
   .arbol.organigrama .nodo-txt b{font-size:14px;line-height:18px}
