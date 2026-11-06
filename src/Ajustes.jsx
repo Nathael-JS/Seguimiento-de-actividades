@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, depto, registrarDeptos, rol, turnoLargo } from './comun.js'
+import { TURNOS, api, depto, lidera, registrarDeptos, rol, turnoLargo } from './comun.js'
 import Icono from './Icono.jsx'
 import { filasDePlantilla } from './plantilla.js'
 import { t } from './i18n.js'
@@ -36,7 +36,112 @@ export default function Ajustes({ user, avisar }) {
         </section>
         <Plantilla user={user} deptos={deptos} alCargar={cargar} avisar={avisar} />
       </div>
+      <VerPlantilla user={user} deptos={deptos} personas={personas} alCambiar={cargar} avisar={avisar} />
     </>
+  )
+}
+
+// La plantilla cargada de cada departamento: se ve, se agrega una persona que faltó y se corrige a cualquiera.
+// Va por la misma carga de plantilla (una fila): mismas reglas y validaciones que el Excel
+function VerPlantilla({ user, deptos, personas, alCambiar, avisar }) {
+  const [clave, setClave] = useState(deptos[0]?.clave)
+  const [editando, setEditando] = useState(null) // null, 'nueva' o la persona
+  if (!clave) return null
+  const lista = personas.filter((p) => p.dept === clave && p.no !== user.no)
+  return (
+    <section className="card plantilla-vista">
+      <div className="row between" style={{ flexWrap: 'wrap', gap: 12 }}>
+        <h2 className="card-title" style={{ margin: 0 }}>{t('Plantilla del departamento')}</h2>
+        <div className="row" style={{ gap: 8 }}>
+          {deptos.length > 1 && (
+            <select aria-label={t('Departamento')} value={clave} onChange={(e) => { setClave(e.target.value); setEditando(null) }}>
+              {deptos.map((d) => <option key={d.clave} value={d.clave}>{depto(d.clave)}</option>)}
+            </select>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={() => setEditando('nueva')}><Icono nombre="plus" />{t('Agregar persona')}</button>
+        </div>
+      </div>
+      {editando && (
+        <FormPersona key={editando === 'nueva' ? 'nueva' : editando.no} p={editando === 'nueva' ? null : editando} clave={clave} user={user} lista={lista}
+          cerrar={() => setEditando(null)}
+          alGuardar={(r, nombre) => {
+            setEditando(null)
+            alCambiar()
+            avisar(r.creados ? t('{nombre} quedó en la plantilla por registrar: ya puede crear su cuenta.', { nombre }) : t('Datos de {nombre} actualizados.', { nombre }))
+          }} />
+      )}
+      {lista.length ? (
+        <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table>
+            <thead>
+              <tr>{['Número', 'Nombre', 'Puesto', 'Turno', 'Encargado', 'Estado', ''].map((c, i) => <th key={i} scope="col">{c && t(c)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {lista.map((p) => (
+                <tr key={p.no}>
+                  <td className="mono">{p.no}</td>
+                  <td>{p.name}<div className="muted" style={{ fontSize: 12 }}>{p.email}</div></td>
+                  <td>{rol(p.role)}</td>
+                  <td>{turnoLargo(p.shift)}</td>
+                  <td>{p.boss === user.no ? t('Tú') : personas.find((x) => x.no === p.boss)?.name ?? '—'}</td>
+                  <td>{p.porRegistrar ? <span className="tag">{t('Por registrar')}</span> : <span className="tag suave">{t('Registrada')}</span>}</td>
+                  <td><button className="btn btn-ghost btn-sm" onClick={() => setEditando(p)} aria-label={t('Editar a {nombre}', { nombre: p.name })}><Icono nombre="edit" />{t('Editar')}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="muted" style={{ marginTop: 12 }}>{t('Todavía no hay personas en la plantilla de este departamento.')}</p>}
+    </section>
+  )
+}
+
+// Alta o corrección de una persona de la plantilla. El encargado se elige entre quienes pueden tenerla a su cargo
+function FormPersona({ p, clave, user, lista, cerrar, alGuardar }) {
+  const [d, setD] = useState({ no: p?.no ?? '', name: p?.name ?? '', email: p?.email ?? '', role: p?.role ?? 'tec', shift: p?.shift ?? 'A', area: p?.area ?? '', boss: p?.boss ?? user.no })
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const set = (k) => (e) => setD({ ...d, [k]: e.target.value })
+  const encargados = [{ no: user.no, name: t('Tú'), role: user.role }, ...lista.filter((x) => x.no !== d.no)].filter((x) => lidera(x.role, d.role))
+  async function guardar(e) {
+    e.preventDefault()
+    setError('')
+    setEnviando(true)
+    try {
+      const r = await api(`/api/departamentos/${clave}/plantilla`, { method: 'POST', body: { por: user.no, filas: [{ ...d, no: d.no.trim() }] } })
+      alGuardar(r, d.name.trim())
+    } catch (err) {
+      // La carga de plantilla responde el error de la fila, no uno general
+      setError(err.datos?.filas?.[0]?.error ? t(err.datos.filas[0].error) : err.message)
+      setEnviando(false)
+    }
+  }
+  return (
+    <form className="form-persona" onSubmit={guardar}>
+      <h3>{p ? t('Editar a {nombre}', { nombre: p.name }) : t('Agregar persona')}</h3>
+      <div className="campos">
+        <label className="field"><span>{t('Número de empleado')}</span><input inputMode="numeric" maxLength={10} required value={d.no} disabled={!!p} onChange={set('no')} /></label>
+        <label className="field"><span>{t('Nombre completo')}</span><input maxLength={100} required value={d.name} onChange={set('name')} /></label>
+        <label className="field"><span>{t('Correo electrónico')}</span><input type="email" maxLength={100} required value={d.email} onChange={set('email')} /></label>
+        <label className="field"><span>{t('Puesto')}</span>
+          <select value={d.role} onChange={(e) => setD({ ...d, role: e.target.value, boss: user.no })}>
+            {['tec', 'jr', 'full', 'sr'].map((r) => <option key={r} value={r}>{rol(r)}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>{t('Turno')}</span>
+          <select value={d.shift} onChange={set('shift')}>{Object.keys(TURNOS).map((k) => <option key={k} value={k}>{turnoLargo(k)}</option>)}</select>
+        </label>
+        <label className="field"><span>{t('Encargado')}</span>
+          <select value={d.boss} onChange={set('boss')}>{encargados.map((x) => <option key={x.no} value={x.no}>{x.name}{x.no !== user.no ? ` · ${rol(x.role)}` : ''}</option>)}</select>
+        </label>
+        <label className="field"><span>{t('Área')} <small className="muted">({t('opcional')})</small></span><input maxLength={60} value={d.area} onChange={set('area')} /></label>
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="row end" style={{ gap: 8 }}>
+        <button type="button" className="btn btn-ghost" onClick={cerrar}>{t('Cancelar')}</button>
+        <button className="btn btn-primary" disabled={enviando}>{t(p ? 'Guardar cambios' : 'Agregar a la plantilla')}</button>
+      </div>
+    </form>
   )
 }
 

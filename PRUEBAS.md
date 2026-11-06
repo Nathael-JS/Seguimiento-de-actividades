@@ -37,7 +37,12 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 |---|---|---|---|---|---|
 | B1 | Inicio sin paneles encimados | Ver el Inicio a distintos anchos de ventana | Ningún panel encima de otro | | |
 | B2 | Minimizar paneles | Flecha de "Notificaciones recientes" y recargar | Queda solo la barra con su nombre, también tras recargar | | |
-| B3 | Crear en Por clasificar | Tablero → + → empleado, 2 renglones → Crear 2 | Aparecen 2 tarjetas; al empleado le llega el aviso | | |
+| B3 | Crear en el Kanban | Kanban → + (Pendiente) → empleado, 2 renglones → Crear 2 | Aparecen 2 tarjetas en Pendiente con la etiqueta "Por clasificar"; al empleado le llega el aviso | | |
+| B23 | Mover de estado | Arrastrar una tarjeta a En proceso (o ⋯ → Mover a) | Queda en En proceso; al empleado le llega el aviso | | |
+| B24 | Filtro de criticidad | Chips arriba del Kanban → Alta | Solo las de criticidad Alta | | |
+| B25 | Asignarse una tarea | Kanban → + → elegirse a sí mismo | Se crea; no llega aviso a sí mismo | | |
+| B26 | Eliminar con motivo | ⋯ → Eliminar → escribir el motivo → Sí, eliminar | Al empleado le llega "… eliminó «…»: motivo" | | |
+| B27 | Ayudantes | Inicio → Avance por líder → Asignar ayudante → marcar un técnico → Guardar | El botón dice "1 ayudante"; el líder lo ve en Monitoreo y le puede asignar; al técnico le llega el aviso | | |
 | B4 | Criticidad al crear | Mismo formulario, Criticidad = Alta | La tarjeta nace en Alta | | |
 | B5 | Repetir | Crear con Repetir → Cada semana | La tarjeta muestra "Cada semana" | | |
 | B6 | Mover | Arrastrar una tarjeta a Crítica (o menú ⋯ → Mover a) | Se mueve con animación | | |
@@ -48,9 +53,11 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 | B11 | Fijar / eliminar | ⋯ → Fijar arriba; ⋯ → Eliminar → Sí | Sube arriba; desaparece | | |
 | B12 | Aprobar solicitud | (después de C4) en la tarjeta con borde ámbar → Aprobar | Se mueve a la columna pedida; al Jr le llega el aviso | | |
 | B13 | Herencias | Herencias → proponer una pendiente a alguien del turno siguiente | Queda por validar (o entra directo si eres su encargado) | | |
-| B14 | Monitoreo | Monitoreo → lista y % de realizadas | Datos del equipo, detalle desplegable | | |
+| B14 | Monitoreo | Monitoreo → lista y % de realizadas; filtro de puesto → Técnico | Datos del equipo, detalle desplegable; con el filtro, solo técnicos | | |
 | B15 | Reportes | Reportes → fechas → Exportar Excel; Exportar PDF | CSV correcto; el PDF abre **vista previa** (en celular se descarga) y *Descargar PDF* baja el archivo con logo, resumen, comparativo y detalle | | |
 | B16 | Matriz y Jerarquía | Abrir ambas | Cargan sin error | | |
+| B28 | Agregar persona | Ajustes → Plantilla del departamento → Agregar persona → datos → Agregar a la plantilla | Aparece "Por registrar" en la tabla; ya puede crear su cuenta | | |
+| B29 | Editar plantilla | Ajustes → Plantilla → Editar → cambiar turno → Guardar cambios | Se actualiza en la tabla | | |
 | B17 | Ajustes (solo gerente) | Descargar ejemplo (.xlsx), cambiar `10001` por tu número y cargarlo | Vista previa con "Turno 1 · Matutino" … "Turno 4 · Administrativo"; al cargar, las personas nuevas quedan **por registrar** (ver D7) | | |
 | B19 | Turnos | Ver Perfil, Monitoreo y el selector de turno al crear | "Turno 1 · Matutino 07:00–15:00" … "Turno 4 · Administrativo 08:00–17:30" | | |
 | B20 | Editar / borrar departamento | Ajustes → lápiz → nuevo nombre → Guardar; papelera en uno vacío | Se renombra; uno con personas no se puede borrar | | |
@@ -62,10 +69,10 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
-| C1 | Menú | Ver el menú | Inicio, Tablero, Actividades asignadas, Buzón, Perfil | | |
+| C1 | Menú | Ver el menú | Inicio, Kanban, Actividades asignadas, Buzón, Perfil | | |
 | C2 | Actividades asignadas | Cambiar el estado de una a En proceso / Realizada | Se guarda; al encargado le llega el aviso | | |
-| C3 | Agregar en Tablero | Tablero → + → 3 renglones → Crear 3 | 3 tarjetas en Por clasificar; el encargado recibe **un** aviso | | |
-| C4 | Pedir mover | Arrastrar una tarjeta a Alta | No se mueve; dice "Pediste mover a Alta" | | |
+| C3 | Agregar en el Kanban | Kanban → + → 3 renglones → Crear 3 | 3 tarjetas en Pendiente (Por clasificar); el encargado recibe **un** aviso | | |
+| C4 | Pedir criticidad | ⋯ → Pedir criticidad → Alta | No cambia; dice "Solicitud enviada a tu encargado: mover a Alta" | | |
 | C5 | Editar la suya | ⋯ → Editar en una que agregó | Puede cambiar texto, fecha y Repetir (no turno ni comentario) | | |
 | C6 | No edita las asignadas | ⋯ en una que le asignaron | No aparece Editar | | |
 | C8 | Límite de cambios de estado | Cambiar el estado de una misma actividad 6 veces | La 6.ª: "Ya cambiaste el estado de esta actividad 5 veces. Espera 10 min…" | | |

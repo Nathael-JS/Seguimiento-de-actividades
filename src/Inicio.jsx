@@ -4,7 +4,7 @@ import TableroGerente from './TableroGerente.jsx'
 import { t } from './i18n.js'
 import { Anillo, AvisoPassword, Criticidad, Estado, NotificacionesRecientes, Panel } from './ui.jsx'
 
-export default function Inicio({ user, datos, error, recargar }) {
+export default function Inicio({ user, datos, error, recargar, avisar }) {
   return (
     <>
       <div className="page-head">
@@ -23,7 +23,7 @@ export default function Inicio({ user, datos, error, recargar }) {
           </section>
 
           {/* El gerente ve el tablero de su área; los demás, lo que tienen por hacer (el menú ya lleva a cada módulo) */}
-          {user.role === 'gte' ? <TableroGerente user={user} notificaciones={datos.notificaciones} recargar={recargar} /> : (
+          {user.role === 'gte' ? <TableroGerente user={user} notificaciones={datos.notificaciones} recargar={recargar} avisar={avisar} /> : (
             <div className="cols">
               <TareasAbiertas user={user} />
               <NotificacionesRecientes user={user} notificaciones={datos.notificaciones} recargar={recargar} />

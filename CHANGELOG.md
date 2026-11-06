@@ -14,6 +14,29 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Fase 2] 2026-11-06: Kanban, plantilla editable, ayudantes y filtros
+
+### Agregado
+- **Ajustes → Plantilla del departamento:** la plantilla cargada, con su estado (registrada o por registrar).
+  - **Agregar persona:** para alguien que faltó en el Excel; queda por registrar.
+  - **Editar:** corrige a cualquiera de la plantilla.
+  - Los dos usan la misma carga de plantilla y sus reglas.
+- **Inicio → Avance por líder → Asignar ayudante:** técnicos e Ing. Jr de su departamento. El botón muestra cuántos tiene.
+- **Monitoreo:** filtro por **puesto**. Un líder elegido trae también a sus ayudantes.
+
+### Cambiado
+- **Tablero → Kanban de actividades:**
+  - columnas por **estado** (Pendiente, En proceso, Realizada, Incompleta);
+  - la criticidad pasa a etiqueta de color y a filtro;
+  - el encargado cambia el estado arrastrando, y al empleado le llega el aviso (`PATCH /api/actividades/:id`);
+  - la criticidad se cambia en el menú ⋯; el técnico y el Jr la piden, como antes.
+- **`GET /api/departamentos`:** el gerente recibe también correo, encargado y si ya se registró; el resto de los encargados, igual que antes.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Tablero.jsx`, `src/TableroGerente.jsx`, `src/Inicio.jsx`, `src/Monitoreo.jsx`, `src/Ajustes.jsx`, `src/comun.js` (`lidera`), `src/index.css`, `src/en.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 ## [v0.0.1 · Fase 1] 2026-11-06: Reglas de jerarquía, ayudantes y autoasignación
 
 ### Agregado

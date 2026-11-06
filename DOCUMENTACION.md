@@ -154,15 +154,17 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
   - Vencen cada **90 días**; se avisa desde 15 días antes.
   - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
 
-### Tablero (por criticidad)
-- **Columnas:** Por clasificar, Simple, Normal, Alta, Crítica y Urgente. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
+### Kanban de actividades (por estado)
+- **Columnas:** los estados, Pendiente, En proceso, Realizada e Incompleta. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
+- **Criticidad:** va como etiqueta de color en cada tarjeta (Por clasificar, Simple, Normal, Alta, Crítica, Urgente) y como filtro arriba del tablero.
 - **Encargado:**
-  - Crea actividades en **Por clasificar** (una por renglón, hasta 20) para alguien de su equipo, con fecha, turno, comentario y, si quiere, criticidad directa.
-  - Las arrastra a su columna (con animación de View Transitions) o usa el menú ⋯ para moverlas, fijarlas, editarlas o eliminarlas.
+  - Crea actividades con **+** en Pendiente (una por renglón, hasta 20) para alguien de su gente, o para sí mismo si es gerente, con fecha, turno, comentario y criticidad.
+  - **Arrastrar** a otra columna cambia el estado (con animación de View Transitions); al empleado le llega el aviso.
+  - En el menú ⋯: Mover a (estado), **Criticidad**, Fijar, Editar, Guardar como tarea y Eliminar (pide el motivo).
   - **Urgente** se cierra al terminar su turno.
 - **Técnico / Ing. Jr:**
-  - Ve solo sus actividades y agrega en Por clasificar (para hoy, en su turno).
-  - Al moverlas crea una **solicitud de cambio** que su encargado **aprueba** o **rechaza** en la tarjeta.
+  - Ve solo sus actividades, las agrega (Por clasificar, para hoy, en su turno) y cambia su estado arrastrándolas.
+  - Al pedir otra **criticidad** crea una **solicitud de cambio** que su encargado **aprueba** o **rechaza** en la tarjeta.
 - **Recurrentes:**
   - Cualquier tarea que no sea urgente se puede repetir con el interruptor **Repetir**: cada día hábil, cada semana o cada mes. Se activa al crearla o desde **Editar**.
   - Al llegar su fecha aparece una copia nueva, Pendiente (ver [10.2](#102-recurrencia)).
@@ -204,6 +206,8 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
 - **Jerarquía:** árbol de quién reporta a quién.
 - **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
 - **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
+  - **Plantilla del departamento:** la plantilla cargada, con estado (registrada o por registrar). **Agregar persona** (alguien que faltó en el Excel) y **Editar** mandan una fila por la misma carga de plantilla: mismas reglas. La persona nueva queda por registrar.
+- **Monitoreo:** toda la gente a su cargo (en el gerente, todo el departamento), con filtro por líder y por **puesto** (gerentes, Senior, Full, Ing. Jr, técnico). Un líder elegido trae también a sus ayudantes.
 
 ### Buzón y avisos
 Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mientras la pestaña está a la vista, y al tocar una se abre la pantalla donde se atiende. Tipos de aviso:
@@ -251,8 +255,8 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | Archivo | Componentes | Página |
 |---|---|---|
 | `Inicio.jsx` | `Inicio`, `Kpi`, `TareasAbiertas` | Inicio del ejecutor/encargado (indicadores, tareas abiertas, notificaciones recientes) |
-| `TableroGerente.jsx` | `TableroGerente`, `Alerta` | Inicio del gerente (por líder, por turno, atención) |
-| `Tablero.jsx` | `Tablero`, `Tarjeta`, `Repetir`, `EditarTarjeta`, `Guardadas`, `NuevasActividades` | Tablero por criticidad (ver sección 6) |
+| `TableroGerente.jsx` | `TableroGerente`, `Alerta`, `Ayudantes` | Inicio del gerente (por líder con **Asignar ayudante**, por turno, atención) |
+| `Tablero.jsx` | `Tablero`, `Tarjeta`, `Repetir`, `EditarTarjeta`, `Guardadas`, `NuevasActividades` | Kanban de actividades por estado (ver sección 6) |
 | `MisActividades.jsx` | `MisActividades`, `Tarea`, `NuevaTarea` | Actividades asignadas |
 | `Lista.jsx` | `ListaActividades`, `Prioridad`, `PorcentajeRealizadas` | Vista de lista y % realizadas desplegable |
 | `Herencias.jsx` | `Herencias`, `Cupo`, `Actividad`, `ParaHeredar`, `PorValidar`, `Enviada` | Herencias |
@@ -351,7 +355,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
 | GET | `/api/actividades/:no` | Propio | Sus actividades (urgentes primero) |
-| PATCH | `/api/actividades/:id` | Asignado | Estado y comentario. El técnico / Ing. Jr cambia el estado de una actividad hasta 5 veces; luego espera 10 min (429) |
+| PATCH | `/api/actividades/:id` | Asignado o su encargado | Estado y comentario. El encargado lo cambia desde el Kanban y se le avisa al empleado. El técnico / Ing. Jr cambia el estado de una actividad hasta 5 veces; luego espera 10 min (429) |
 | PATCH | `/api/actividades/:id/tablero` | Encargado / asignado | Mover o fijar; el técnico asignado crea una solicitud (202) |
 | POST | `/api/actividades/:id/solicitud` | Encargado | Aprobar o rechazar la solicitud de cambio |
 | PATCH | `/api/actividades/:id/editar` | Encargado / dueño | Editar texto, comentario, fecha, turno y recurrencia (`no` la quita) |

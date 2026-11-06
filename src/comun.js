@@ -32,7 +32,7 @@ export const PESO_CRITICIDAD = { simple: 0, nueva: 1, normal: 1, alta: 2, critic
 // cuando hay muchos, como en Gerencia)
 export const MODULOS = [
   { ruta: 'inicio', titulo: 'Inicio', icono: 'home', grupo: 'Día a día' },
-  { ruta: 'tablero', titulo: 'Tablero', icono: 'board', desc: 'Actividades por criticidad, semana a semana.', grupo: 'Día a día' },
+  { ruta: 'tablero', titulo: 'Kanban', icono: 'board', desc: 'Actividades por estado, semana a semana.', grupo: 'Día a día' },
   { ruta: 'mis-actividades', titulo: 'Actividades asignadas', icono: 'list', desc: 'Actualiza el estado de tus tareas.', excepto: 'gte', grupo: 'Día a día' },
   { ruta: 'herencias', titulo: 'Herencias', icono: 'swap', desc: 'Propón, valida y redirige actividades heredadas.', solo: 'encargado', grupo: 'Día a día' },
   { ruta: 'buzon', titulo: 'Buzón', icono: 'bell', desc: 'Asignaciones, avances y comentarios.', grupo: 'Día a día' },
@@ -136,6 +136,10 @@ export const pctRealizadas = (actividades) =>
   actividades.length ? Math.round((actividades.filter((a) => a.status === 'done').length / actividades.length) * 100) : 0
 
 export const esEncargado = (role) => role === 'gte' || role === 'sr' || role === 'full'
+// Quién puede tener a quién a su cargo (igual que lidera en server/app.js): Full → técnico e Ing. Jr; Senior → además
+// Full; gerente → todos, también gerentes
+const NIVEL_PUESTO = { gte: 0, sr: 1, full: 2, jr: 3, tec: 3 }
+export const lidera = (jefe, sub) => esEncargado(jefe) && (NIVEL_PUESTO[jefe] < NIVEL_PUESTO[sub] || (jefe === 'gte' && sub === 'gte'))
 
 // Las mismas reglas que valida el servidor para una contraseña nueva
 export const reglasPassword = (p1, p2) => [

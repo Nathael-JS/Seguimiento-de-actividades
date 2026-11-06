@@ -748,9 +748,13 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (!esEncargado(empleado(req.sesion.no))) return reply.code(403).send({ error: 'Solo los encargados ven la plantilla.' })
     const rate = conRateDe(req.query)
     const depts = deptosDe(req.sesion.no)
+    const gerente = empleado(req.sesion.no).role === 'gte'
     return usuarios
       .filter((u) => depts.includes(u.dept))
-      .map(({ no, name, role, dept, shift, area }) => ({ no, name, role, dept, shift, area, ...rate(no) }))
+      // El correo, el encargado y si ya se registró, solo para el gerente: es quien corrige la plantilla (Ajustes)
+      .map(({ no, name, role, dept, shift, area, email, boss, porRegistrar }) => ({
+        no, name, role, dept, shift, area, ...(gerente && { email, boss, porRegistrar: !!porRegistrar }), ...rate(no),
+      }))
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
   })
 
@@ -1083,7 +1087,9 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const a = actividades.find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
     const { por, estado, nota = a.note } = req.body
-    if (a.to !== por) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad puede actualizarla.' })
+    // Quien la tiene asignada, o su encargado desde el Kanban (se le avisa al empleado)
+    const desdeEncargado = a.to !== por && delEquipo(por, a)
+    if (a.to !== por && !desdeEncargado) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad o su encargado pueden actualizarla.' })
     if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
     if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
 
@@ -1108,7 +1114,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       doneAt: estado !== 'done' ? undefined : a.status === 'done' ? a.doneAt : ahora(),
     })
     // El encargado se entera del cambio de estado y del comentario por separado, como en el mockup
-    if (cambioEstado) notificar({ for: responsable(a), kind: estado, who: por, ref: a.id })
+    if (cambioEstado) notificar({ for: desdeEncargado ? a.to : responsable(a), kind: estado, who: por, ref: a.id })
     if (cambioNota) notificar({ for: responsable(a), kind: 'comment', who: por, ref: a.id })
     return { ...a, byName: empleado(a.by)?.name }
   })

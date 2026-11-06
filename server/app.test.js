@@ -225,6 +225,16 @@ test('ayudantes: quien tiene al líder a su cargo los elige; el líder los manej
   assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ por: '10230', para: '10511' }))).code, 403)
 })
 
+test('kanban: el encargado cambia el estado de las actividades de su gente y se le avisa al empleado', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar())).body
+  const mover = (por, estado) => pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por, estado })
+  assert.equal((await mover('10145', 'progress')).code, 403) // Ana: no es de su rama
+  assert.equal((await mover('10230', 'progress')).body.status, 'progress') // Diego, su encargado
+  const aviso = app.estado.notificaciones.findLast((n) => n.ref === a.id)
+  assert.deepEqual([aviso.for, aviso.kind, aviso.who], ['10482', 'progress', '10230'])
+})
+
 test('registrar crea una actividad por punto, pendiente, y notifica al ejecutor', async () => {
   const app = build()
   const { code, body } = await pedir(app, 'POST', '/api/actividades', asignar())
@@ -443,6 +453,9 @@ test('departamentos: solo el propio y solo encargados, sin datos sensibles; el r
   assert.equal(lc.length, 10)
   assert.ok(lc.every((e) => e.dept === 'lc'))
   assert.deepEqual(Object.keys(lc[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
+  // El gerente (corrige la plantilla en Ajustes) ve también correo, encargado y si ya se registró
+  const jorge = (await de('10001')).find((e) => e.no === '10482')
+  assert.deepEqual([jorge.email, jorge.boss, jorge.porRegistrar], ['jorge.salinas@empresa.com', '10230', false])
   assert.deepEqual((await de('10620')).map((e) => e.no), ['10700', '10620', '10604']) // Pruebas Funcionales
   assert.ok('rate' in (await de('10230', `?${CDMX}`))[0])
   assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 401)
