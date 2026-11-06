@@ -1290,6 +1290,22 @@ test('desde 0: el super administrador da de alta al gerente, el gerente se regis
   assert.equal((await conCookie(app, 'POST', `/api/departamentos/${d.clave}/plantilla`, nora, { por: '50001', filas: [fila] })).json().creados, 1)
 })
 
+test('cuentas de prueba: el super administrador las crea o reactiva; entran con demo1234 sin código; CUENTAS_PRUEBA=no las bloquea', async () => {
+  const { app, adm, confirmar } = await conSA()
+  const crear = () => adm('POST', '/api/admin/cuentas-prueba', { por: '90001' })
+  assert.equal((await crear()).body.confirmar, true)
+  await confirmar()
+  assert.deepEqual((await crear()).body.map((u) => [u.no, u.role, u.boss, u.prueba]), [['80001', 'gte', null, true], ['80002', 'tec', '80001', true], ['80003', 'jr', '80001', true]])
+  assert.equal((await crear()).code, 200) // otra vez: se reactivan, sin duplicar
+  assert.equal(app.estado.usuarios.filter((u) => u.no.startsWith('8000')).length, 3)
+  for (const no of ['80001', '80002', '80003']) assert.ok((await login({ usuario: no, password: 'demo1234' }, app)).json().name)
+  // Apagadas por el servidor: no se crean
+  const off = build({ superadmins: [SA], cuentasPrueba: false })
+  const sa = cookieDe(await entrar(SA.email, SA.password, off))
+  await conCookie(off, 'POST', '/api/admin/confirmar', sa, { por: '90001', password: SA.password })
+  assert.equal((await conCookie(off, 'POST', '/api/admin/cuentas-prueba', sa, { por: '90001' })).statusCode, 409)
+})
+
 test('salida y tiempo extra: se registra antes de salir y cuenta solo si pasa de 15 min tras el fin del turno', async () => {
   const app = build()
   const ch = app.estado.checador

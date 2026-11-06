@@ -361,6 +361,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET · PATCH | `/api/admin/usuarios` · `/:empleado` | Super admin | Listar y editar puesto, turno y acceso |
 | POST | `/api/admin/usuarios/:empleado/password` · `/mfa` | Super admin | Contraseña temporal y reinicio del MFA |
 | POST | `/api/admin/respaldo` | Super admin | Respaldo JSON de toda la base (sin sesiones) |
+| POST | `/api/admin/cuentas-prueba` | Super admin | Crea o reactiva las cuentas de prueba 80001 (gerente), 80002 (técnico) y 80003 (Ing. Jr) del departamento Pruebas: `demo1234`, sin código de la app. 409 si `CUENTAS_PRUEBA=no` |
 | POST | `/api/admin/gerentes` | Super admin | Dar de alta a un gerente por registrar (nombre, número, correo, turno y departamento, que se crea si no existe; uno con gerente no se le quita). Pide confirmación |
 | GET | `/api/admin/plantillas` | Super admin | Personas de las plantillas (por registrar / registradas) e intentos de registro rechazados |
 | PATCH · DELETE | `/api/admin/plantillas/:empleado` | Super admin | Corregir número o correo, o quitar, una fila por registrar (pide confirmación) |

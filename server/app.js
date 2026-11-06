@@ -1531,6 +1531,28 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     return respaldo(app.estado)
   })
 
+  // Cuentas de prueba para revisar la app (contraseña demo1234, sin código de la app): gerente, técnico e Ing. Jr del
+  // departamento Pruebas. Si ya existen se reactivan con esa contraseña. CUENTAS_PRUEBA=no las apaga todas
+  const DE_PRUEBA = [
+    { no: '80001', name: 'Gerente Prueba', email: 'gerente@prueba.local', role: 'gte', boss: null, area: 'Gerencia' },
+    { no: '80002', name: 'Técnico Prueba', email: 'tecnico@prueba.local', role: 'tec', boss: '80001', area: 'Pruebas' },
+    { no: '80003', name: 'Junior Prueba', email: 'junior@prueba.local', role: 'jr', boss: '80001', area: 'Pruebas' },
+  ]
+  app.post('/api/admin/cuentas-prueba', async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    if (!cuentasPrueba) return reply.code(409).send({ error: 'Las cuentas de prueba están apagadas: quita CUENTAS_PRUEBA=no en el servidor y reinícialo.' })
+    if (DE_PRUEBA.some((c) => usuarios.some((u) => !u.prueba && (u.no === c.no || u.email === c.email)))) {
+      return reply.code(409).send({ error: 'Un número o correo de las cuentas de prueba ya es de una cuenta real.' })
+    }
+    if (!departamentos.some((d) => d.clave === 'pruebas')) departamentos.push({ clave: 'pruebas', nombre: 'Pruebas', gerente: '80001' })
+    for (const c of DE_PRUEBA) {
+      const u = empleado(c.no) ?? usuarios[usuarios.push({}) - 1]
+      Object.assign(u, c, { dept: 'pruebas', shift: 'A', prueba: true, activo: true, password: hashSync('demo1234'), pwdChanged: ahora(), porRegistrar: false, debeCambiar: false })
+    }
+    registrar(req, 'admin-cuentas-prueba', { por: req.sesion.no })
+    return DE_PRUEBA.map((c) => vistaUsuario(empleado(c.no)))
+  })
+
   // Plantillas: quién viene en la plantilla de su departamento y si ya se registró, y los intentos de registro que no
   // coincidieron (número y correo escritos) para validarlos contra el sistema
   app.get('/api/admin/plantillas', async () => ({

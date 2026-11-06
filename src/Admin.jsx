@@ -96,6 +96,17 @@ export function Usuarios({ user, avisar }) {
     }
   }
 
+  // Gerente, técnico e Ing. Jr de prueba (demo1234, sin código de la app) para revisar la app
+  async function cuentasPrueba() {
+    try {
+      await conConfirmacion(() => api('/api/admin/cuentas-prueba', { method: 'POST', body: { por: user.no } }))
+      avisar(t('Cuentas de prueba listas: 80001 gerente, 80002 técnico y 80003 Ing. Jr, contraseña demo1234.'))
+      cargar()
+    } catch (e) {
+      if (!e.cancelado) avisar(e.message)
+    }
+  }
+
   return (
     <>
       <div className="page-head row between" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -103,7 +114,10 @@ export function Usuarios({ user, avisar }) {
           <h1>{t('Usuarios')}</h1>
           <p>{t('Todas las cuentas del sistema. Elige una para ver sus datos y cambiar su puesto, turno o acceso.')}</p>
         </div>
-        <button className="btn btn-secondary" onClick={respaldar}><Icono nombre="file" />{t('Descargar respaldo')}</button>
+        <div className="row">
+          <button className="btn btn-ghost" onClick={cuentasPrueba}><Icono nombre="users" />{t('Cuentas de prueba')}</button>
+          <button className="btn btn-secondary" onClick={respaldar}><Icono nombre="file" />{t('Descargar respaldo')}</button>
+        </div>
       </div>
       <div className="admin">
         <section className="card admin-lista" aria-label={t('Usuarios')}>

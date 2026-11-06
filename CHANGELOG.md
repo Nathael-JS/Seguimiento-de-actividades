@@ -12,6 +12,23 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+## [PR #33] 2026-11-06: Cuentas de prueba desde la app
+
+### Agregado
+- **Usuarios → Cuentas de prueba** (super administrador, `POST /api/admin/cuentas-prueba`, pide su contraseña): crea o reactiva tres cuentas del departamento *Pruebas*, con contraseña `demo1234` y sin código de la app:
+  - 80001 Gerente Prueba;
+  - 80002 Técnico Prueba;
+  - 80003 Junior Prueba (Ing. Jr).
+- Si ya existen, se reactivan con esa contraseña; no se duplican. Si un número o correo es de una cuenta real, no hace nada.
+
+### Advertencias
+- Solo funcionan si el servidor **no** tiene `CUENTAS_PRUEBA=no`. En Render: Environment → quitar la variable (o ponerla en `si`) y guardar. Para apagarlas otra vez basta con volver a `CUENTAS_PRUEBA=no`.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Admin.jsx`, `src/en.js`, `src/i18n.test.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 ## [PR #29] 2026-11-05: Control de versiones y servidor de planta
 
 ### Agregado
