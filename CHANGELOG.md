@@ -14,6 +14,17 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · CI] 2026-11-06: CI en verde
+
+### Corregido
+- **CI en rojo** desde el PR #34 ([I-10](DOCUMENTACION.md#i-10-ci-en-rojo-en-los-pr-34-y-35-y-en-main)): la prueba de PostgreSQL borraba una actividad sin el motivo que ahora es obligatorio. Ahora lo manda.
+- **Log de la CI:** la revisión de salud del PostgreSQL de la CI ya no llena el log de "role root does not exist".
+
+### Archivos
+- `server/db.test.js`, `.github/workflows/ci.yml`, `DOCUMENTACION.md`
+
+---
+
 ## [v0.0.1 · Ajustes 2] 2026-11-06: Organigrama, revertir movimientos, Nuevas actividades y datos de prueba
 
 ### Agregado

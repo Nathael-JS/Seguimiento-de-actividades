@@ -662,3 +662,10 @@ Problemas reales que ya pasaron. Si algo vuelve a fallar, busca aquí el síntom
 - **Solución:** `.plegado .side{z-index:25}`, por encima de la barra superior (5) y de los menús de las tarjetas (20).
 - **Prevención:** todo lo que flota (nombres, menús, avisos) debe estar en una capa con `z-index` mayor que el contenido junto al que aparece. Revisar con el menú plegado y desplegado.
 
+### I-10. CI en rojo en los PR #34 y #35 y en `main`
+- **Fecha / PR:** 2026-11-06 · PR #34, #35 (corregido en el PR siguiente)
+- **Síntoma:** GitHub → Actions → CI marcaba ✗ en los PR y en `main`; 94 pruebas pasaban y fallaba "PostgreSQL: primera carga…" en `server/db.test.js:55`.
+- **Causa:** desde la v0.0.1 (Fase 1), borrar una actividad pide `motivo`. La prueba de PostgreSQL borraba sin motivo; el servidor respondía 400 y la actividad seguía ahí. Esa prueba solo corre con `TEST_DATABASE_URL`, y no se corrió en local antes de subir.
+- **Solución:** la prueba manda el motivo. Además, la revisión de salud del PostgreSQL de la CI usa `pg_isready -U postgres` (antes llenaba el log de "role root does not exist", que no era el error).
+- **Prevención:** antes de subir, correr también las pruebas de PostgreSQL: `TEST_DATABASE_URL=postgresql://… npm test`. Cuando cambie lo que pide un endpoint, buscar sus llamadas en `server/*.test.js` (las dos pruebas). Y no fusionar un PR con la CI en rojo.
+
