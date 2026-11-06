@@ -1,7 +1,7 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { api, cierreTurno, horas, hoy, inicioDeHoy, modulosDe, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { Avatar, BotonIdioma, BotonTema, Firma, Logo, SiFalla } from './ui.jsx'
+import { Avatar, BotonIdioma, BotonTema, Firma, ItemNotificacion, Logo, SiFalla } from './ui.jsx'
 import { t } from './i18n.js'
 import Inicio from './Inicio.jsx'
 
@@ -72,10 +72,24 @@ export default function Shell({ user, onLogout, avisoInicial }) {
 
   // Indicadores y notificaciones; se vuelven a pedir al cambiar de página para ver lo que hicieron otros.
   // hoy hace que el servidor genere los avisos de atraso con la fecha local
+  // Aviso emergente: las notificaciones sin leer que no estaban en la carga anterior. La primera carga no avisa
+  // (son las de antes de entrar); si llegan varias juntas se muestra la más nueva y cuántas más hay
+  const conocidas = useRef(null)
+  const [emergente, setEmergente] = useState(null)
+  const temporizadorEmergente = useRef(null)
+  const cerrarEmergente = useCallback(() => { clearTimeout(temporizadorEmergente.current); setEmergente(null) }, [])
+  const avisarNuevas = useCallback((lista) => {
+    const nuevas = conocidas.current ? lista.filter((n) => !n.read && !conocidas.current.has(n.id)) : []
+    conocidas.current = new Set(lista.map((n) => n.id))
+    if (!nuevas.length) return
+    clearTimeout(temporizadorEmergente.current)
+    setEmergente({ n: nuevas[0], mas: nuevas.length - 1 })
+    temporizadorEmergente.current = setTimeout(() => setEmergente(null), 8000)
+  }, [])
   const recargar = useCallback(
     () => api(`/api/inicio/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}&hoy=${hoy()}`)
-      .then((d) => { setDatos(d); setError('') }).catch((e) => setError(e.message)),
-    [user.no],
+      .then((d) => { avisarNuevas(d.notificaciones); setDatos(d); setError('') }).catch((e) => setError(e.message)),
+    [user.no, avisarNuevas],
   )
   useEffect(() => { recargar() }, [recargar, ruta])
   // Avisos al momento: contador y Buzón se actualizan solos cada 30 s mientras la pestaña está a la vista
@@ -217,6 +231,21 @@ export default function Shell({ user, onLogout, avisoInicial }) {
       </div>
 
       <div className="toast" role="status">{aviso && <><Icono nombre="check" />{aviso}</>}</div>
+
+      <div className="emergente" role="status" aria-live="polite">
+        {emergente && (
+          <div className="card emergente-tarjeta" key={emergente.n.id} onMouseEnter={() => clearTimeout(temporizadorEmergente.current)}>
+            <div className="row between">
+              <b className="emergente-titulo"><Icono nombre="bell" />{t('Nueva notificación')}</b>
+              <button className="iconbtn" aria-label={t('Cerrar')} onClick={cerrarEmergente}>×</button>
+            </div>
+            <ul className="list notif-list" onClick={cerrarEmergente}>
+              <ItemNotificacion n={emergente.n} user={user} recargar={recargar} avatar />
+            </ul>
+            {emergente.mas > 0 && <a className="meta" href="#buzon" onClick={cerrarEmergente}>{t('y {n} más en el Buzón', { n: emergente.mas })}</a>}
+          </div>
+        )}
+      </div>
 
       <dialog ref={extra} className="card modal" aria-labelledby="extra-titulo">
         <form onSubmit={registrarExtra} style={{ display: 'contents' }}>

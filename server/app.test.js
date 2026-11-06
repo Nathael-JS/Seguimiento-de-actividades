@@ -178,13 +178,83 @@ const asignar = (cambios = {}) => ({
   puntos: [{ texto: 'Revisar bomba' }, { texto: 'Cambiar filtro' }], comentario: 'Urgente', ...cambios,
 })
 
-test('equipo asignable: solo encargados y solo empleados de menor rango', async () => {
+test('equipo asignable: solo encargados y solo empleados de menor rango; el gerente también se asigna a sí mismo', async () => {
   const app = build()
-  assert.deepEqual((await pedir(app, 'GET', '/api/equipo/10230')).body.map((e) => e.no), ['10490', '10482'])
-  // Laura (Gerente) puede asignar a Seniors, Fulls, Jrs y Técnicos de toda su rama
-  assert.equal((await pedir(app, 'GET', '/api/equipo/10001')).body.length, 9)
+  assert.deepEqual((await pedir(app, 'GET', '/api/equipo/10230')).body.map((e) => e.no), ['10482', '10490']) // técnico e Ing. Jr: mismo nivel, por nombre
+  // Laura (Gerente): ella misma y los Seniors, Fulls, Jrs y Técnicos de toda su rama
+  const laura = (await pedir(app, 'GET', '/api/equipo/10001')).body
+  assert.equal(laura.length, 10)
+  assert.equal(laura[0].no, '10001')
   assert.equal((await pedir(app, 'GET', '/api/equipo/10482')).code, 403)
   assert.equal((await pedir(app, 'GET', '/api/equipo/99999')).code, 401)
+})
+
+test('jerarquía: quién puede tener a quién a su cargo; gerente a cargo de otro gerente; sin ciclos', async () => {
+  const app = build()
+  const u = (no) => app.estado.usuarios.find((x) => x.no === no)
+  // Andrés (gerente de pf) queda a cargo de Laura: ella ve a Andrés y a su gente, y puede asignarles
+  u('10700').boss = '10001'
+  const laura = (await pedir(app, 'GET', '/api/equipo/10001')).body.map((e) => e.no)
+  assert.ok(['10700', '10620', '10604'].every((no) => laura.includes(no)))
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ por: '10001', para: '10700' }))).code, 201)
+  // Andrés no puede asignar a Laura (no está a su cargo) y sí a sí mismo
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ por: '10700', para: '10001' }))).code, 403)
+  const propias = await pedir(app, 'POST', '/api/actividades', asignar({ por: '10700', para: '10700' }))
+  assert.equal(propias.code, 201)
+  assert.ok(!app.estado.notificaciones.some((n) => n.for === '10700' && n.who === '10700')) // no se avisa a sí mismo
+  // Un ciclo en los datos no cuelga el servidor
+  u('10001').boss = '10700'
+  assert.equal((await pedir(app, 'GET', '/api/equipo/10001')).code, 200)
+})
+
+test('ayudantes: quien tiene al líder a su cargo los elige; el líder los maneja como a su gente', async () => {
+  const app = build()
+  const elegir = (por, lider, ayudantes) => pedir(app, 'PUT', `/api/lideres/${lider}/ayudantes`, { por, ayudantes })
+  // Laura le da a Diego (Full) como ayudante a Luis (técnico de Sofía)
+  assert.equal((await elegir('10230', '10230', ['10511'])).code, 403) // Diego no está a su propio cargo
+  assert.equal((await elegir('10001', '10230', ['10112'])).code, 400) // un Senior no es ayudante
+  assert.equal((await elegir('10001', '10230', ['10604'])).code, 400) // otro departamento
+  assert.deepEqual((await elegir('10001', '10230', ['10511'])).body.map((a) => a.no), ['10511'])
+  assert.ok(app.estado.notificaciones.some((n) => n.for === '10511' && n.kind === 'ayudante' && n.who === '10230'))
+  const diego = (await pedir(app, 'GET', '/api/equipo/10230')).body
+  assert.ok(diego.some((e) => e.no === '10511'))
+  assert.deepEqual(diego.length, 3)
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ por: '10230', para: '10511' }))).code, 201)
+  // Se quita: ya no es de su gente
+  await elegir('10001', '10230', [])
+  assert.equal((await pedir(app, 'POST', '/api/actividades', asignar({ por: '10230', para: '10511' }))).code, 403)
+})
+
+test('kanban: el encargado cambia el estado de las actividades de su gente y se le avisa al empleado', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar())).body
+  const mover = (por, estado) => pedir(app, 'PATCH', `/api/actividades/${a.id}`, { por, estado })
+  assert.equal((await mover('10145', 'progress')).code, 403) // Ana: no es de su rama
+  assert.equal((await mover('10230', 'progress')).body.status, 'progress') // Diego, su encargado
+  const aviso = app.estado.notificaciones.findLast((n) => n.ref === a.id)
+  assert.deepEqual([aviso.for, aviso.kind, aviso.who], ['10482', 'progress', '10230'])
+})
+
+test('árbol: el gerente mueve a su gente bajo otro encargado; técnico sobre Jr = ayudante; sin ciclos', async () => {
+  const app = build()
+  const mover = (por, no, a) => pedir(app, 'PATCH', `/api/jerarquia/${no}`, { por, a })
+  const u = (no) => app.estado.usuarios.find((x) => x.no === no)
+  assert.equal((await mover('10230', '10482', '10251')).code, 403) // solo un gerente
+  assert.equal((await mover('10001', '10604', '10230')).code, 403) // Ricardo no es de Laura
+  // Jorge (técnico de Diego) pasa con Sofía (Full): cambia su encargado y se le avisa
+  assert.equal((await mover('10001', '10482', '10251')).body.boss, '10251')
+  assert.equal(u('10482').boss, '10251')
+  assert.ok(app.estado.notificaciones.some((n) => n.for === '10482' && n.kind === 'jerarquia' && n.nuevo === '10251'))
+  // Un Full no puede quedar a cargo de otro Full; un Senior no puede ir debajo de su propia rama
+  assert.equal((await mover('10001', '10230', '10251')).code, 400)
+  assert.equal((await mover('10001', '10112', '10230')).code, 400)
+  // Técnico sobre Ing. Jr: queda como su ayudante, sin cambiar su encargado
+  const r = await mover('10001', '10511', '10490')
+  assert.deepEqual(r.body, { no: '10511', ayudanteDe: '10490' })
+  assert.equal(u('10511').boss, '10251')
+  assert.deepEqual(u('10490').ayudantes, ['10511'])
+  // Un Full pasa directo con la gerente
+  assert.equal((await mover('10001', '10230', '10001')).body.boss, '10001')
 })
 
 test('registrar crea una actividad por punto, pendiente, y notifica al ejecutor', async () => {
@@ -405,6 +475,9 @@ test('departamentos: solo el propio y solo encargados, sin datos sensibles; el r
   assert.equal(lc.length, 10)
   assert.ok(lc.every((e) => e.dept === 'lc'))
   assert.deepEqual(Object.keys(lc[0]).sort(), ['area', 'dept', 'name', 'no', 'role', 'shift'])
+  // El gerente (corrige la plantilla en Ajustes) ve también correo, encargado y si ya se registró
+  const jorge = (await de('10001')).find((e) => e.no === '10482')
+  assert.deepEqual([jorge.email, jorge.boss, jorge.porRegistrar], ['jorge.salinas@empresa.com', '10230', false])
   assert.deepEqual((await de('10620')).map((e) => e.no), ['10700', '10620', '10604']) // Pruebas Funcionales
   assert.ok('rate' in (await de('10230', `?${CDMX}`))[0])
   assert.equal((await conCookie(app, 'GET', '/api/departamentos', undefined)).statusCode, 401)
@@ -704,7 +777,7 @@ test('matriz: yield de diarias y urgentes, tiempo extra y asistencia del checado
     const matriz = (no, q) => pedir(app, 'GET', `/api/matriz/${no}?hoy=2026-11-03&${q}`)
     const { code, body } = await matriz('10230', 'desde=2026-10-26&hasta=2026-11-03')
     assert.equal(code, 200)
-    assert.deepEqual(body.map((f) => f.no), ['10490', '10482']) // su rama, por puesto
+    assert.deepEqual(body.map((f) => f.no), ['10482', '10490']) // su rama, por puesto (técnico e Ing. Jr empatan: por nombre)
     const jorge = body.find((f) => f.no === '10482')
     // 29 oct: 4 diarias, 1 realizada. Hasta ayer: el tiempo extra que pasa de 15 min tras las 15:00; 6 de 6 días hábiles
     assert.deepEqual([jorge.diarias, jorge.urgentes, jorge.asistencia], [[1, 4], [0, 0], [6, 6]])
@@ -1021,8 +1094,11 @@ test('tablero: el encargado mueve entre criticidades y a Urgente, fija y elimina
   assert.deepEqual([n.prioridad, n.cierreTurno, n.criticidad], [undefined, undefined, 'critica'])
   assert.equal((await mover({ fijada: true })).body.fijada, true)
   // Eliminar: desaparece de sus listas y sus avisos
-  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10482' })).code, 403)
-  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230' })).code, 200)
+  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10482', motivo: 'Ya no aplica' })).code, 403)
+  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230' })).code, 400) // sin motivo
+  assert.equal((await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230', motivo: 'Ya no aplica' })).code, 200)
+  const aviso = app.estado.notificaciones.findLast((n) => n.for === a.to)
+  assert.deepEqual([aviso.kind, aviso.texto, aviso.motivo], ['eliminada', a.text, 'Ya no aplica'])
   assert.ok(!(await pedir(app, 'GET', '/api/actividades/10482')).body.some((x) => x.id === a.id))
   assert.ok(!(await pedir(app, 'GET', '/api/inicio/10482')).body.notificaciones.some((x) => x.kind === 'urgente'))
   assert.equal((await mover({ columna: 'alta' })).code, 404)
@@ -1060,7 +1136,7 @@ test('tablero del técnico: pide mover sus tarjetas y su encargado aprueba o rec
 test('auditoría: los números de actividad no se reutilizan al eliminar; equipo trae quién la creó; login con límite', async () => {
   const app = build()
   const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ puntos: [{ texto: 'Primera' }] }))).body
-  await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230' })
+  await pedir(app, 'DELETE', `/api/actividades/${a.id}`, { por: '10230', motivo: 'Duplicada' })
   const [b] = (await pedir(app, 'POST', '/api/actividades', asignar({ puntos: [{ texto: 'Segunda' }] }))).body
   assert.equal(b.id, a.id + 1)
   const jorge = (await pedir(app, 'GET', '/api/equipo/10001')).body.find((e) => e.no === '10482')

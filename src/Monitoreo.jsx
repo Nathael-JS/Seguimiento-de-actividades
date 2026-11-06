@@ -17,6 +17,7 @@ export default function Monitoreo({ user }) {
   const [filtro, setFiltro] = useState(() => consulta.get('lider') ?? 'todos')
   // #monitoreo?empleado=N (desde Jerarquía) abre directo sus actividades
   const [elegido, setElegido] = useState(() => consulta.get('empleado'))
+  const [puesto, setPuesto] = useState('') // '' = todos los puestos
   // Lista (por defecto) o tarjetas por persona; se recuerda en el navegador
   const [vista, setVista] = useState(() => { try { return localStorage.getItem('monitoreo-vista') ?? 'lista' } catch { return 'lista' } })
   const elegirVista = (v) => { setVista(v); try { localStorage.setItem('monitoreo-vista', v) } catch { /* solo esta vez */ } }
@@ -30,8 +31,12 @@ export default function Monitoreo({ user }) {
 
   const nombres = Object.fromEntries([[user.no, user.name], ...equipo.map((e) => [e.no, e.name])])
   const lideres = equipo.filter((e) => esEncargado(e.role))
-  const visibles = equipo.filter((e) =>
-    filtro === 'todos' || (filtro === 'directos' ? e.boss === user.no : e.no === filtro || e.boss === filtro))
+  // Un líder elegido: él, quienes le reportan directo y sus ayudantes
+  const delLider = (e) => e.no === filtro || e.boss === filtro || equipo.find((l) => l.no === filtro)?.ayudantes?.includes(e.no)
+  const visibles = equipo.filter((e) => (!puesto || e.role === puesto) &&
+    (filtro === 'todos' || (filtro === 'directos' ? e.boss === user.no : delLider(e))))
+  // Solo los puestos que hay en su gente
+  const puestos = ['gte', 'sr', 'full', 'jr', 'tec'].filter((r) => equipo.some((e) => e.role === r))
 
   return (
     <>
@@ -53,6 +58,13 @@ export default function Monitoreo({ user }) {
           </button>
         ))}
       </div>
+      <label className="puesto-filtro">
+        <span className="sr">{t('Puesto')}</span>
+        <select value={puesto} onChange={(e) => setPuesto(e.target.value)}>
+          <option value="">{t('Todos los puestos')}</option>
+          {puestos.map((r) => <option key={r} value={r}>{rol(r)} ({equipo.filter((e) => e.role === r).length})</option>)}
+        </select>
+      </label>
       <div className="segmento" role="group" aria-label={t('Vista')}>
         <button aria-pressed={vista === 'lista'} onClick={() => elegirVista('lista')}><Icono nombre="list" />{t('Lista')}</button>
         <button aria-pressed={vista === 'tarjetas'} onClick={() => elegirVista('tarjetas')}><Icono nombre="grid" />{t('Tarjetas')}</button>

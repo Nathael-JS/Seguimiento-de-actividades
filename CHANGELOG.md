@@ -12,6 +12,93 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+# Versión 0.0.1
+
+## [v0.0.1 · Fase 4] 2026-11-06: Árbol de jerarquía interactivo
+
+### Agregado
+- **Jerarquía interactiva (gerente):**
+  - arrastra a una persona sobre su nuevo encargado (Full, Senior o gerente que pueda tenerla a su cargo);
+  - mientras arrastra, los destinos válidos se marcan y los demás se atenúan;
+  - **Mover a…** hace lo mismo con teclado y en celular, con solo destinos válidos;
+  - soltar un técnico sobre un Ing. Jr (o al revés) lo deja como su **ayudante**;
+  - la persona movida pasa al departamento de su encargado y recibe un aviso (`PATCH /api/jerarquia/:empleado`).
+- **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y ayudantes.
+- **Ayudantes en el árbol:** con borde punteado bajo su líder.
+
+### Corregido
+- **Aviso de solicitud de criticidad:** decía "valídalo en el Tablero" y el menú ahora dice Kanban; ahora dice "valídalo en el Kanban".
+- **Traducciones sin uso:** se quitaron las seis del Tablero por criticidad.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Jerarquia.jsx`, `src/ui.jsx`, `src/index.css`, `src/en.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
+## [v0.0.1 · Fase 3] 2026-11-06: Aviso emergente de notificaciones
+
+### Agregado
+- **Aviso emergente** al llegar una notificación nueva, en escritorio y celular:
+  - aparece arriba a la derecha (en celular, arriba a todo lo ancho);
+  - se cierra solo a los 8 s, y se queda abierto mientras el cursor está encima;
+  - al tocarlo abre la actividad y la marca como leída;
+  - si llegan varias juntas, muestra la más nueva y "y N más en el Buzón";
+  - al entrar no avisa de las que ya había.
+- Llega con la actualización de cada 30 s (o al cambiar de pantalla). No usa las notificaciones del sistema operativo.
+
+### Archivos
+- `src/Shell.jsx`, `src/index.css`, `src/en.js`, `PRUEBAS.md`
+
+---
+
+## [v0.0.1 · Fase 2] 2026-11-06: Kanban, plantilla editable, ayudantes y filtros
+
+### Agregado
+- **Ajustes → Plantilla del departamento:** la plantilla cargada, con su estado (registrada o por registrar).
+  - **Agregar persona:** para alguien que faltó en el Excel; queda por registrar.
+  - **Editar:** corrige a cualquiera de la plantilla.
+  - Los dos usan la misma carga de plantilla y sus reglas.
+- **Inicio → Avance por líder → Asignar ayudante:** técnicos e Ing. Jr de su departamento. El botón muestra cuántos tiene.
+- **Monitoreo:** filtro por **puesto**. Un líder elegido trae también a sus ayudantes.
+
+### Cambiado
+- **Tablero → Kanban de actividades:**
+  - columnas por **estado** (Pendiente, En proceso, Realizada, Incompleta);
+  - la criticidad pasa a etiqueta de color y a filtro;
+  - el encargado cambia el estado arrastrando, y al empleado le llega el aviso (`PATCH /api/actividades/:id`);
+  - la criticidad se cambia en el menú ⋯; el técnico y el Jr la piden, como antes.
+- **`GET /api/departamentos`:** el gerente recibe también correo, encargado y si ya se registró; el resto de los encargados, igual que antes.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Tablero.jsx`, `src/TableroGerente.jsx`, `src/Inicio.jsx`, `src/Monitoreo.jsx`, `src/Ajustes.jsx`, `src/comun.js` (`lidera`), `src/index.css`, `src/en.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
+## [v0.0.1 · Fase 1] 2026-11-06: Reglas de jerarquía, ayudantes y autoasignación
+
+### Agregado
+- **Ayudantes** (`PUT /api/lideres/:lider/ayudantes`): un líder (Full, Senior o gerente) puede tener uno o varios técnicos o Ing. Jr de su departamento.
+  - Los maneja como a su gente: les asigna, hereda y borra actividades, y los ve en Monitoreo.
+  - El ayudante no deja de reportar a su encargado.
+  - Los elige quien tiene al líder a su cargo, y al ayudante le llega un aviso.
+- **El gerente se asigna tareas:** aparece primero en su lista al crear actividades. Solo él o el gerente que lo tiene a su cargo le asignan; no se avisa a sí mismo.
+- **Borrar con motivo:** eliminar una actividad pide el porqué, y al empleado le llega "X eliminó «actividad»: motivo".
+- **Versión visible:** `v0.0.1` al pie de la app (`package.json` 0.0.1).
+
+### Cambiado
+- **Puestos:**
+  - técnico e Ing. Jr al mismo nivel;
+  - el Full tiene a su cargo técnicos e Ing. Jr;
+  - el Senior, además, a Full;
+  - el gerente, a todos, también a otros gerentes, y ve la gente de los departamentos que dirige ese gerente.
+  - Las reglas aplican a la plantilla y al cambio de puesto del super administrador.
+- **Jerarquía sin ciclos:** si los datos tuvieran un ciclo, el equipo se calcula sin colgarse.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Tablero.jsx`, `src/TableroGerente.jsx`, `src/Reportes.jsx`, `src/ui.jsx`, `src/en.js`, `vite.config.js`, `package.json`, `package-lock.json`, `DOCUMENTACION.md`
+
+---
+
 ## [PR #33] 2026-11-06: Cuentas de prueba desde la app
 
 ### Agregado

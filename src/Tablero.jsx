@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, hoy, nombreTurno, rol } from './comun.js'
+import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, estado as nombreEstado, hoy, nombreTurno, rol } from './comun.js'
 import Icono from './Icono.jsx'
-import { Avatar, Estado } from './ui.jsx'
+import { Avatar } from './ui.jsx'
 import { t } from './i18n.js'
 
-// Tablero por criticidad, semana a semana. Se arrastran las tarjetas o se usa el menú de cada una (teclado y táctil).
-// - Encargado: crea las actividades de su equipo en Por clasificar, las mueve, fija y elimina, y valida las
-//   solicitudes de cambio de su equipo.
-// - Técnico / Ing. Jr: ve solo las suyas y agrega en Por clasificar; al moverlas pide el cambio a su encargado
-const COLUMNAS = ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente']
+// Kanban de actividades por estado, semana a semana. Se arrastran las tarjetas o se usa el menú de cada una
+// (teclado y táctil). La criticidad va como etiqueta en la tarjeta y como filtro.
+// - Encargado: crea las actividades de su gente, cambia su estado y su criticidad, las fija y elimina, y valida
+//   las solicitudes de cambio de criticidad de su equipo.
+// - Técnico / Ing. Jr: ve solo las suyas, las agrega y cambia su estado; la criticidad la pide a su encargado
+const COLUMNAS = ['pending', 'progress', 'done', 'incomplete'] // los estados
+const CRITICIDADES_TABLERO = ['nueva', 'simple', 'normal', 'alta', 'critica', 'urgente']
 const NIVELES = ['simple', 'normal', 'alta', 'critica'] // criticidades de una tarea guardada
 const columnaDe = (a) => (a.prioridad === 'urgente' ? 'urgente' : a.criticidad ?? 'normal')
 
@@ -48,6 +50,7 @@ export default function Tablero({ user, recargar, avisar }) {
   const [semana, setSemana] = useState(() => (semanas.includes(lunesDe(hoy())) ? lunesDe(hoy()) : semanas[0]))
   const [nuevaSemana, setNuevaSemana] = useState('')
   const [encima, setEncima] = useState(null) // columna sobre la que se arrastra
+  const [filtro, setFiltro] = useState('') // criticidad a la vista ('' = todas)
   const [guardadas, setGuardadas] = useState([])
   const [usar, setUsar] = useState(null) // tarea guardada elegida para crear: abre el panel Por clasificar con ella
   const encargado = user.encargado
@@ -104,6 +107,21 @@ export default function Tablero({ user, recargar, avisar }) {
     const cambios = urgente ? { prioridad: 'urgente', criticidad: undefined } : { prioridad: undefined, criticidad: columna }
     aplicar(a, { ...cambios, solicitud: undefined }, cuerpo, t('Movida a {columna}.', { columna: nombreColumna(columna) }))
   }
+  // Arrastrar a otra columna cambia el estado (el encargado, también el de las actividades de su gente)
+  async function cambiarEstado(a, estado) {
+    if (a.status === estado) return
+    const antes = acts
+    conTransicion(() => setActs(acts.map((x) => (x.id === a.id ? { ...x, status: estado } : x))))
+    try {
+      const r = await api(`/api/actividades/${a.id}`, { method: 'PATCH', body: { por: user.no, estado } })
+      setActs((l) => l.map((x) => (x.id === a.id ? { ...x, ...r, persona: a.persona } : x)))
+      avisar(t('Movida a {columna}.', { columna: nombreEstado(estado) }))
+      recargar()
+    } catch (e) {
+      conTransicion(() => setActs(antes))
+      avisar(e.message)
+    }
+  }
   // Lanza el error para que el formulario de la tarjeta lo muestre
   async function editar(a, cambios) {
     const r = await api(`/api/actividades/${a.id}/editar`, { method: 'PATCH', body: { por: user.no, ...cambios } })
@@ -138,9 +156,9 @@ export default function Tablero({ user, recargar, avisar }) {
     }
   }
   const fijar = (a) => aplicar(a, { fijada: !a.fijada }, { fijada: !a.fijada })
-  async function eliminar(a) {
+  async function eliminar(a, motivo) {
     try {
-      await api(`/api/actividades/${a.id}`, { method: 'DELETE', body: { por: user.no } })
+      await api(`/api/actividades/${a.id}`, { method: 'DELETE', body: { por: user.no, motivo } })
       conTransicion(() => setActs((l) => l.filter((x) => x.id !== a.id)))
       avisar(t('Actividad eliminada.'))
       recargar()
@@ -153,7 +171,7 @@ export default function Tablero({ user, recargar, avisar }) {
   if (!acts) return <p className="muted">{t('Cargando…')}</p>
 
   const domingo = masDias(semana, 6)
-  const deLaSemana = acts.filter((a) => a.date >= semana && a.date <= domingo)
+  const deLaSemana = acts.filter((a) => a.date >= semana && a.date <= domingo && (!filtro || columnaDe(a) === filtro))
   // Fijadas arriba; luego las abiertas y al final las realizadas, por fecha
   const orden = (x, y) => (y.fijada === true) - (x.fijada === true) || (x.status === 'done') - (y.status === 'done') || x.date.localeCompare(y.date) || x.id - y.id
   const porValidar = acts.filter((a) => a.solicitud)
@@ -161,10 +179,10 @@ export default function Tablero({ user, recargar, avisar }) {
   return (
     <>
       <div className="page-head">
-        <h1>{t('Tablero')}</h1>
+        <h1>{t('Kanban de actividades')}</h1>
         <p>{encargado
-          ? t('Crea las actividades de tu equipo en Por clasificar y arrástralas a su criticidad. Urgente se cierra al terminar su turno.')
-          : t('Tus actividades por criticidad. Agrega en Por clasificar; al moverlas, tu encargado valida el cambio.')}</p>
+          ? t('Crea las actividades de tu gente con + y arrástralas según su estado. La criticidad se cambia en el menú de cada tarjeta.')
+          : t('Tus actividades por estado: arrástralas al avanzar. Para cambiar su criticidad, tu encargado valida el cambio.')}</p>
       </div>
 
       {porValidar.length > 0 && (
@@ -194,11 +212,18 @@ export default function Tablero({ user, recargar, avisar }) {
         </span>
       </div>
       <p className="meta">{dia(semana)} – {dia(domingo)} · {t(deLaSemana.length === 1 ? '{n} actividad' : '{n} actividades', { n: deLaSemana.length })}</p>
+      <div className="filtro-crit" role="group" aria-label={t('Filtrar por criticidad')}>
+        {['', ...CRITICIDADES_TABLERO].map((c) => (
+          <button key={c || 'todas'} type="button" className="chip-col" data-crit={c || undefined} aria-pressed={filtro === c} onClick={() => setFiltro(c)}>
+            {c ? nombreColumna(c) : t('Todas')}
+          </button>
+        ))}
+      </div>
       <Guardadas lista={guardadas} usar={(g) => setUsar({ g, n: Date.now() })} quitar={quitarGuardada} />
 
       <div className="tablero">
         {COLUMNAS.map((c) => {
-          const tarjetas = deLaSemana.filter((a) => columnaDe(a) === c).sort(orden)
+          const tarjetas = deLaSemana.filter((a) => a.status === c).sort(orden)
           return (
             <section key={c} className={`columna col-${c}${encima === c ? ' encima' : ''}`} aria-labelledby={`col-${c}`}
               onDragOver={(e) => { e.preventDefault(); setEncima(c) }} onDragLeave={() => setEncima(null)}
@@ -206,11 +231,11 @@ export default function Tablero({ user, recargar, avisar }) {
                 e.preventDefault()
                 setEncima(null)
                 const a = acts.find((x) => x.id === Number(e.dataTransfer.getData('text/plain')))
-                if (a) mover(a, c)
+                if (a) cambiarEstado(a, c)
               }}>
               <header>
-                <h2 id={`col-${c}`}>{nombreColumna(c)} <span className="mono">{tarjetas.length}</span></h2>
-                {c === 'nueva' && (
+                <h2 id={`col-${c}`}>{nombreEstado(c)} <span className="mono">{tarjetas.length}</span></h2>
+                {c === 'pending' && (
                   <NuevasActividades key={usar?.n ?? 0} inicial={usar?.g} guardadas={guardadas} equipo={equipo} semana={semana} user={user}
                     alCrear={(n) => {
                       setUsar(null)
@@ -223,9 +248,9 @@ export default function Tablero({ user, recargar, avisar }) {
                 )}
               </header>
               <ul>
-                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} columna={c} encargado={encargado} mover={mover} fijar={fijar} eliminar={eliminar} responder={responder} editar={editar} guardarComo={guardarComo} />)}
+                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} encargado={encargado} mover={mover} cambiarEstado={cambiarEstado} fijar={fijar} eliminar={eliminar} responder={responder} editar={editar} guardarComo={guardarComo} />)}
               </ul>
-              {!tarjetas.length && <p className="vacia">{t(c === 'nueva' ? 'Crea actividades con +; luego arrástralas a su criticidad.' : 'Arrastra una tarjeta aquí.')}</p>}
+              {!tarjetas.length && <p className="vacia">{t(c === 'pending' ? 'Crea actividades con +.' : 'Arrastra una tarjeta aquí.')}</p>}
             </section>
           )
         })}
@@ -234,8 +259,10 @@ export default function Tablero({ user, recargar, avisar }) {
   )
 }
 
-function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, editar, guardarComo }) {
+function Tarjeta({ a, encargado, mover, cambiarEstado, fijar, eliminar, responder, editar, guardarComo }) {
+  const columna = columnaDe(a)
   const [confirmar, setConfirmar] = useState(false)
+  const [motivo, setMotivo] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
   const [editando, setEditando] = useState(false)
   const cerrada = a.cerrada
@@ -261,10 +288,16 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, edi
           <summary aria-label={t('Opciones de “{actividad}”', { actividad: a.text })}><Icono nombre="dots" /></summary>
           <div className="menu-cuerpo">
             {!cerrada && <>
-              <span className="meta">{t(encargado ? 'Mover a' : 'Pedir mover a')}</span>
+              <span className="meta">{t('Mover a')}</span>
               <div className="mover-a">
-                {COLUMNAS.filter((c) => c !== columna).map((c) => (
-                  <button key={c} type="button" className="chip-col" onClick={() => mover(a, c)}>{nombreColumna(c)}</button>
+                {COLUMNAS.filter((c) => c !== a.status).map((c) => (
+                  <button key={c} type="button" className="chip-col" onClick={(e) => { cerrarMenu(e); cambiarEstado(a, c) }}>{nombreEstado(c)}</button>
+                ))}
+              </div>
+              <span className="meta">{t(encargado ? 'Criticidad' : 'Pedir criticidad')}</span>
+              <div className="mover-a">
+                {CRITICIDADES_TABLERO.filter((c) => c !== columna).map((c) => (
+                  <button key={c} type="button" className="chip-col" data-crit={c} onClick={() => mover(a, c)}>{nombreColumna(c)}</button>
                 ))}
               </div>
             </>}
@@ -281,10 +314,17 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, edi
             )}
             {encargado && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => fijar(a)}>{t(a.fijada ? 'Desfijar' : 'Fijar arriba')}</button>
-              {confirmar
-                ? <button type="button" className="btn btn-danger btn-sm" onClick={() => eliminar(a)}>{t('Sí, eliminar')}</button>
-                : <button type="button" className="btn btn-ghost btn-sm peligro" onClick={() => setConfirmar(true)}>{t('Eliminar')}</button>}
+              {!confirmar && <button type="button" className="btn btn-ghost btn-sm peligro" onClick={() => setConfirmar(true)}>{t('Eliminar')}</button>}
             </div>}
+            {encargado && confirmar && (
+              // El motivo le llega al empleado en su aviso
+              <form className="eliminar-motivo" onSubmit={(e) => { e.preventDefault(); eliminar(a, motivo.trim()) }}>
+                <label className="field"><span>{t('¿Por qué se elimina?')}</span>
+                  <input value={motivo} maxLength={300} onChange={(e) => setMotivo(e.target.value)} autoFocus />
+                </label>
+                <button className="btn btn-danger btn-sm" disabled={motivo.trim().length < 3}>{t('Sí, eliminar')}</button>
+              </form>
+            )}
           </div>
         </details>
       </div>
@@ -293,7 +333,7 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, edi
         <span className="meta mono">{dia(a.date)} · {nombreTurno(a.shift)}</span>
       </div>
       <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-        <Estado estado={a.status} />
+        <span className="tag crit" data-crit={columna}>{nombreColumna(columna)}</span>
         {cerrada && <span className="tag suave">{t('Cerrada con el turno')}</span>}
         {a.inh && <span className="tag">{t('Heredada')}</span>}
         {a.recurrencia && <span className="tag suave repite"><Icono nombre="repeat" />{t(PERIODOS[a.recurrencia])}</span>}

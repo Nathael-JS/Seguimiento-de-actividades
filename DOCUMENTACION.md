@@ -124,10 +124,17 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 | Senior (`sr`) | 1 | Gerencia | Encargado |
 | Ing. Full (`full`) | 2 | Gerencia | Encargado |
 | Ing. Jr (`jr`) | 3 | Jr / Técnico | Ejecutor |
-| Técnico (`tec`) | 4 | Jr / Técnico | Ejecutor |
+| Técnico (`tec`) | 3 | Jr / Técnico | Ejecutor (mismo nivel que el Ing. Jr) |
 | Super administrador (`sa`) | — | Gerencia | Solo administra: Usuarios, Registros, Perfil |
 
-- **Encargado** = rango ≤ 2 (`esEncargado`). Su **equipo** son los empleados debajo de él en la jerarquía (`boss`), solo de sus departamentos. Solo puede asignar a quien tiene un rango menor que el suyo (`asignables`).
+- **Encargado** = rango ≤ 2 (`esEncargado`). Quién puede tener a quién a su cargo (`lidera`):
+  - **Ing. Full:** técnicos e Ing. Jr.
+  - **Senior:** Full, técnicos e Ing. Jr.
+  - **Gerente:** a todos, también a otros gerentes. Un gerente a cargo de otro ve también a la gente de los departamentos que dirige ese otro.
+  - Entre técnico e Ing. Jr no hay encargado, solo ayudante.
+- **Equipo** (`equipo`): los empleados debajo de él en la jerarquía (`boss`), de sus departamentos. Si los datos tuvieran un ciclo, no se cuelga: cada persona se visita una vez.
+- **Ayudantes** (`ayudantes` en el líder, `ayudantesDe`): técnicos e Ing. Jr de sus departamentos que el líder maneja como a su gente (asignar, heredar, borrar, Monitoreo), sin dejar de reportar a su encargado. Los elige quien tiene al líder a su cargo.
+- **Su gente** (`gente`) = equipo + ayudantes. **A quién asigna** (`asignables`): su gente; el gerente, también a sí mismo (solo él o su gerente le asignan).
 - **Menús** (`MODULOS` y `modulosDe` en `src/comun.js`):
   - Encargado: Inicio, Tablero, Actividades asignadas, Herencias, Buzón, Monitoreo, Reportes, Matriz, Jerarquía, Departamentos, Perfil (y Ajustes si es gerente; el gerente no tiene Actividades asignadas).
   - Jr / Técnico: Inicio, Tablero, Actividades asignadas, Buzón, Perfil.
@@ -147,15 +154,17 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
   - Vencen cada **90 días**; se avisa desde 15 días antes.
   - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
 
-### Tablero (por criticidad)
-- **Columnas:** Por clasificar, Simple, Normal, Alta, Crítica y Urgente. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
+### Kanban de actividades (por estado)
+- **Columnas:** los estados, Pendiente, En proceso, Realizada e Incompleta. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
+- **Criticidad:** va como etiqueta de color en cada tarjeta (Por clasificar, Simple, Normal, Alta, Crítica, Urgente) y como filtro arriba del tablero.
 - **Encargado:**
-  - Crea actividades en **Por clasificar** (una por renglón, hasta 20) para alguien de su equipo, con fecha, turno, comentario y, si quiere, criticidad directa.
-  - Las arrastra a su columna (con animación de View Transitions) o usa el menú ⋯ para moverlas, fijarlas, editarlas o eliminarlas.
+  - Crea actividades con **+** en Pendiente (una por renglón, hasta 20) para alguien de su gente, o para sí mismo si es gerente, con fecha, turno, comentario y criticidad.
+  - **Arrastrar** a otra columna cambia el estado (con animación de View Transitions); al empleado le llega el aviso.
+  - En el menú ⋯: Mover a (estado), **Criticidad**, Fijar, Editar, Guardar como tarea y Eliminar (pide el motivo).
   - **Urgente** se cierra al terminar su turno.
 - **Técnico / Ing. Jr:**
-  - Ve solo sus actividades y agrega en Por clasificar (para hoy, en su turno).
-  - Al moverlas crea una **solicitud de cambio** que su encargado **aprueba** o **rechaza** en la tarjeta.
+  - Ve solo sus actividades, las agrega (Por clasificar, para hoy, en su turno) y cambia su estado arrastrándolas.
+  - Al pedir otra **criticidad** crea una **solicitud de cambio** que su encargado **aprueba** o **rechaza** en la tarjeta.
 - **Recurrentes:**
   - Cualquier tarea que no sea urgente se puede repetir con el interruptor **Repetir**: cada día hábil, cada semana o cada mes. Se activa al crearla o desde **Editar**.
   - Al llegar su fecha aparece una copia nueva, Pendiente (ver [10.2](#102-recurrencia)).
@@ -194,11 +203,18 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
   - **Entrada:** la primera vez del día que la persona abre la app (aviso "Bienvenido…").
   - **Salida:** desde 30 min antes del fin del turno aparecen en la barra de arriba **Tiempo extra** y **Marcar salida**; siguen ahí hasta marcarla. El turno 3 marca su salida a la mañana siguiente sobre la jornada de la noche anterior.
   - **Tiempo extra:** primero se **registra** cuánto se quedará (de 30 min a 6 h; se puede corregir hasta marcar la salida). Al marcar la salida se valida solo: cuenta si salió **más de 15 min** después del fin del turno, y cuenta lo que se quedó de verdad, **hasta lo registrado**. Sin registro o sin salida marcada no cuenta.
-- **Jerarquía:** árbol de quién reporta a quién.
+- **Jerarquía:** árbol de quién reporta a quién, con los **ayudantes** de cada líder (borde punteado).
+  - **El gerente lo reorganiza:** arrastra a una persona sobre su nuevo encargado (Full, Senior o gerente que pueda tenerla a su cargo), o usa **Mover a…** (teclado y celular, solo destinos válidos). Mientras arrastra, los destinos válidos se marcan y los demás se atenúan.
+  - **Técnico ↔ Ing. Jr:** soltar uno sobre el otro lo deja como **ayudante** (no cambia su encargado).
+  - **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y cuántos ayudantes tiene.
+  - A la persona movida le llega el aviso "… te movió: ahora reportas a …".
 - **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
 - **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
+  - **Plantilla del departamento:** la plantilla cargada, con estado (registrada o por registrar). **Agregar persona** (alguien que faltó en el Excel) y **Editar** mandan una fila por la misma carga de plantilla: mismas reglas. La persona nueva queda por registrar.
+- **Monitoreo:** toda la gente a su cargo (en el gerente, todo el departamento), con filtro por líder y por **puesto** (gerentes, Senior, Full, Ing. Jr, técnico). Un líder elegido trae también a sus ayudantes.
 
 ### Buzón y avisos
+- **Aviso emergente** (`Shell.jsx`): al llegar una notificación nueva sin leer (actualización de cada 30 s) aparece unos segundos arriba a la derecha; al tocarlo abre la actividad. La primera carga no avisa.
 Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mientras la pestaña está a la vista, y al tocar una se abre la pantalla donde se atiende. Tipos de aviso:
 
 | Tipo | Cuándo |
@@ -244,15 +260,15 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | Archivo | Componentes | Página |
 |---|---|---|
 | `Inicio.jsx` | `Inicio`, `Kpi`, `TareasAbiertas` | Inicio del ejecutor/encargado (indicadores, tareas abiertas, notificaciones recientes) |
-| `TableroGerente.jsx` | `TableroGerente`, `Alerta` | Inicio del gerente (por líder, por turno, atención) |
-| `Tablero.jsx` | `Tablero`, `Tarjeta`, `Repetir`, `EditarTarjeta`, `Guardadas`, `NuevasActividades` | Tablero por criticidad (ver sección 6) |
+| `TableroGerente.jsx` | `TableroGerente`, `Alerta`, `Ayudantes` | Inicio del gerente (por líder con **Asignar ayudante**, por turno, atención) |
+| `Tablero.jsx` | `Tablero`, `Tarjeta`, `Repetir`, `EditarTarjeta`, `Guardadas`, `NuevasActividades` | Kanban de actividades por estado (ver sección 6) |
 | `MisActividades.jsx` | `MisActividades`, `Tarea`, `NuevaTarea` | Actividades asignadas |
 | `Lista.jsx` | `ListaActividades`, `Prioridad`, `PorcentajeRealizadas` | Vista de lista y % realizadas desplegable |
 | `Herencias.jsx` | `Herencias`, `Cupo`, `Actividad`, `ParaHeredar`, `PorValidar`, `Enviada` | Herencias |
 | `Monitoreo.jsx` | `Monitoreo`, `Detalle` | Monitoreo del equipo |
 | `Reportes.jsx` | `Reportes`, `Comparativo` | Reportes y comparativo |
 | `Matriz.jsx` | `Matriz`, `Celda`, `Extra` | Matriz de seguimiento |
-| `Jerarquia.jsx` | `Jerarquia`, `Rama`, `Nodo` | Árbol del equipo |
+| `Jerarquia.jsx` | `Jerarquia`, `Rama`, `Nodo`, `Ficha`, `MoverA` | Árbol del equipo; el gerente lo reorganiza (arrastrar o Mover a…) |
 | `Departamentos.jsx` | `Departamentos` | Plantilla y rate |
 | `Ajustes.jsx` | `Ajustes`, `NuevoDepto`, `Plantilla` | Departamentos del gerente |
 | `Buzon.jsx` | `Buzon` | Notificaciones por grupo y día |
@@ -284,7 +300,7 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | Función | Regla |
 |---|---|
 | `empleado(id)` | Busca por número, correo o usuario del correo |
-| `deptosDe(no)`, `equipo(no)`, `asignables(u)` | Departamentos propios y dirigidos; equipo por jerarquía; a quién puede asignar |
+| `lidera(jefe, sub)`, `deptosDe(no)`, `equipo(no)`, `ayudantesDe(u)`, `gente(u)`, `asignables(u)` | Reglas de puesto; departamentos propios y dirigidos; equipo por jerarquía; ayudantes; equipo + ayudantes; a quién puede asignar |
 | `vigentes()` | Actividades sin heredar (las heredadas quedan solo en el historial) |
 | `delTurno(acts, desde)` | Lo abierto + lo realizado desde el inicio del día local |
 | `siguienteId(lista)` | Siguiente número de una lista; nunca reutiliza uno borrado |
@@ -339,15 +355,17 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET | `/api/fotos/:empleado` | Sesión | La foto de perfil (404 si no tiene: se muestran las iniciales); caché de 5 min |
 | PATCH · DELETE | `/api/departamentos/:clave` | Gerente que lo dirige | Renombrar; borrar si no tiene personas |
 | DELETE | `/api/notificaciones/:no` | Propio | Borrar el historial de notificaciones (los avisos automáticos no vuelven) |
-| GET | `/api/equipo/:no` | Encargado | Su equipo con sus actividades vigentes |
+| GET | `/api/equipo/:no` | Encargado | Su gente con sus actividades vigentes y los `ayudantes` de cada líder (el gerente viene primero, él mismo) |
+| PATCH | `/api/jerarquia/:empleado` | Gerente | `{ por, a }`: lo pone bajo `a` (alguien de su gente o él mismo) si `lidera`; entre técnico e Ing. Jr lo deja como ayudante. Nunca debajo de su propia rama. Pasa al departamento de su encargado. Avisa a quien se mueve |
+| PUT | `/api/lideres/:lider/ayudantes` | Quien tiene al líder a su cargo | `{ por, ayudantes: [no] }`: la lista completa de ayudantes (técnicos e Ing. Jr de sus departamentos). Avisa a quien entra |
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
 | GET | `/api/actividades/:no` | Propio | Sus actividades (urgentes primero) |
-| PATCH | `/api/actividades/:id` | Asignado | Estado y comentario. El técnico / Ing. Jr cambia el estado de una actividad hasta 5 veces; luego espera 10 min (429) |
+| PATCH | `/api/actividades/:id` | Asignado o su encargado | Estado y comentario. El encargado lo cambia desde el Kanban y se le avisa al empleado. El técnico / Ing. Jr cambia el estado de una actividad hasta 5 veces; luego espera 10 min (429) |
 | PATCH | `/api/actividades/:id/tablero` | Encargado / asignado | Mover o fijar; el técnico asignado crea una solicitud (202) |
 | POST | `/api/actividades/:id/solicitud` | Encargado | Aprobar o rechazar la solicitud de cambio |
 | PATCH | `/api/actividades/:id/editar` | Encargado / dueño | Editar texto, comentario, fecha, turno y recurrencia (`no` la quita) |
-| DELETE | `/api/actividades/:id` | Encargado | Eliminar (si no tiene una herencia pendiente) |
+| DELETE | `/api/actividades/:id` | Encargado | Eliminar con `motivo` (3 a 300 caracteres), si no tiene una herencia pendiente. Al empleado le llega el aviso con el texto y el motivo |
 | GET | `/api/guardadas/:no` | Propio | Tareas guardadas |
 | POST | `/api/guardadas` | Sesión | Guardar una plantilla (mismo texto la actualiza; máximo 100) |
 | DELETE | `/api/guardadas/:id` | Dueño | Eliminar una guardada |

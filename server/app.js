@@ -10,9 +10,12 @@ import { respaldo } from './db.js'
 const leer = (archivo) => JSON.parse(readFileSync(new URL(`./datos/${process.env.DATOS_SEMILLA ?? 'inicio'}/${archivo}`, import.meta.url)))
 const dist = new URL('../dist/', import.meta.url)
 
-// Menor número = más rango. Encargados: Gerente, Senior, Ing. Full
-const RANGO = { gte: 0, sr: 1, full: 2, jr: 3, tec: 4 }
+// Menor número = más rango. Encargados: Gerente, Senior, Ing. Full. Técnico e Ing. Jr son del mismo nivel
+const RANGO = { gte: 0, sr: 1, full: 2, jr: 3, tec: 3 }
 const esEncargado = (u) => RANGO[u.role] <= 2
+// Quién puede tener a quién a su cargo (por puesto): el Full, a técnicos e Ing. Jr; el Senior, además a Full; el
+// gerente, a todos, también a otros gerentes. Entre técnico e Ing. Jr no hay encargado, solo ayudante
+const lidera = (jefe, sub) => RANGO[jefe] <= 2 && (RANGO[jefe] < RANGO[sub] || (jefe === 'gte' && sub === 'gte'))
 // Super administrador: fuera de los departamentos; maneja usuarios y registros
 const esSA = (u) => u?.role === 'sa'
 const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
@@ -412,11 +415,23 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     usuarios.find((u) => u.email === id || u.email.split('@')[0] === id || u.no === id)
   // Departamentos de alguien: el suyo y los que dirige como gerente
   const deptosDe = (no) => [...new Set([empleado(no)?.dept, ...departamentos.filter((d) => d.gerente === no).map((d) => d.clave)])]
-  // Todos los empleados debajo de `no` en la jerarquía, directos e indirectos; nunca de un departamento ajeno
-  const equipo = (no, depts = deptosDe(no)) =>
-    usuarios.filter((u) => u.boss === no && depts.includes(u.dept)).flatMap((u) => [u, ...equipo(u.no, depts)])
-  // A quién puede asignar un encargado: su equipo, solo con menor rango que él
-  const asignables = (u) => equipo(u.no).filter((e) => RANGO[e.role] > RANGO[u.role])
+  // Todos los empleados debajo de `no` en la jerarquía, directos e indirectos; nunca de un departamento ajeno, salvo
+  // un gerente a cargo de otro: entra con los departamentos que dirige. `vistos` evita un ciclo si los datos lo tuvieran
+  const equipo = (no, depts = deptosDe(no), vistos = new Set([no])) =>
+    usuarios.filter((u) => u.boss === no && !vistos.has(u.no) && (depts.includes(u.dept) || u.role === 'gte'))
+      .flatMap((u) => {
+        vistos.add(u.no)
+        return [u, ...equipo(u.no, u.role === 'gte' ? [...new Set([...depts, ...deptosDe(u.no)])] : depts, vistos)]
+      })
+  // Ayudantes de un líder: técnicos e Ing. Jr de sus departamentos que maneja como a su gente sin ser su encargado
+  const ayudantesDe = (u) => {
+    const depts = deptosDe(u.no)
+    return (u.ayudantes ?? []).map(empleado).filter((a) => a && depts.includes(a.dept) && RANGO[a.role] === 3)
+  }
+  // Su gente: su equipo en la jerarquía y sus ayudantes, sin repetir
+  const gente = (u) => [...new Map([...equipo(u.no), ...ayudantesDe(u)].map((e) => [e.no, e])).values()]
+  // A quién puede asignar un encargado: su gente; el gerente, también a sí mismo (y solo él o su gerente lo hacen)
+  const asignables = (u) => (u.role === 'gte' ? [u, ...gente(u)] : gente(u))
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
   const vigentes = () => actividades.filter((a) => !a.handedTo)
   // Lo del turno: lo que sigue abierto y lo realizado desde `desde`. Sin `desde`, todo
@@ -733,9 +748,13 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (!esEncargado(empleado(req.sesion.no))) return reply.code(403).send({ error: 'Solo los encargados ven la plantilla.' })
     const rate = conRateDe(req.query)
     const depts = deptosDe(req.sesion.no)
+    const gerente = empleado(req.sesion.no).role === 'gte'
     return usuarios
       .filter((u) => depts.includes(u.dept))
-      .map(({ no, name, role, dept, shift, area }) => ({ no, name, role, dept, shift, area, ...rate(no) }))
+      // El correo, el encargado y si ya se registró, solo para el gerente: es quien corrige la plantilla (Ajustes)
+      .map(({ no, name, role, dept, shift, area, email, boss, porRegistrar }) => ({
+        no, name, role, dept, shift, area, ...(gerente && { email, boss, porRegistrar: !!porRegistrar }), ...rate(no),
+      }))
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
   })
 
@@ -803,8 +822,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       const jefeDelDepto = jefe && (f.boss === por || enArchivo.has(f.boss) || jefe.dept === clave)
       // Siempre a cargo de alguien de mayor puesto, y sin dejar a nadie a cargo de alguien de igual o menor
       // puesto: así la jerarquía nunca hace ciclos
-      const rangoOk = jefe && RANGO[jefe.role] <= 2 && RANGO[jefe.role] < RANGO[f.role] &&
-        usuarios.every((u) => u.boss !== f.no || enArchivo.has(u.no) || RANGO[u.role] > RANGO[f.role])
+      const rangoOk = jefe && lidera(jefe.role, f.role) &&
+        usuarios.every((u) => u.boss !== f.no || enArchivo.has(u.no) || lidera(f.role, u.role))
       const error =
         filas.findIndex((x) => x.no === f.no) !== i ? 'Número repetido en el archivo.'
           : f.no === por ? 'Tú no vas en la plantilla: ya diriges el departamento.'
@@ -875,7 +894,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     // solo se aceptan fechas a un día o menos de la del servidor (cubre cualquier zona horaria)
     if (req.query.hoy && hoyValido(req.query.hoy)) generarAvisos(req.query.hoy)
     // El encargado ve las suyas y las de su equipo; el ejecutor, solo las suyas
-    const alcance = esEncargado(u) ? [u.no, ...equipo(u.no).map((e) => e.no)] : [u.no]
+    const alcance = esEncargado(u) ? [u.no, ...gente(u).map((e) => e.no)] : [u.no]
     const acts = delTurno(vigentes().filter((a) => alcance.includes(a.to)), req.query.desde)
     return {
       diasPassword: diasPassword(u),
@@ -897,7 +916,9 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
             kind: n.kind,
             who: empleado(n.who)?.name,
             whoNo: n.who, // para su foto
-            actividad: a?.text,
+            actividad: a?.text ?? n.texto, // una eliminada ya no existe: el aviso guarda su texto
+            motivo: n.motivo,
+            nuevo: n.nuevo && empleado(n.nuevo)?.name, // jerarquía: su nuevo encargado
             activityTo: a?.to, // de quién es la actividad: decide si se abre Mis actividades o Monitoreo
             urgente: a?.prioridad === 'urgente',
             count: n.count,
@@ -975,11 +996,62 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const rate = conRateDe(req.query)
     return asignables(u)
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
-      .map(({ no, name, role, dept, shift, boss }) => ({
-        no, name, role, dept, shift, boss, ...rate(no),
+      .map(({ no, name, role, dept, shift, boss, ayudantes = [] }) => ({
+        no, name, role, dept, shift, boss, ayudantes, ...rate(no),
         actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id).map((a) => ({ ...a, byName: empleado(a.by)?.name })),
       }))
   }))
+
+  // Ayudantes de un líder (Full, Senior o gerente): los elige quien lo tiene a su cargo. Técnicos e Ing. Jr de los
+  // departamentos del líder; se manda la lista completa. Se avisa a quien entra
+  const ayudantesSchema = {
+    params: { type: 'object', properties: { lider: noEmpleado } },
+    body: objeto(['por', 'ayudantes'], { por: noEmpleado, ayudantes: { type: 'array', maxItems: 30, uniqueItems: true, items: noEmpleado } }),
+  }
+  app.put('/api/lideres/:lider/ayudantes', { schema: ayudantesSchema }, async (req, reply) => {
+    const { por, ayudantes } = req.body
+    const lider = empleado(req.params.lider)
+    if (!lider || !esEncargado(lider)) return reply.code(404).send({ error: 'Ese líder no existe.' })
+    if (!equipo(por).some((e) => e.no === lider.no)) return reply.code(403).send({ error: 'Ese líder no está a tu cargo.' })
+    const depts = deptosDe(lider.no)
+    if (!ayudantes.every((no) => { const a = empleado(no); return a && RANGO[a.role] === 3 && depts.includes(a.dept) })) {
+      return reply.code(400).send({ error: 'Los ayudantes son técnicos o Ing. Jr de su departamento.' })
+    }
+    for (const no of ayudantes) if (!lider.ayudantes?.includes(no)) notificar({ for: no, kind: 'ayudante', who: lider.no })
+    lider.ayudantes = ayudantes
+    return ayudantesDe(lider).map(({ no, name, role, shift }) => ({ no, name, role, shift }))
+  })
+
+  // Árbol de jerarquía: el gerente mueve a alguien de su gente bajo otro encargado (Full, Senior o gerente que pueda
+  // tenerlo a su cargo). Entre técnico e Ing. Jr no hay encargado: soltar uno sobre el otro lo deja como su ayudante.
+  // Nunca debajo de su propia rama (ciclo). Se le avisa a quien se mueve
+  const moverSchema = {
+    params: { type: 'object', properties: { empleado: noEmpleado } },
+    body: objeto(['por', 'a'], { por: noEmpleado, a: noEmpleado }),
+  }
+  app.patch('/api/jerarquia/:empleado', { schema: moverSchema }, async (req, reply) => {
+    const { por, a } = req.body
+    const yo = empleado(por)
+    if (yo.role !== 'gte') return reply.code(403).send({ error: 'Solo un gerente reorganiza la jerarquía.' })
+    const u = empleado(req.params.empleado)
+    const suya = equipo(por)
+    if (!u || !suya.some((e) => e.no === u.no)) return reply.code(403).send({ error: 'Esa persona no está a tu cargo.' })
+    const destino = a === por ? yo : suya.find((e) => e.no === a)
+    if (!destino || destino.no === u.no) return reply.code(400).send({ error: 'Elige a alguien de tu equipo.' })
+    if (equipo(u.no).some((e) => e.no === destino.no)) return reply.code(400).send({ error: 'No puede quedar debajo de alguien de su propio equipo.' })
+    if (RANGO[u.role] === 3 && RANGO[destino.role] === 3) {
+      if (!destino.ayudantes?.includes(u.no)) destino.ayudantes = [...(destino.ayudantes ?? []), u.no]
+      notificar({ for: u.no, kind: 'ayudante', who: destino.no })
+      return { no: u.no, ayudanteDe: destino.no }
+    }
+    if (!lidera(destino.role, u.role)) return reply.code(400).send({ error: 'Ese puesto no puede tenerlo a su cargo: un Full lleva técnicos e Ing. Jr; un Senior, además Full; un gerente, a todos.' })
+    if (u.boss === destino.no) return { no: u.no, boss: u.boss }
+    u.boss = destino.no
+    // Pasa al departamento de su encargado (un gerente puede dirigir varios: se queda en el suyo si es de él)
+    if (!(destino.role === 'gte' && deptosDe(destino.no).includes(u.dept))) u.dept = destino.dept
+    notificar({ for: u.no, kind: 'jerarquia', who: por, nuevo: destino.no })
+    return { no: u.no, boss: u.boss }
+  })
 
   app.post('/api/actividades', { schema: registrarSchema }, async (req, reply) => {
     const { por, para, fecha, turno, puntos, comentario = '', prioridad, cierre, criticidad = 'normal', recurrencia: periodo } = req.body
@@ -1005,7 +1077,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       actividades.push(a)
       return a
     })
-    notificar({ for: para, kind: 'assigned', who: por, count: nuevas.length })
+    if (para !== por) notificar({ for: para, kind: 'assigned', who: por, count: nuevas.length }) // el gerente se asigna a sí mismo
     return reply.code(201).send(nuevas)
   })
 
@@ -1047,7 +1119,9 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const a = actividades.find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
     const { por, estado, nota = a.note } = req.body
-    if (a.to !== por) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad puede actualizarla.' })
+    // Quien la tiene asignada, o su encargado desde el Kanban (se le avisa al empleado)
+    const desdeEncargado = a.to !== por && delEquipo(por, a)
+    if (a.to !== por && !desdeEncargado) return reply.code(403).send({ error: 'Solo quien tiene asignada la actividad o su encargado pueden actualizarla.' })
     if (a.handedTo) return reply.code(409).send({ error: 'Esta actividad ya fue heredada a otro turno.' })
     if (a.cerrada) return reply.code(409).send({ error: 'Esta tarea urgente se cerró al terminar el turno.' })
 
@@ -1072,7 +1146,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       doneAt: estado !== 'done' ? undefined : a.status === 'done' ? a.doneAt : ahora(),
     })
     // El encargado se entera del cambio de estado y del comentario por separado, como en el mockup
-    if (cambioEstado) notificar({ for: responsable(a), kind: estado, who: por, ref: a.id })
+    if (cambioEstado) notificar({ for: desdeEncargado ? a.to : responsable(a), kind: estado, who: por, ref: a.id })
     if (cambioNota) notificar({ for: responsable(a), kind: 'comment', who: por, ref: a.id })
     return { ...a, byName: empleado(a.by)?.name }
   })
@@ -1140,13 +1214,18 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     notificar({ for: a.to, kind: aprobar ? 'solicitud-ok' : 'solicitud-no', who: por, ref: a.id, columna })
     return a
   })
-  app.delete('/api/actividades/:id', { schema: { params: heredarSchema.params, body: objeto(['por'], { por: noEmpleado }) } }, async (req, reply) => {
+  // Borrar pide el motivo: se le avisa al empleado con el texto de la actividad (ya no existe para abrirla)
+  const borrarSchema = { params: heredarSchema.params, body: objeto(['por', 'motivo'], { por: noEmpleado, motivo: { type: 'string', minLength: 3, maxLength: 300, pattern: '\\S' } }) }
+  app.delete('/api/actividades/:id', { schema: borrarSchema }, async (req, reply) => {
+    const { por, motivo } = req.body
     const i = actividades.findIndex((x) => x.id === req.params.id && !x.handedTo)
     if (i < 0) return reply.code(404).send({ error: 'Actividad no encontrada.' })
-    if (!delEquipo(req.body.por, actividades[i])) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
-    if (actividades[i].herencia) return reply.code(409).send({ error: 'Tiene una herencia esperando validación.' })
+    const a = actividades[i]
+    if (!delEquipo(por, a)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    if (a.herencia) return reply.code(409).send({ error: 'Tiene una herencia esperando validación.' })
     // Se borra; las herencias ya resueltas la conservan en su historial por la original, no por esta
     actividades.splice(i, 1)
+    if (a.to !== por) notificar({ for: a.to, kind: 'eliminada', who: por, texto: a.text, motivo: motivo.trim() })
     return { ok: true }
   })
 
@@ -1319,7 +1398,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     conEmpleado((u, req, reply) => {
       if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados heredan actividades.' })
       const { hoy } = req.query
-      const equipoDe = [u, ...equipo(u.no)]
+      const equipoDe = [u, ...gente(u)]
       return {
         limite: LIMITE,
         usadas: {
@@ -1364,7 +1443,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     let destino = h.para
     if (accion === 'redirigir') {
       const r = empleado(para)
-      if (!r || r.no === h.para || (r.no !== por && !equipo(por).some((e) => e.no === r.no)) || !puedeRecibir(a, r)) {
+      if (!r || r.no === h.para || (r.no !== por && !gente(empleado(por)).some((e) => e.no === r.no)) || !puedeRecibir(a, r)) {
         return reply.code(400).send({ error: 'Redirige a alguien de tu equipo, del mismo nivel de puesto y del turno siguiente.' })
       }
       const usadas = herencias.filter((x) => x.resueltaPor === por && x.resueltaHoy === hoy && x.estado === 'redirigida').length
@@ -1383,7 +1462,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const { por, empleados, desde, hasta, turno } = req.body
     const encargado = empleado(por)
     if (!encargado || !esEncargado(encargado)) return reply.code(403).send({ error: 'Solo los encargados generan reportes.' })
-    const permitidos = [por, ...equipo(por).map((e) => e.no)]
+    const permitidos = [por, ...gente(encargado).map((e) => e.no)]
     if (!empleados.every((no) => permitidos.includes(no))) {
       return reply.code(403).send({ error: 'Solo puedes consultar a tu equipo.' })
     }
@@ -1418,7 +1497,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     for (let d = desde; d <= hastaAyer; d = diaSiguiente(d)) habiles += diaHabil(d)
     const periodo = vigentes().filter((a) => a.date >= desde && a.date <= hasta)
     const yieldDe = (acts) => [acts.filter((a) => a.status === 'done').length, acts.length]
-    return equipo(u.no)
+    return gente(u)
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role, shift, boss }) => {
         const suyas = periodo.filter((a) => a.to === no)
@@ -1486,8 +1565,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (role && role !== u.role) {
       // Igual que la plantilla: su encargado de mayor puesto y su gente de menor, para que la jerarquía no haga ciclos
       const jefe = empleado(u.boss)
-      if (jefe && !(RANGO[jefe.role] < RANGO[role])) return reply.code(400).send({ error: 'Su encargado debe ser de mayor puesto: cambia primero a su encargado.' })
-      if (usuarios.some((x) => x.boss === u.no && RANGO[x.role] <= RANGO[role])) {
+      if (jefe && !lidera(jefe.role, role)) return reply.code(400).send({ error: 'Su encargado debe ser de mayor puesto: cambia primero a su encargado.' })
+      if (usuarios.some((x) => x.boss === u.no && !lidera(role, x.role))) {
         return reply.code(400).send({ error: 'Tiene a su cargo personas de igual o mayor puesto: cámbialas primero.' })
       }
     }

@@ -33,7 +33,7 @@ export class SiFalla extends Component {
 }
 
 // Logo: el reloj de turnos de la portada (A, B y C) con una palomita al centro. Es el mismo dibujo que public/favicon.svg
-export const Firma = () => <p className="firma">{COPYRIGHT}</p>
+export const Firma = () => <p className="firma">{COPYRIGHT} · v{__VERSION__}</p>
 
 export function Logo() {
   return (
@@ -66,10 +66,13 @@ export function Notificacion({ n }) {
     return n.who ? <>{quien} {t('tiene atrasada')} “{n.actividad}”</> : <>{t('Tu actividad')} “{n.actividad}” {t('está atrasada')}</>
   }
   if (n.kind === 'editada') return <>{quien} {t('editó')} “{n.actividad}”</>
+  if (n.kind === 'eliminada') return <>{quien} {t('eliminó')} “{n.actividad}”: {n.motivo}</>
+  if (n.kind === 'jerarquia') return <>{quien} {t('te movió: ahora reportas a')} {n.nuevo}</>
+  if (n.kind === 'ayudante') return <>{quien} {t('te tiene como ayudante: ya puede asignarte actividades')}</>
   if (n.kind === 'urgente') return <>{quien} {t('marcó como urgente')} “{n.actividad}”</>
   if (n.kind.startsWith('solicitud')) {
     const datos = { actividad: n.actividad, columna: columnaTablero(n.columna) }
-    const texto = { solicitud: 'pide mover “{actividad}” a {columna}: valídalo en el Tablero', 'solicitud-ok': 'aprobó mover “{actividad}” a {columna}', 'solicitud-no': 'no aprobó mover “{actividad}” a {columna}' }[n.kind]
+    const texto = { solicitud: 'pide mover “{actividad}” a {columna}: valídalo en el Kanban', 'solicitud-ok': 'aprobó mover “{actividad}” a {columna}', 'solicitud-no': 'no aprobó mover “{actividad}” a {columna}' }[n.kind]
     return <>{quien} {t(texto, datos)}</>
   }
   if (n.kind === 'herencia-pendiente') return <>{quien} {t('propone heredar')} “{n.actividad}” {t('a alguien de tu equipo: valídala')}</>
