@@ -926,3 +926,15 @@ dialog.modal.vista-pdf{max-width:1100px;width:calc(100% - 48px);height:calc(100d
 .form-persona{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface-000);display:flex;flex-direction:column;gap:12px}
 .form-persona h3{margin:0;font:600 15px/20px var(--font-sans)}
 .form-persona .campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+
+/* Aviso emergente de una notificación nueva: arriba a la derecha (en celular, arriba a todo lo ancho) */
+.emergente{position:fixed;top:76px;right:24px;z-index:60;width:min(380px,calc(100vw - 32px));pointer-events:none}
+.emergente-tarjeta{pointer-events:auto;padding:12px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow-pop);animation:emergente-entra .35s var(--ease-salida)}
+.emergente-titulo{display:flex;align-items:center;gap:6px;font:600 13px/18px var(--font-sans)}
+.emergente-titulo svg{width:16px;height:16px;color:var(--accent)}
+.emergente .notif-list{margin:0}
+.emergente .iconbtn{width:28px;height:28px;font-size:18px}
+@keyframes emergente-entra{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.emergente-tarjeta{animation:none}}
+@media (max-width:560px){.emergente{top:64px;left:16px;right:16px;width:auto}}
+@media print{.emergente{display:none}}

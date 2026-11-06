@@ -14,6 +14,22 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Fase 3] 2026-11-06: Aviso emergente de notificaciones
+
+### Agregado
+- **Aviso emergente** al llegar una notificación nueva, en escritorio y celular:
+  - aparece arriba a la derecha (en celular, arriba a todo lo ancho);
+  - se cierra solo a los 8 s, y se queda abierto mientras el cursor está encima;
+  - al tocarlo abre la actividad y la marca como leída;
+  - si llegan varias juntas, muestra la más nueva y "y N más en el Buzón";
+  - al entrar no avisa de las que ya había.
+- Llega con la actualización de cada 30 s (o al cambiar de pantalla). No usa las notificaciones del sistema operativo.
+
+### Archivos
+- `src/Shell.jsx`, `src/index.css`, `src/en.js`, `PRUEBAS.md`
+
+---
+
 ## [v0.0.1 · Fase 2] 2026-11-06: Kanban, plantilla editable, ayudantes y filtros
 
 ### Agregado

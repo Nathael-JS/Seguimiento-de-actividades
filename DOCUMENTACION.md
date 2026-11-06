@@ -210,6 +210,7 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
 - **Monitoreo:** toda la gente a su cargo (en el gerente, todo el departamento), con filtro por líder y por **puesto** (gerentes, Senior, Full, Ing. Jr, técnico). Un líder elegido trae también a sus ayudantes.
 
 ### Buzón y avisos
+- **Aviso emergente** (`Shell.jsx`): al llegar una notificación nueva sin leer (actualización de cada 30 s) aparece unos segundos arriba a la derecha; al tocarlo abre la actividad. La primera carga no avisa.
 Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mientras la pestaña está a la vista, y al tocar una se abre la pantalla donde se atiende. Tipos de aviso:
 
 | Tipo | Cuándo |

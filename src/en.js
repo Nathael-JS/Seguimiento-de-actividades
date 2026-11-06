@@ -674,6 +674,8 @@ export default {
   'Agregar a la plantilla': 'Add to roster',
   'Tú': 'You',
   'opcional': 'optional',
+  'Nueva notificación': 'New notification',
+  'y {n} más en el Buzón': 'and {n} more in the Inbox',
   'Descargar respaldo': 'Download backup',
   'agregó {n} tareas, entre ellas': 'added {n} tasks, including',
   // Recurrentes, edición y tareas guardadas
