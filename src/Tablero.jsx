@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { PERIODOS, TURNOS, api, cierreTurno, columnaTablero as nombreColumna, criticidad, dia, estado as nombreEstado, hoy, nombreTurno, rol } from './comun.js'
+import { PERIODOS, TURNOS, api, cierreTurno, finTurno, columnaTablero as nombreColumna, criticidad, dia, estado as nombreEstado, hoy, nombreTurno, rol } from './comun.js'
 import Icono from './Icono.jsx'
 import { Avatar } from './ui.jsx'
 import { t } from './i18n.js'
@@ -159,6 +159,17 @@ export default function Tablero({ user, recargar, avisar }) {
     }
   }
   const fijar = (a) => aplicar(a, { fijada: !a.fijada }, { fijada: !a.fijada })
+  // Urgente vencida: reabrirla hasta el fin de su turno, dejarla incompleta y cerrada, o eliminarla (queda en el historial)
+  async function revisar(a, accion, motivo) {
+    try {
+      const r = await api(`/api/actividades/${a.id}/revision`, { method: 'POST', body: { por: user.no, accion, motivo, ...(accion === 'reabrir' && { cierre: finTurno(a.shift).toISOString() }) } })
+      conTransicion(() => setActs((l) => (r.eliminada ? l.filter((x) => x.id !== a.id) : l.map((x) => (x.id === a.id ? { ...r, persona: a.persona } : x)))))
+      avisar(t({ reabrir: 'Reabierta hasta el fin de su turno; se avisó a {nombre}.', cerrar: 'Queda incompleta y cerrada.', eliminar: 'Eliminada; sigue en el historial de Monitoreo.' }[accion], { nombre: a.persona.name.split(' ')[0] }))
+      recargar()
+    } catch (e) {
+      avisar(e.message)
+    }
+  }
   async function eliminar(a, motivo) {
     try {
       await api(`/api/actividades/${a.id}`, { method: 'DELETE', body: { por: user.no, motivo } })
@@ -252,7 +263,7 @@ export default function Tablero({ user, recargar, avisar }) {
                 )}
               </header>
               <ul>
-                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} encargado={encargado} mover={mover} cambiarEstado={cambiarEstado} fijar={fijar} eliminar={eliminar} responder={responder} editar={editar} guardarComo={guardarComo} />)}
+                {tarjetas.map((a) => <Tarjeta key={a.id} a={a} encargado={encargado} mover={mover} cambiarEstado={cambiarEstado} fijar={fijar} eliminar={eliminar} responder={responder} editar={editar} guardarComo={guardarComo} revisar={revisar} />)}
               </ul>
               {!tarjetas.length && <p className="vacia">{t(c === 'nueva' ? 'Crea actividades con +; luego dales su criticidad o arrástralas a su estado.' : 'Arrastra una tarjeta aquí.')}</p>}
             </section>
@@ -263,7 +274,7 @@ export default function Tablero({ user, recargar, avisar }) {
   )
 }
 
-function Tarjeta({ a, encargado, mover, cambiarEstado, fijar, eliminar, responder, editar, guardarComo }) {
+function Tarjeta({ a, encargado, mover, cambiarEstado, fijar, eliminar, responder, editar, guardarComo, revisar }) {
   const columna = columnaDe(a)
   const [confirmar, setConfirmar] = useState(false)
   const [motivo, setMotivo] = useState('')
@@ -342,6 +353,7 @@ function Tarjeta({ a, encargado, mover, cambiarEstado, fijar, eliminar, responde
         {a.inh && <span className="tag">{t('Heredada')}</span>}
         {a.recurrencia && <span className="tag suave repite"><Icono nombre="repeat" />{t(PERIODOS[a.recurrencia])}</span>}
       </div>
+      {a.porRevisar && (encargado ? <RevisarUrgente a={a} revisar={revisar} /> : <p className="revisar-urgente meta">{t('Se cerró incompleta: tu encargado la revisa.')}</p>)}
       {a.solicitud && (
         <div className="solicitud">
           <span><Icono nombre="swap" /> {t(encargado ? 'Pide mover a' : 'Pediste mover a')} <b>{nombreColumna(a.solicitud.columna)}</b></span>
@@ -488,12 +500,17 @@ function NuevasActividades({ equipo, semana, user, guardadas, inicial, alCrear }
     if (puntos.length > 20) return setError(t('Máximo 20 actividades a la vez.'))
     if (puntos.some((p) => p.length > 200)) return setError(t('Cada actividad, máximo 200 caracteres.'))
     setEnviando(true)
-    const comun = { por: user.no, prioridad: 'diaria', ...(repetir && { recurrencia: repetir }) }
+    // Urgente: vale solo hasta el fin de su turno (no se repite ni lleva criticidad)
+    const urgente = encargado && nivel === 'urgente'
+    const comun = { por: user.no, prioridad: urgente ? 'urgente' : 'diaria', ...(repetir && !urgente && { recurrencia: repetir }) }
     try {
       if (encargado) {
         await api('/api/actividades', {
           method: 'POST',
-          body: { ...comun, para, fecha, turno, comentario: comentario.trim(), criticidad: nivel, puntos: puntos.map((p) => ({ texto: p })) },
+          body: {
+            ...comun, para, fecha, turno, comentario: comentario.trim(), puntos: puntos.map((p) => ({ texto: p })),
+            ...(urgente ? { cierre: cierreTurno(fecha, turno).toISOString() } : { criticidad: nivel }),
+          },
         })
       } else {
         // Su encargado las clasifica: nacen Por clasificar aunque la tarea guardada tenga criticidad
@@ -537,10 +554,12 @@ function NuevasActividades({ equipo, semana, user, guardadas, inicial, alCrear }
         </select>
       </div>
       <select aria-label={t('Criticidad')} value={nivel} onChange={(e) => setNivel(e.target.value)}>
-        {['nueva', ...NIVELES].map((c) => <option key={c} value={c}>{nombreColumna(c)}</option>)}
+        {['nueva', ...NIVELES, 'urgente'].map((c) => <option key={c} value={c}>{nombreColumna(c)}</option>)}
       </select>
       <input aria-label={t('Comentario del encargado')} placeholder={t('Comentario (opcional)')} maxLength={500} value={comentario} onChange={(e) => setComentario(e.target.value)} /></>}
-      <Repetir valor={repetir} cambiar={setRepetir} />
+      {nivel === 'urgente'
+        ? <p className="nota-urgente"><Icono nombre="alert" />{t('Urgente: vale solo dentro de su turno. Si no se completa, pasa a Incompleta y queda por revisar: su encargado la reabre, la deja cerrada o la elimina (queda en el historial).')}</p>
+        : <Repetir valor={repetir} cambiar={setRepetir} />}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row end" style={{ gap: 6 }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierta(false)}>{t('Cancelar')}</button>
@@ -549,5 +568,23 @@ function NuevasActividades({ equipo, semana, user, guardadas, inicial, alCrear }
         </button>
       </div>
     </form>
+  )
+}
+
+// Urgente que se cerró incompleta: el encargado decide con un motivo, que le llega al empleado
+function RevisarUrgente({ a, revisar }) {
+  const [motivo, setMotivo] = useState('')
+  const listo = motivo.trim().length >= 3
+  const hacer = (accion) => revisar(a, accion, motivo.trim())
+  return (
+    <div className="revisar-urgente">
+      <b><Icono nombre="alert" />{t('Urgente vencida: por revisar')}</b>
+      <input aria-label={t('Motivo de la revisión')} placeholder={t('Motivo (lo verá el empleado)')} maxLength={300} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-primary btn-sm" disabled={!listo} onClick={() => hacer('reabrir')}>{t('Reabrir')}</button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!listo} onClick={() => hacer('cerrar')}>{t('Dejar cerrada')}</button>
+        <button type="button" className="btn btn-ghost btn-sm peligro" disabled={!listo} onClick={() => hacer('eliminar')}>{t('Eliminar')}</button>
+      </div>
+    </div>
   )
 }

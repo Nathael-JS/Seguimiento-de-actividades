@@ -4,6 +4,7 @@ import { api, consultaRate, dia, esEncargado, hora, hoy, inicioDeHoy, nombreTurn
 import { t } from './i18n.js'
 import { Anillo, Avatar, Criticidad, Estado, Rate } from './ui.jsx'
 import { ListaActividades, PorcentajeRealizadas } from './Lista.jsx'
+import Conversacion from './Conversacion.jsx'
 
 // % realizadas; null sin actividades (el anillo muestra "—")
 const conAvance = (acts) => (acts.length ? pctRealizadas(acts) : null)
@@ -18,6 +19,8 @@ export default function Monitoreo({ user }) {
   // #monitoreo?empleado=N (desde Jerarquía) abre directo sus actividades
   const [elegido, setElegido] = useState(() => consulta.get('empleado'))
   const [puesto, setPuesto] = useState('') // '' = todos los puestos
+  const [abierta, setAbierta] = useState(null) // actividad con su conversación abierta
+  const [historial, setHistorial] = useState(null)
   // Lista (por defecto) o tarjetas por persona; se recuerda en el navegador
   const [vista, setVista] = useState(() => { try { return localStorage.getItem('monitoreo-vista') ?? 'lista' } catch { return 'lista' } })
   const elegirVista = (v) => { setVista(v); try { localStorage.setItem('monitoreo-vista', v) } catch { /* solo esta vez */ } }
@@ -25,6 +28,12 @@ export default function Monitoreo({ user }) {
   useEffect(() => {
     api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}&${consultaRate()}`).then(setEquipo).catch((e) => setError(e.message))
   }, [user.no])
+
+  // Historial: se pide al abrir esa vista (lo realizado, cerrado, heredado o eliminado de los últimos 30 días)
+  useEffect(() => {
+    if (vista !== 'historial' || historial) return
+    api(`/api/historial/${user.no}?desde=${fechaMas(-30)}`).then(setHistorial).catch((e) => setError(e.message))
+  }, [vista, historial, user.no])
 
   if (error) return <p className="error" role="alert">{error}</p>
   if (!equipo) return <p className="muted">{t('Cargando…')}</p>
@@ -68,11 +77,15 @@ export default function Monitoreo({ user }) {
       <div className="segmento" role="group" aria-label={t('Vista')}>
         <button aria-pressed={vista === 'lista'} onClick={() => elegirVista('lista')}><Icono nombre="list" />{t('Lista')}</button>
         <button aria-pressed={vista === 'tarjetas'} onClick={() => elegirVista('tarjetas')}><Icono nombre="grid" />{t('Tarjetas')}</button>
+        <button aria-pressed={vista === 'historial'} onClick={() => elegirVista('historial')}><Icono nombre="log" />{t('Historial')}</button>
       </div>
       </div>
 
-      {vista === 'lista' ? (
-        <ListaActividades conPersona nombres={nombres}
+      {vista === 'historial' ? (
+        !historial ? <p className="muted">{t('Cargando…')}</p>
+          : <Historial filas={historial.filter((a) => visibles.some((e) => e.no === a.to))} abrir={setAbierta} />
+      ) : vista === 'lista' ? (
+        <ListaActividades conPersona nombres={nombres} abrir={setAbierta}
           filas={visibles.flatMap((e) => e.actividades.map((a) => ({ ...a, persona: e.name })))} />
       ) : visibles.length ? (
         <div className="emp-grid">
@@ -107,6 +120,7 @@ export default function Monitoreo({ user }) {
         </div>
       ) : <section className="card empty">{t('No hay empleados en este filtro.')}</section>}
 
+      {abierta && <Conversacion a={abierta} user={user} cerrar={() => setAbierta(null)} />}
       {elegido && equipo.some((e) => e.no === elegido) && (
         <Detalle user={user} emp={equipo.find((e) => e.no === elegido)} cerrar={() => setElegido(null)} />
       )}
@@ -178,5 +192,31 @@ function Detalle({ user, emp, cerrar }) {
           ))}
       </div>
     </dialog>
+  )
+}
+
+// Historial: lo que ya terminó (realizado, urgente cerrada, heredado o eliminado), lo más reciente primero
+const resultado = (a) => (a.eliminada ? t('Eliminada') : a.heredadaA ? t('Heredada a {nombre}', { nombre: a.heredadaA })
+  : a.status === 'done' ? t('Realizada') : t('Incompleta y cerrada'))
+function Historial({ filas, abrir }) {
+  if (!filas.length) return <section className="card empty">{t('Sin actividades terminadas en los últimos 30 días.')}</section>
+  return (
+    <div className="table-wrap">
+      <table className="lista-act historial">
+        <thead><tr>{['Actividad', 'Asignada a', 'Resultado', 'Fecha', 'Terminó'].map((c) => <th key={c} scope="col">{t(c)}</th>)}</tr></thead>
+        <tbody>
+          {filas.map((a) => (
+            <tr key={a.id} className={a.eliminada ? 'eliminada' : ''}>
+              <th scope="row"><button type="button" className="titulo enlace" onClick={() => abrir(a)}>{a.text}</button>
+                {(a.eliminada?.motivo ?? a.revisiones?.at(-1)?.motivo) && <span className="meta">{a.eliminada?.motivo ?? a.revisiones.at(-1).motivo}</span>}</th>
+              <td><span className="persona"><Avatar no={a.to} name={a.persona} />{a.persona}</span></td>
+              <td>{a.status === 'done' && !a.eliminada && !a.heredadaA ? <Estado estado="done" /> : <span className={`tag${a.eliminada ? ' urgente' : ' suave'}`}>{resultado(a)}</span>}</td>
+              <td className="nowrap"><span className="mono">{dia(a.date)}</span> · {nombreTurno(a.shift)}</td>
+              <td className="nowrap meta">{hora(a.doneAt ?? a.eliminada?.at ?? a.cierreTurno ?? a.at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

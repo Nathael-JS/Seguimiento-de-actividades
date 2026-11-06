@@ -35,7 +35,7 @@ async function sesionDe(app, no) {
 }
 // Pide a la API con la sesión de quien actúa: el "por" del cuerpo o el número en la dirección
 async function pedir(app, method, url, payload) {
-  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas|asistencia|salida|extra)\/(\d{5})/)?.[1]
+  const no = payload?.por ?? url.match(/^\/api\/(?:inicio|actividades|perfil|equipo|notificaciones|matriz|herencias|guardadas|asistencia|salida|extra|historial)\/(\d{5})/)?.[1]
   const enviar = async () => {
     const cookie = no && await sesionDe(app, no)
     return app.inject({ method, url, payload, ...(cookie && { headers: { cookie } }) })
@@ -253,6 +253,8 @@ test('árbol: el gerente mueve a su gente bajo otro encargado; técnico sobre Jr
   assert.deepEqual(r.body, { no: '10511', ayudanteDe: '10490' })
   assert.equal(u('10511').boss, '10251')
   assert.deepEqual(u('10490').ayudantes, ['10511'])
+  // No pueden ser ayudantes uno del otro
+  assert.equal((await mover('10001', '10490', '10511')).body.error, 'Ya es su ayudante: no pueden ser ayudantes uno del otro.')
   // Se revierte quitándolo de los ayudantes del Jr (lo que hace "Revertir" en el árbol)
   assert.deepEqual((await pedir(app, 'PUT', '/api/lideres/10490/ayudantes', { por: '10001', ayudantes: [] })).body, [])
   assert.deepEqual(u('10490').ayudantes, [])
@@ -260,6 +262,55 @@ test('árbol: el gerente mueve a su gente bajo otro encargado; técnico sobre Jr
   assert.equal((await mover('10001', '10482', '10230')).body.boss, '10230')
   // Un Full pasa directo con la gerente
   assert.equal((await mover('10001', '10230', '10001')).body.boss, '10001')
+})
+
+test('conversación de una actividad: quien la tiene, quien la asignó y sus encargados; avisa a los demás', async () => {
+  const app = build()
+  const [a] = (await pedir(app, 'POST', '/api/actividades', asignar())).body // Diego → Jorge
+  const escribir = (por, texto) => pedir(app, 'POST', `/api/actividades/${a.id}/comentarios`, { por, texto })
+  assert.equal((await escribir('10145', 'Hola')).code, 404) // Ana: ni la tiene ni es su encargada
+  assert.equal((await escribir('10482', '   ')).code, 400)
+  await escribir('10482', 'Ya empecé')
+  const r = await escribir('10001', '¿Para cuándo queda?') // Laura, encargada de la rama
+  assert.deepEqual(r.body.map((c) => [c.name, c.texto]), [['Jorge Salinas', 'Ya empecé'], ['Laura Méndez', '¿Para cuándo queda?']])
+  assert.ok(app.estado.notificaciones.some((n) => n.for === '10482' && n.kind === 'comment' && n.who === '10001'))
+  assert.ok(app.estado.notificaciones.some((n) => n.for === '10230' && n.kind === 'comment' && n.who === '10482'))
+  // Diego (quien la asignó) ve la conversación completa
+  const diego = await conCookie(app, 'GET', `/api/actividades/${a.id}/comentarios`, await sesionDe(app, '10230'))
+  assert.equal(diego.json().length, 2)
+})
+
+test('urgente vencida: por revisar; reabrir, dejarla cerrada o eliminarla (queda en el historial)', async () => {
+  const app = build()
+  const nueva = async () => {
+    const [a] = (await pedir(app, 'POST', '/api/actividades', asignar({ prioridad: 'urgente', cierre: new Date(Date.now() + 3_600_000).toISOString() }))).body
+    const x = app.estado.actividades.find((y) => y.id === a.id)
+    x.cierreTurno = new Date(Date.now() - 1000).toISOString() // ya pasó su turno
+    await pedir(app, 'GET', '/api/equipo/10230') // cualquier petición la cierra
+    return x
+  }
+  const revisar = (a, cuerpo) => pedir(app, 'POST', `/api/actividades/${a.id}/revision`, { por: '10230', motivo: 'Faltó material', ...cuerpo })
+  const a = await nueva()
+  assert.deepEqual([a.cerrada, a.status], [true, 'incomplete'])
+  assert.equal((await pedir(app, 'GET', '/api/equipo/10230')).body.flatMap((e) => e.actividades).find((x) => x.id === a.id).porRevisar, true)
+  assert.equal((await revisar(a, { accion: 'reabrir', por: '10482' })).code, 403) // solo su encargado
+  assert.equal((await revisar(a, { accion: 'reabrir', cierre: new Date(Date.now() + 3 * 86_400_000).toISOString() })).code, 400)
+  assert.equal(a.revisiones, undefined) // un intento inválido no queda anotado
+  const r = await revisar(a, { accion: 'reabrir', cierre: new Date(Date.now() + 3_600_000).toISOString() })
+  assert.deepEqual([r.body.status, r.body.cerrada], ['pending', false])
+  assert.ok(app.estado.notificaciones.some((n) => n.for === '10482' && n.kind === 'urgente-reabierta'))
+  // Dejarla incompleta y cerrada: ya no está por revisar
+  const b = await nueva()
+  assert.equal((await revisar(b, { accion: 'cerrar' })).body.porRevisar, false)
+  assert.equal((await revisar(b, { accion: 'cerrar' })).code, 409)
+  // Eliminarla: sale del equipo y queda en el historial con su motivo
+  const c = await nueva()
+  await revisar(c, { accion: 'eliminar' })
+  assert.ok(!(await pedir(app, 'GET', '/api/equipo/10230')).body.flatMap((e) => e.actividades).some((x) => x.id === c.id))
+  const hist = (await pedir(app, 'GET', '/api/historial/10230')).body
+  assert.equal(hist.find((x) => x.id === c.id).eliminada.motivo, 'Faltó material')
+  assert.ok(hist.some((x) => x.id === b.id) && hist.every((x) => x.status === 'done' || x.cerrada || x.heredadaA || x.eliminada))
+  assert.equal((await pedir(app, 'GET', '/api/historial/10482')).code, 403)
 })
 
 test('registrar crea una actividad por punto, pendiente, y notifica al ejecutor', async () => {
@@ -1378,10 +1429,10 @@ test('cuentas de prueba: el super administrador las crea o reactiva; entran con 
   await confirmar()
   assert.deepEqual((await crear()).body.map((u) => [u.no, u.role, u.boss, u.prueba]), [['80001', 'gte', null, true], ['80004', 'full', '80001', true], ['80002', 'tec', '80004', true], ['80003', 'jr', '80004', true]])
   const muestra = () => app.estado.actividades.filter((a) => a.to.startsWith('8000')).length
-  assert.equal(muestra(), 5) // actividades de muestra para ver el Kanban con datos
+  assert.equal(muestra(), 9) // actividades de muestra (también del gerente y una urgente por revisar)
   assert.equal((await crear()).code, 200) // otra vez: se reactivan, sin duplicar cuentas ni actividades
   assert.equal(app.estado.usuarios.filter((u) => u.no.startsWith('8000')).length, 4)
-  assert.equal(muestra(), 5)
+  assert.equal(muestra(), 9)
   for (const no of ['80001', '80004', '80002', '80003']) assert.ok((await login({ usuario: no, password: 'demo1234' }, app)).json().name)
   // Apagadas por el servidor: no se crean
   const off = build({ superadmins: [SA], cuentasPrueba: false })

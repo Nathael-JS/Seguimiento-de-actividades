@@ -433,7 +433,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   // A quién puede asignar un encargado: su gente; el gerente, también a sí mismo (y solo él o su gerente lo hacen)
   const asignables = (u) => (u.role === 'gte' ? [u, ...gente(u)] : gente(u))
   // Una actividad heredada queda en el historial (reportes) pero sale de listas e indicadores
-  const vigentes = () => actividades.filter((a) => !a.handedTo)
+  // (una urgente eliminada en su revisión tampoco: queda solo en el historial)
+  const vigentes = () => actividades.filter((a) => !a.handedTo && !a.eliminada)
   // Lo del turno: lo que sigue abierto y lo realizado desde `desde`. Sin `desde`, todo
   // Avisos automáticos, una sola vez cada uno:
   // - actividad pendiente o en proceso con fecha anterior a hoy → al ejecutor y a quien la asignó
@@ -998,7 +999,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       .sort((a, b) => RANGO[a.role] - RANGO[b.role] || a.name.localeCompare(b.name))
       .map(({ no, name, role, dept, shift, boss, ayudantes = [] }) => ({
         no, name, role, dept, shift, boss, ayudantes, ...rate(no),
-        actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id).map((a) => ({ ...a, byName: empleado(a.by)?.name })),
+        actividades: acts.filter((a) => a.to === no).sort((a, b) => b.id - a.id).map((a) => ({ ...a, byName: empleado(a.by)?.name, porRevisar: porRevisar(a) })),
       }))
   }))
 
@@ -1040,6 +1041,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (!destino || destino.no === u.no) return reply.code(400).send({ error: 'Elige a alguien de tu equipo.' })
     if (equipo(u.no).some((e) => e.no === destino.no)) return reply.code(400).send({ error: 'No puede quedar debajo de alguien de su propio equipo.' })
     if (RANGO[u.role] === 3 && RANGO[destino.role] === 3) {
+      if (u.ayudantes?.includes(destino.no)) return reply.code(400).send({ error: 'Ya es su ayudante: no pueden ser ayudantes uno del otro.' })
       if (!destino.ayudantes?.includes(u.no)) destino.ayudantes = [...(destino.ayudantes ?? []), u.no]
       notificar({ for: u.no, kind: 'ayudante', who: destino.no })
       return { no: u.no, ayudanteDe: destino.no }
@@ -1347,6 +1349,71 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       }))
   })
 
+  // ── Conversación, historial y revisión de urgentes ─────────────────────────────────────────────────────────
+  // La conversación de una actividad: la ven y escriben quien la tiene, quien la asignó y sus encargados
+  const actividadSchema = { params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } } }
+  const puedeVer = (por, a) => a.to === por || a.by === por || delEquipo(por, a)
+  const vistaComentarios = (a) => (a.comentarios ?? []).map((c) => ({ ...c, name: empleado(c.por)?.name ?? '—' }))
+  app.get('/api/actividades/:id/comentarios', { schema: actividadSchema }, async (req, reply) => {
+    const a = actividades.find((x) => x.id === req.params.id)
+    if (!a || !puedeVer(req.sesion.no, a)) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    return vistaComentarios(a)
+  })
+  const comentarioSchema = { ...actividadSchema, body: objeto(['por', 'texto'], { por: noEmpleado, texto: { type: 'string', minLength: 1, maxLength: 1000, pattern: '\\S' } }) }
+  app.post('/api/actividades/:id/comentarios', { schema: comentarioSchema }, async (req, reply) => {
+    const { por, texto } = req.body
+    const a = actividades.find((x) => x.id === req.params.id)
+    if (!a || !puedeVer(por, a)) return reply.code(404).send({ error: 'Actividad no encontrada.' })
+    a.comentarios = [...(a.comentarios ?? []), { por, at: ahora(), texto: texto.trim() }]
+    // Se avisa a quien la tiene y a su responsable, menos a quien escribe
+    for (const no of new Set([a.to, responsable(a)])) if (no && no !== por) notificar({ for: no, kind: 'comment', who: por, ref: a.id })
+    return vistaComentarios(a)
+  })
+
+  // Historial del equipo: lo realizado, las urgentes cerradas, lo heredado y lo eliminado en una revisión
+  const historialSchema = { ...porEmpleado, querystring: objeto([], { desde: { type: 'string', format: 'date' }, hasta: { type: 'string', format: 'date' } }) }
+  app.get('/api/historial/:no', { schema: historialSchema }, conEmpleado((u, req, reply) => {
+    if (!esEncargado(u)) return reply.code(403).send({ error: 'Solo los encargados ven el historial de su equipo.' })
+    const { desde = '0000-01-01', hasta = '9999-12-31' } = req.query
+    const alcance = new Set([u.no, ...gente(u).map((e) => e.no)])
+    return actividades
+      .filter((a) => alcance.has(a.to) && a.date >= desde && a.date <= hasta && (a.status === 'done' || a.cerrada || a.handedTo || a.eliminada))
+      .sort((x, y) => (y.doneAt ?? y.at).localeCompare(x.doneAt ?? x.at))
+      .slice(0, 500)
+      .map((a) => ({ ...a, persona: empleado(a.to)?.name, byName: empleado(a.by)?.name, heredadaA: a.handedTo && empleado(a.handedTo)?.name }))
+  }))
+
+  // Una urgente que se cerró incompleta queda por revisar: su encargado la reabre (con motivo y nuevo cierre, dentro
+  // de las próximas 24 h), la deja incompleta y cerrada, o la elimina (con motivo; sigue en el historial)
+  const porRevisar = (a) => a.prioridad === 'urgente' && a.cerrada && a.status === 'incomplete' && !a.eliminada && a.revisada !== a.cierreTurno
+  const revisionSchema = {
+    ...actividadSchema,
+    body: objeto(['por', 'accion', 'motivo'], {
+      por: noEmpleado, accion: { enum: ['reabrir', 'cerrar', 'eliminar'] },
+      motivo: { type: 'string', minLength: 3, maxLength: 300, pattern: '\\S' }, cierre: { type: 'string', format: 'date-time' },
+    }),
+  }
+  app.post('/api/actividades/:id/revision', { schema: revisionSchema }, async (req, reply) => {
+    const { por, accion, cierre } = req.body
+    const motivo = req.body.motivo.trim()
+    const a = actividades.find((x) => x.id === req.params.id)
+    if (!a || !delEquipo(por, a)) return reply.code(403).send({ error: 'Esa actividad no es de tu equipo.' })
+    if (!porRevisar(a)) return reply.code(409).send({ error: 'Esa actividad no está por revisar.' })
+    const espera = Date.parse(cierre) - Date.now()
+    if (accion === 'reabrir' && !(espera > 0 && espera <= DIA)) return reply.code(400).send({ error: 'Una urgente es para el turno en curso o el siguiente: revisa la fecha y el turno.' })
+    a.revisiones = [...(a.revisiones ?? []), { accion, motivo, por, at: ahora() }]
+    if (accion === 'reabrir') {
+      Object.assign(a, { cerrada: false, status: 'pending', pct: 0, cierreTurno: cierre })
+      notificar({ for: a.to, kind: 'urgente-reabierta', who: por, ref: a.id, motivo })
+    } else if (accion === 'eliminar') {
+      a.eliminada = { por, motivo, at: ahora() }
+      if (a.to !== por) notificar({ for: a.to, kind: 'eliminada', who: por, texto: a.text, motivo })
+    } else {
+      a.revisada = a.cierreTurno
+    }
+    return { ...a, byName: empleado(a.by)?.name, porRevisar: porRevisar(a) }
+  })
+
   app.post('/api/actividades/:id/heredar', { schema: heredarSchema }, async (req, reply) => {
     const a = actividades.find((x) => x.id === req.params.id)
     if (!a) return reply.code(404).send({ error: 'Actividad no encontrada.' })
@@ -1618,11 +1685,16 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     { no: '80002', name: 'Técnico Prueba', email: 'tecnico@prueba.local', role: 'tec', boss: '80004', area: 'Pruebas' },
     { no: '80003', name: 'Junior Prueba', email: 'junior@prueba.local', role: 'jr', boss: '80004', area: 'Pruebas' },
   ]
-  // Actividades de muestra de hoy, para ver el Kanban, Monitoreo y el árbol con datos. Solo a quien aún no tiene
+  // Actividades de muestra de hoy para ver el Kanban, Monitoreo, el historial y el árbol con datos: [para, de, texto,
+  // estado, criticidad o 'urgente-vencida' (urgente que se cerró incompleta: por revisar), comentario]. No se repiten
   const MUESTRA = [
-    ['80004', '80001', 'Revisar indicadores del turno', 'progress', 'normal'],
+    ['80001', '80001', 'Revisar los indicadores del departamento', 'progress', 'alta'],
+    ['80001', '80001', 'Preparar la junta semanal con el equipo', 'pending', 'normal'],
+    ['80004', '80001', 'Revisar indicadores del turno', 'progress', 'normal', '¿Puedes incluir el yield de ayer?'],
+    ['80004', '80001', 'Auditoría de 5S en la línea 2', 'done', 'alta'],
     ['80002', '80004', 'Revisar presión del circuito de enfriamiento', 'pending', 'alta'],
-    ['80002', '80004', 'Cambiar filtro de la estación 2', 'progress', 'normal'],
+    ['80002', '80004', 'Cambiar filtro de la estación 2', 'progress', 'normal', 'Ya pedí el filtro al almacén.'],
+    ['80002', '80004', 'Reparar fuga en la válvula V-3', 'incomplete', 'urgente-vencida'],
     ['80003', '80004', 'Actualizar la hoja de WIP', 'pending', 'nueva'],
     ['80003', '80004', 'Prueba de fuga en la unidad de muestra', 'done', 'critica'],
   ]
@@ -1635,12 +1707,19 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (!departamentos.some((d) => d.clave === 'pruebas')) departamentos.push({ clave: 'pruebas', nombre: 'Pruebas', gerente: '80001' })
     for (const c of DE_PRUEBA) {
       const u = empleado(c.no) ?? usuarios[usuarios.push({}) - 1]
-      Object.assign(u, c, { dept: 'pruebas', shift: 'A', prueba: true, activo: true, password: hashSync('demo1234'), pwdChanged: ahora(), porRegistrar: false, debeCambiar: false })
+      // Sin ayudantes: la jerarquía de prueba vuelve a quedar limpia
+      Object.assign(u, c, { dept: 'pruebas', shift: 'A', prueba: true, activo: true, password: hashSync('demo1234'), pwdChanged: ahora(), porRegistrar: false, debeCambiar: false, ayudantes: [] })
     }
-    const sinActividades = new Set(DE_PRUEBA.map((c) => c.no).filter((no) => !actividades.some((a) => a.to === no)))
     const at = ahora()
-    for (const [to, by, text, status, criticidad] of MUESTRA.filter(([to]) => sinActividades.has(to))) {
-      actividades.push({ id: siguienteId(actividades), to, by, date: at.slice(0, 10), shift: 'A', at, text, pct: status === 'done' ? 100 : 0, status, mgr: '', note: '', criticidad, ...(status === 'done' && { doneAt: at }) })
+    for (const [to, by, text, status, nivel, comentario] of MUESTRA) {
+      if (actividades.some((a) => a.to === to && a.text === text)) continue
+      const urgente = nivel === 'urgente-vencida'
+      actividades.push({
+        id: siguienteId(actividades), to, by, date: at.slice(0, 10), shift: 'A', at, text, pct: status === 'done' ? 100 : 0, status, mgr: '', note: '',
+        ...(urgente ? { prioridad: 'urgente', cierreTurno: at, cerrada: true } : { criticidad: nivel }),
+        ...(status === 'done' && { doneAt: at }),
+        ...(comentario && { comentarios: [{ por: by === to ? to : by, at, texto: comentario }] }),
+      })
     }
     registrar(req, 'admin-cuentas-prueba', { por: req.sesion.no })
     return DE_PRUEBA.map((c) => vistaUsuario(empleado(c.no)))

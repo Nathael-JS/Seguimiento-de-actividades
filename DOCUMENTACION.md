@@ -161,7 +161,7 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
   - Crea actividades con **+** en Pendiente (una por renglón, hasta 20) para alguien de su gente, o para sí mismo si es gerente, con fecha, turno, comentario y criticidad.
   - **Arrastrar** a otra columna cambia el estado (con animación de View Transitions); al empleado le llega el aviso.
   - En el menú ⋯: Mover a (estado), **Criticidad**, Fijar, Editar, Guardar como tarea y Eliminar (pide el motivo).
-  - **Urgente** se cierra al terminar su turno.
+  - **Urgente** (también en el selector de criticidad al crear, con su nota): vale solo dentro de su turno. Si no se completa, al terminar el turno pasa a **Incompleta** y queda **por revisar** por su encargado, que con un motivo (lo ve el empleado) la **reabre** hasta el fin de su turno, la **deja cerrada** o la **elimina**. La eliminada sale del tablero pero sigue en el historial; todas las revisiones quedan en la actividad.
 - **Técnico / Ing. Jr:**
   - Ve solo sus actividades, las agrega (Por clasificar, para hoy, en su turno) y cambia su estado arrastrándolas.
   - Al pedir otra **criticidad** crea una **solicitud de cambio** que su encargado **aprueba** o **rechaza** en la tarjeta.
@@ -206,13 +206,15 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
 - **Jerarquía:** organigrama de arriba abajo de quién reporta a quién (en pantallas angostas, lista vertical), con los **ayudantes** de cada líder (punteados). Las ramas se pliegan desde su chip "N directos".
   - **Revertir:** los movimientos de la visita se deshacen en orden, el último primero.
   - **El gerente lo reorganiza:** arrastra a una persona sobre su nuevo encargado (Full, Senior o gerente que pueda tenerla a su cargo), o usa **Mover a…** (teclado y celular, solo destinos válidos). Mientras arrastra, los destinos válidos se marcan y los demás se atenúan.
-  - **Técnico ↔ Ing. Jr:** soltar uno sobre el otro lo deja como **ayudante** (no cambia su encargado).
+  - **Técnico ↔ Ing. Jr:** soltar uno sobre el otro lo deja como **ayudante** (no cambia su encargado). No pueden ser ayudantes uno del otro.
   - **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y cuántos ayudantes tiene.
   - A la persona movida le llega el aviso "… te movió: ahora reportas a …".
 - **Departamentos:** plantilla del departamento con el **rate de aprobación** (% de las actividades de los últimos 30 días realizadas a tiempo).
 - **Ajustes (gerente):** crear departamentos y cargar la plantilla de personas desde Excel/CSV. Primero muestra una vista previa y, si hay un error, no guarda nada.
   - **Plantilla del departamento:** la plantilla cargada, con estado (registrada o por registrar). **Agregar persona** (alguien que faltó en el Excel) y **Editar** mandan una fila por la misma carga de plantilla: mismas reglas. La persona nueva queda por registrar.
 - **Monitoreo:** toda la gente a su cargo (en el gerente, todo el departamento), con filtro por líder y por **puesto** (gerentes, Senior, Full, Ing. Jr, técnico). Un líder elegido trae también a sus ayudantes.
+  - **Historial:** las actividades terminadas de los últimos 30 días: realizadas, incompletas cerradas, heredadas y eliminadas (tachadas, con su motivo).
+  - **Conversación:** el título de cada actividad (en Lista e Historial) abre un panel con sus datos y un chat de comentarios. Escriben quien la tiene, quien la asignó y sus encargados; a la persona y a su encargado les llega el aviso.
 
 ### Buzón y avisos
 - **Aviso emergente** (`Shell.jsx`): al llegar una notificación nueva sin leer (actualización de cada 30 s) aparece unos segundos arriba a la derecha; al tocarlo abre la actividad. La primera carga no avisa.
@@ -371,6 +373,10 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/guardadas` | Sesión | Guardar una plantilla (mismo texto la actualiza; máximo 100) |
 | DELETE | `/api/guardadas/:id` | Dueño | Eliminar una guardada |
 | GET | `/api/actividades/:id/receptores` | Encargado | Quién puede recibir la herencia y quién la valida |
+| GET | `/api/actividades/:id/comentarios` | Involucrados | Conversación de la actividad |
+| POST | `/api/actividades/:id/comentarios` | Involucrados | Agregar un comentario (1 a 1000 caracteres; avisa a la persona y a su encargado) |
+| POST | `/api/actividades/:id/revision` | Encargado | Urgente vencida: `reabrir`, `cerrar` o `eliminar`, con motivo |
+| GET | `/api/historial/:no?desde&hasta` | Encargado | Terminadas, cerradas, heredadas y eliminadas de su gente (máximo 500) |
 | POST | `/api/actividades/:id/heredar` | Encargado | Proponer una herencia |
 | GET | `/api/herencias/:no?hoy` | Propio | Por validar, enviadas, cupos del día |
 | POST | `/api/herencias/:id/responder` | Validador | Aceptar, rechazar o redirigir |

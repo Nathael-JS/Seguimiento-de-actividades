@@ -14,6 +14,29 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Ajustes 3] 2026-11-06: Urgentes con revisión, Historial y conversación
+
+### Agregado
+- **Urgentes al crear:** "Urgente" vuelve al selector de criticidad del Kanban, con una nota de cómo funcionan.
+- **Revisión de urgentes vencidas:** la urgente que no se completó en su turno queda Incompleta y por revisar. El encargado, con un motivo, la reabre hasta el fin de su turno, la deja cerrada o la elimina. Todo queda en el historial.
+- **Monitoreo → Historial:** actividades realizadas, cerradas, heredadas y eliminadas de los últimos 30 días.
+- **Conversación:** al tocar una actividad en Monitoreo se abre un panel con sus datos y un chat de comentarios, con aviso a la persona y a su encargado.
+- **Datos de prueba:** el gerente tiene actividades propias; además hay una urgente vencida por revisar, realizadas y comentarios (9 actividades entre las cuatro cuentas).
+
+### Cambiado
+- **Pantallas anchas:** las páginas llenan todo el ancho disponible.
+
+### Corregido
+- **Ayudantes cruzados:** un técnico y un Ing. Jr ya no pueden quedar como ayudantes uno del otro (servidor y árbol).
+
+### Advertencias
+- Para ver los datos de prueba nuevos, vuelve a tocar **Usuarios → Cuentas de prueba** (solo agrega lo que falta).
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Conversacion.jsx` (nuevo), `src/Monitoreo.jsx`, `src/Tablero.jsx`, `src/Lista.jsx`, `src/Jerarquia.jsx`, `src/ui.jsx`, `src/Icono.jsx`, `src/en.js`, `src/i18n.test.js`, `src/index.css`
+
+---
+
 ## [v0.0.1 · CI] 2026-11-06: CI en verde
 
 ### Corregido
