@@ -124,10 +124,17 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 | Senior (`sr`) | 1 | Gerencia | Encargado |
 | Ing. Full (`full`) | 2 | Gerencia | Encargado |
 | Ing. Jr (`jr`) | 3 | Jr / Técnico | Ejecutor |
-| Técnico (`tec`) | 4 | Jr / Técnico | Ejecutor |
+| Técnico (`tec`) | 3 | Jr / Técnico | Ejecutor (mismo nivel que el Ing. Jr) |
 | Super administrador (`sa`) | — | Gerencia | Solo administra: Usuarios, Registros, Perfil |
 
-- **Encargado** = rango ≤ 2 (`esEncargado`). Su **equipo** son los empleados debajo de él en la jerarquía (`boss`), solo de sus departamentos. Solo puede asignar a quien tiene un rango menor que el suyo (`asignables`).
+- **Encargado** = rango ≤ 2 (`esEncargado`). Quién puede tener a quién a su cargo (`lidera`):
+  - **Ing. Full:** técnicos e Ing. Jr.
+  - **Senior:** Full, técnicos e Ing. Jr.
+  - **Gerente:** a todos, también a otros gerentes. Un gerente a cargo de otro ve también a la gente de los departamentos que dirige ese otro.
+  - Entre técnico e Ing. Jr no hay encargado, solo ayudante.
+- **Equipo** (`equipo`): los empleados debajo de él en la jerarquía (`boss`), de sus departamentos. Si los datos tuvieran un ciclo, no se cuelga: cada persona se visita una vez.
+- **Ayudantes** (`ayudantes` en el líder, `ayudantesDe`): técnicos e Ing. Jr de sus departamentos que el líder maneja como a su gente (asignar, heredar, borrar, Monitoreo), sin dejar de reportar a su encargado. Los elige quien tiene al líder a su cargo.
+- **Su gente** (`gente`) = equipo + ayudantes. **A quién asigna** (`asignables`): su gente; el gerente, también a sí mismo (solo él o su gerente le asignan).
 - **Menús** (`MODULOS` y `modulosDe` en `src/comun.js`):
   - Encargado: Inicio, Tablero, Actividades asignadas, Herencias, Buzón, Monitoreo, Reportes, Matriz, Jerarquía, Departamentos, Perfil (y Ajustes si es gerente; el gerente no tiene Actividades asignadas).
   - Jr / Técnico: Inicio, Tablero, Actividades asignadas, Buzón, Perfil.
@@ -284,7 +291,7 @@ React sin router: `Shell.jsx` elige la página según `location.hash` (`#tablero
 | Función | Regla |
 |---|---|
 | `empleado(id)` | Busca por número, correo o usuario del correo |
-| `deptosDe(no)`, `equipo(no)`, `asignables(u)` | Departamentos propios y dirigidos; equipo por jerarquía; a quién puede asignar |
+| `lidera(jefe, sub)`, `deptosDe(no)`, `equipo(no)`, `ayudantesDe(u)`, `gente(u)`, `asignables(u)` | Reglas de puesto; departamentos propios y dirigidos; equipo por jerarquía; ayudantes; equipo + ayudantes; a quién puede asignar |
 | `vigentes()` | Actividades sin heredar (las heredadas quedan solo en el historial) |
 | `delTurno(acts, desde)` | Lo abierto + lo realizado desde el inicio del día local |
 | `siguienteId(lista)` | Siguiente número de una lista; nunca reutiliza uno borrado |
@@ -339,7 +346,8 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET | `/api/fotos/:empleado` | Sesión | La foto de perfil (404 si no tiene: se muestran las iniciales); caché de 5 min |
 | PATCH · DELETE | `/api/departamentos/:clave` | Gerente que lo dirige | Renombrar; borrar si no tiene personas |
 | DELETE | `/api/notificaciones/:no` | Propio | Borrar el historial de notificaciones (los avisos automáticos no vuelven) |
-| GET | `/api/equipo/:no` | Encargado | Su equipo con sus actividades vigentes |
+| GET | `/api/equipo/:no` | Encargado | Su gente con sus actividades vigentes y los `ayudantes` de cada líder (el gerente viene primero, él mismo) |
+| PUT | `/api/lideres/:lider/ayudantes` | Quien tiene al líder a su cargo | `{ por, ayudantes: [no] }`: la lista completa de ayudantes (técnicos e Ing. Jr de sus departamentos). Avisa a quien entra |
 | POST | `/api/actividades` | Encargado | Asignar 1–20 actividades (criticidad, urgente con `cierre`, `recurrencia`) |
 | POST | `/api/actividades/propia` | Técnico / Ing. Jr | Agregar 1–20 tareas propias (`textos`); un solo aviso al encargado |
 | GET | `/api/actividades/:no` | Propio | Sus actividades (urgentes primero) |
@@ -347,7 +355,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | PATCH | `/api/actividades/:id/tablero` | Encargado / asignado | Mover o fijar; el técnico asignado crea una solicitud (202) |
 | POST | `/api/actividades/:id/solicitud` | Encargado | Aprobar o rechazar la solicitud de cambio |
 | PATCH | `/api/actividades/:id/editar` | Encargado / dueño | Editar texto, comentario, fecha, turno y recurrencia (`no` la quita) |
-| DELETE | `/api/actividades/:id` | Encargado | Eliminar (si no tiene una herencia pendiente) |
+| DELETE | `/api/actividades/:id` | Encargado | Eliminar con `motivo` (3 a 300 caracteres), si no tiene una herencia pendiente. Al empleado le llega el aviso con el texto y el motivo |
 | GET | `/api/guardadas/:no` | Propio | Tareas guardadas |
 | POST | `/api/guardadas` | Sesión | Guardar una plantilla (mismo texto la actualiza; máximo 100) |
 | DELETE | `/api/guardadas/:id` | Dueño | Eliminar una guardada |

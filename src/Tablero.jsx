@@ -138,9 +138,9 @@ export default function Tablero({ user, recargar, avisar }) {
     }
   }
   const fijar = (a) => aplicar(a, { fijada: !a.fijada }, { fijada: !a.fijada })
-  async function eliminar(a) {
+  async function eliminar(a, motivo) {
     try {
-      await api(`/api/actividades/${a.id}`, { method: 'DELETE', body: { por: user.no } })
+      await api(`/api/actividades/${a.id}`, { method: 'DELETE', body: { por: user.no, motivo } })
       conTransicion(() => setActs((l) => l.filter((x) => x.id !== a.id)))
       avisar(t('Actividad eliminada.'))
       recargar()
@@ -236,6 +236,7 @@ export default function Tablero({ user, recargar, avisar }) {
 
 function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, editar, guardarComo }) {
   const [confirmar, setConfirmar] = useState(false)
+  const [motivo, setMotivo] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
   const [editando, setEditando] = useState(false)
   const cerrada = a.cerrada
@@ -281,10 +282,17 @@ function Tarjeta({ a, columna, encargado, mover, fijar, eliminar, responder, edi
             )}
             {encargado && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => fijar(a)}>{t(a.fijada ? 'Desfijar' : 'Fijar arriba')}</button>
-              {confirmar
-                ? <button type="button" className="btn btn-danger btn-sm" onClick={() => eliminar(a)}>{t('Sí, eliminar')}</button>
-                : <button type="button" className="btn btn-ghost btn-sm peligro" onClick={() => setConfirmar(true)}>{t('Eliminar')}</button>}
+              {!confirmar && <button type="button" className="btn btn-ghost btn-sm peligro" onClick={() => setConfirmar(true)}>{t('Eliminar')}</button>}
             </div>}
+            {encargado && confirmar && (
+              // El motivo le llega al empleado en su aviso
+              <form className="eliminar-motivo" onSubmit={(e) => { e.preventDefault(); eliminar(a, motivo.trim()) }}>
+                <label className="field"><span>{t('¿Por qué se elimina?')}</span>
+                  <input value={motivo} maxLength={300} onChange={(e) => setMotivo(e.target.value)} autoFocus />
+                </label>
+                <button className="btn btn-danger btn-sm" disabled={motivo.trim().length < 3}>{t('Sí, eliminar')}</button>
+              </form>
+            )}
           </div>
         </details>
       </div>

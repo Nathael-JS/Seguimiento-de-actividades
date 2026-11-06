@@ -40,7 +40,7 @@ export default function Reportes({ user }) {
   useEffect(() => {
     api(`/api/equipo/${user.no}`)
       .then((e) => {
-        setEquipo(e)
+        setEquipo(e.filter((x) => x.no !== user.no)) // el gerente viene en su propia lista; aquí va aparte
         // Como en el mockup, de inicio quedan marcados los ejecutores
         setElegidos(e.filter((x) => x.role === 'tec' || x.role === 'jr').map((x) => x.no))
       })

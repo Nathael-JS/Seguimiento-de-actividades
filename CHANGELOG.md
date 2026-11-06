@@ -12,6 +12,33 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+# Versión 0.0.1
+
+## [v0.0.1 · Fase 1] 2026-11-06: Reglas de jerarquía, ayudantes y autoasignación
+
+### Agregado
+- **Ayudantes** (`PUT /api/lideres/:lider/ayudantes`): un líder (Full, Senior o gerente) puede tener uno o varios técnicos o Ing. Jr de su departamento.
+  - Los maneja como a su gente: les asigna, hereda y borra actividades, y los ve en Monitoreo.
+  - El ayudante no deja de reportar a su encargado.
+  - Los elige quien tiene al líder a su cargo, y al ayudante le llega un aviso.
+- **El gerente se asigna tareas:** aparece primero en su lista al crear actividades. Solo él o el gerente que lo tiene a su cargo le asignan; no se avisa a sí mismo.
+- **Borrar con motivo:** eliminar una actividad pide el porqué, y al empleado le llega "X eliminó «actividad»: motivo".
+- **Versión visible:** `v0.0.1` al pie de la app (`package.json` 0.0.1).
+
+### Cambiado
+- **Puestos:**
+  - técnico e Ing. Jr al mismo nivel;
+  - el Full tiene a su cargo técnicos e Ing. Jr;
+  - el Senior, además, a Full;
+  - el gerente, a todos, también a otros gerentes, y ve la gente de los departamentos que dirige ese gerente.
+  - Las reglas aplican a la plantilla y al cambio de puesto del super administrador.
+- **Jerarquía sin ciclos:** si los datos tuvieran un ciclo, el equipo se calcula sin colgarse.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Tablero.jsx`, `src/TableroGerente.jsx`, `src/Reportes.jsx`, `src/ui.jsx`, `src/en.js`, `vite.config.js`, `package.json`, `package-lock.json`, `DOCUMENTACION.md`
+
+---
+
 ## [PR #33] 2026-11-06: Cuentas de prueba desde la app
 
 ### Agregado

@@ -17,7 +17,8 @@ export default function TableroGerente({ user, notificaciones, recargar }) {
     api(`/api/equipo/${user.no}?desde=${encodeURIComponent(inicioDeHoy())}`).then(setEquipo).catch((e) => setError(e.message))
   }, [user.no])
 
-  const r = equipo && resumenArea(equipo, hoy())
+  // El gerente viene en su propia lista (puede asignarse tareas), pero no es líder de sí mismo
+  const r = equipo && resumenArea(equipo.filter((e) => e.no !== user.no), hoy())
   const pendientes = r ? r.incompletas.length + r.atrasadas.length + r.sinActividades.length : 0
 
   return (

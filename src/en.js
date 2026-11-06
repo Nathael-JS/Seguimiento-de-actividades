@@ -642,6 +642,12 @@ export default {
   'Cuentas de prueba listas: 80001 gerente, 80002 técnico y 80003 Ing. Jr, contraseña demo1234.': 'Test accounts ready: 80001 manager, 80002 technician and 80003 Jr. Eng., password demo1234.',
   'Las cuentas de prueba están apagadas: quita CUENTAS_PRUEBA=no en el servidor y reinícialo.': 'Test accounts are turned off: remove CUENTAS_PRUEBA=no on the server and restart it.',
   'Un número o correo de las cuentas de prueba ya es de una cuenta real.': 'A test account number or email already belongs to a real account.',
+  'Ese líder no existe.': 'That leader does not exist.',
+  'Ese líder no está a tu cargo.': 'That leader does not report to you.',
+  'Los ayudantes son técnicos o Ing. Jr de su departamento.': 'Helpers are technicians or Jr. Engineers from their department.',
+  'eliminó': 'deleted',
+  'te tiene como ayudante: ya puede asignarte actividades': 'has you as a helper: they can now assign you activities',
+  '¿Por qué se elimina?': 'Why is it being deleted?',
   'Descargar respaldo': 'Download backup',
   'agregó {n} tareas, entre ellas': 'added {n} tasks, including',
   // Recurrentes, edición y tareas guardadas
