@@ -41,7 +41,7 @@ test('PostgreSQL: primera carga con los datos de prueba; lo que cambia sobrevive
     const pedir = (method, u, payload) => app.inject({ method, url: u, payload, headers: { cookie } }).then((r) => r.json())
     const [a] = await pedir('POST', '/api/actividades', { por: '10230', para: '10482', fecha: '2026-11-04', turno: 'A', criticidad: 'nueva', puntos: [{ texto: 'Guardada en Postgres' }] })
     const [b] = await pedir('POST', '/api/actividades', { por: '10230', para: '10482', fecha: '2026-11-04', turno: 'A', puntos: [{ texto: 'Se borra' }] })
-    await pedir('DELETE', `/api/actividades/${b.id}`, { por: '10230' })
+    await pedir('DELETE', `/api/actividades/${b.id}`, { por: '10230', motivo: 'Prueba de borrado' })
     const fila = (await pool.query('select para, fecha, criticidad, estado from actividades where id = $1', [a.id])).rows[0]
     assert.deepEqual(fila, { para: '10482', fecha: '2026-11-04', criticidad: 'nueva', estado: 'pending' })
 
