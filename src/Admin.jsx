@@ -100,7 +100,7 @@ export function Usuarios({ user, avisar }) {
   async function cuentasPrueba() {
     try {
       await conConfirmacion(() => api('/api/admin/cuentas-prueba', { method: 'POST', body: { por: user.no } }))
-      avisar(t('Cuentas de prueba listas: 80001 gerente, 80002 técnico y 80003 Ing. Jr, contraseña demo1234.'))
+      avisar(t('Cuentas de prueba listas: 80001 gerente, 80004 Full, 80002 técnico y 80003 Ing. Jr, contraseña demo1234.'))
       cargar()
     } catch (e) {
       if (!e.cancelado) avisar(e.message)

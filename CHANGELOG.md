@@ -14,6 +14,41 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Ajustes 2] 2026-11-06: Organigrama, revertir movimientos, Nuevas actividades y datos de prueba
+
+### Agregado
+- **Jerarquía como organigrama:** de arriba abajo, con tarjetas por persona (el color de su puesto en el anillo del avatar) y conectores; los de ayudante, punteados.
+  - Si no cabe, se desplaza a lo ancho. En pantallas angostas (menos de 900 px) queda la lista vertical.
+  - Las ramas se pliegan desde el chip "N directos".
+- **Revertir movimientos:** después de mover a alguien en el árbol aparece "Último cambio: … · Revertir". Revierte en orden todos los de la visita: regresa a su encargado anterior, o lo quita de ayudante.
+- **Cuentas de prueba:**
+  - se agrega **80004 Full Prueba**, a cargo del técnico (80002) y del junior (80003); el gerente (80001) queda arriba;
+  - traen 5 actividades de muestra de hoy, solo a quien aún no tiene.
+
+### Cambiado
+- **Kanban:**
+  - vuelve la columna **Nuevas actividades** (punteada): ahí se crean con + y esperan su criticidad; al clasificarlas pasan a Pendiente; soltar una pendiente ahí le quita la criticidad;
+  - el filtro de criticidad pasa a un solo desplegable.
+- **`PUT /api/lideres/:lider/ayudantes`:** acepta también a un Ing. Jr, para revertir un ayudante del árbol.
+
+### Corregido
+- **Chip de directos del árbol:** usaba la clase `plegar`, la misma del botón para plegar el menú lateral, y salía cortado de 32 px. Ahora usa `chip-rama`.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Jerarquia.jsx`, `src/Tablero.jsx`, `src/Admin.jsx`, `src/index.css`, `src/en.js`, `src/i18n.test.js`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
+## [v0.0.1 · Ajuste] 2026-11-06: Reloj del inicio de sesión centrado
+
+### Corregido
+- **Reloj del panel de inicio de sesión:** estaba colocado para salirse del panel por la derecha y se veía cortado. Ahora va centrado en su panel, entre la marca y el texto de acceso, y su tamaño se ajusta al ancho y al alto de la ventana.
+
+### Archivos
+- `src/index.css`
+
+---
+
 ## [v0.0.1 · Fase 4] 2026-11-06: Árbol de jerarquía interactivo
 
 ### Agregado

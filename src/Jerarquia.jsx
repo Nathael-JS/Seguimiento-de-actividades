@@ -4,14 +4,18 @@ import Icono from './Icono.jsx'
 import { Avatar } from './ui.jsx'
 import { t } from './i18n.js'
 
-// Árbol de la rama de quien consulta, armado con el campo boss de su equipo. El gerente lo reorganiza: arrastra a una
-// persona sobre otro encargado (o usa "Mover a…", con teclado y en el celular). Técnico sobre Ing. Jr (o al revés)
-// lo deja como su ayudante. Al pasar sobre una persona se ve su ficha: encargado, líder, actividades y su gente
+// Organigrama de la rama de quien consulta (de arriba abajo; en el celular, lista), armado con el campo boss de su
+// equipo. El gerente lo reorganiza: arrastra a una persona sobre otro encargado (o usa "Mover a…", con teclado y en el
+// celular) y puede revertir los movimientos de esta visita. Técnico sobre Ing. Jr (o al revés) lo deja como su
+// ayudante. Al pasar sobre una persona se ve su ficha: encargado, líder, actividades y su gente
 export default function Jerarquia({ user, avisar }) {
   const [equipo, setEquipo] = useState(null)
   const [error, setError] = useState('')
   const [arrastrado, setArrastrado] = useState(null) // persona que se está arrastrando
   const [moviendo, setMoviendo] = useState(null) // persona a la que se le eligió "Mover a…"
+  const [historial, setHistorial] = useState([]) // movimientos de esta visita, el último al final: se revierten en orden
+  const [plegados, setPlegados] = useState(() => new Set()) // ramas plegadas
+  const plegar = (no) => setPlegados((s) => { const n = new Set(s); if (!n.delete(no)) n.add(no); return n })
   const gerente = user.role === 'gte'
 
   const cargar = useCallback(() => api(`/api/equipo/${user.no}`).then(setEquipo).catch((e) => setError(e.message)), [user.no])
@@ -36,6 +40,7 @@ export default function Jerarquia({ user, avisar }) {
     setMoviendo(null)
     try {
       const r = await api(`/api/jerarquia/${p.no}`, { method: 'PATCH', body: { por: user.no, a: destino.no } })
+      setHistorial((h) => [...h, r.ayudanteDe ? { p, lider: destino } : { p, antes: p.boss, despues: destino }])
       avisar(r.ayudanteDe
         ? t('{nombre} ahora es ayudante de {lider}.', { nombre: p.name.split(' ')[0], lider: destino.name.split(' ')[0] })
         : t('{nombre} ahora reporta a {lider}.', { nombre: p.name.split(' ')[0], lider: destino.no === user.no ? t('ti') : destino.name.split(' ')[0] }))
@@ -44,7 +49,25 @@ export default function Jerarquia({ user, avisar }) {
       avisar(e.message)
     }
   }
-  const ctx = { user, gerente, arrastrado, setArrastrado, puedeSoltar, mover, hijos, rama, persona, liderDe, setMoviendo }
+  // Revertir el último movimiento: de vuelta con su encargado anterior, o fuera de los ayudantes de quien lo recibió
+  async function revertir() {
+    const m = historial.at(-1)
+    try {
+      if (m.lider) {
+        const lider = persona(m.lider.no)
+        await api(`/api/lideres/${lider.no}/ayudantes`, { method: 'PUT', body: { por: user.no, ayudantes: (lider.ayudantes ?? []).filter((x) => x !== m.p.no) } })
+      } else {
+        await api(`/api/jerarquia/${m.p.no}`, { method: 'PATCH', body: { por: user.no, a: m.antes } })
+      }
+      setHistorial((h) => h.slice(0, -1))
+      avisar(t('Movimiento revertido: {nombre} volvió a su lugar.', { nombre: m.p.name.split(' ')[0] }))
+      cargar()
+    } catch (e) {
+      avisar(e.message)
+    }
+  }
+  const ctx = { user, gerente, arrastrado, setArrastrado, puedeSoltar, mover, hijos, rama, persona, liderDe, setMoviendo, plegados, plegar }
+  const ultimo = historial.at(-1)
   // La raíz (quien consulta) con sus ayudantes: el gerente viene en su lista; a un Full o Senior se le reconocen porque
   // su encargado no está en el árbol
   const propio = equipo.find((e) => e.no === user.no)
@@ -59,8 +82,20 @@ export default function Jerarquia({ user, avisar }) {
           ? t('Quién reporta a quién. Arrastra a una persona sobre su nuevo encargado (o usa Mover a…); un técnico sobre un Ing. Jr queda como su ayudante.')
           : t('Quién reporta a quién en tu equipo. Toca una rama para plegarla; abre a una persona para ver sus actividades.')}</p>
       </div>
-      <section className={`card${arrastrado ? ' arrastrando-arbol' : ''}`}>
-        <ul className="arbol"><Rama p={raiz} ctx={ctx} /></ul>
+      {ultimo && (
+        <div className="notice revertir" role="status">
+          <Icono nombre="swap" />
+          <span>
+            {ultimo.lider
+              ? t('Último cambio: {nombre} quedó como ayudante de {lider}.', { nombre: ultimo.p.name, lider: ultimo.lider.name })
+              : t('Último cambio: {nombre} pasó a reportar a {lider}.', { nombre: ultimo.p.name, lider: ultimo.despues.no === user.no ? t('ti') : ultimo.despues.name })}
+            {historial.length > 1 && <span className="muted"> · {t('{n} cambios en esta visita', { n: historial.length })}</span>}
+          </span>
+          <button className="btn btn-secondary btn-sm" onClick={revertir}>{t('Revertir')}</button>
+        </div>
+      )}
+      <section className={`card organigrama-marco${arrastrado ? ' arrastrando-arbol' : ''}`}>
+        <ul className="arbol organigrama"><Rama p={raiz} ctx={ctx} /></ul>
       </section>
       {moviendo && <MoverA p={moviendo} destinos={[user, ...equipo.filter((e) => e.no !== user.no)].filter((d) => puedeSoltar(moviendo, d))}
         mover={mover} cerrar={() => setMoviendo(null)} />}
@@ -71,23 +106,22 @@ export default function Jerarquia({ user, avisar }) {
 function Rama({ p, ctx }) {
   const directos = ctx.hijos(p.no)
   const ayudantes = (p.ayudantes ?? []).map(ctx.persona).filter(Boolean)
-  const nodo = <Nodo p={p} ctx={ctx} directos={directos.length} total={ctx.rama(p.no).length} />
-  if (!directos.length && !ayudantes.length) return <li>{nodo}</li>
+  const plegada = ctx.plegados.has(p.no)
   return (
     <li>
-      <details open>
-        <summary>{nodo}</summary>
+      <Nodo p={p} ctx={ctx} directos={directos.length} total={ctx.rama(p.no).length} plegada={plegada} />
+      {!plegada && (directos.length > 0 || ayudantes.length > 0) && (
         <ul>
           {directos.map((e) => <Rama key={e.no} p={e} ctx={ctx} />)}
           {/* Sus ayudantes: reportan a otro encargado; aquí solo se muestran (se mueven desde su lugar) */}
           {ayudantes.map((a) => <li key={`ayudante-${a.no}`} className="ayudante"><Nodo p={a} ctx={ctx} ayudante /></li>)}
         </ul>
-      </details>
+      )}
     </li>
   )
 }
 
-function Nodo({ p, ctx, directos = 0, total = 0, ayudante = false }) {
+function Nodo({ p, ctx, directos = 0, total = 0, ayudante = false, plegada = false }) {
   const { user, gerente, arrastrado, setArrastrado, puedeSoltar, mover } = ctx
   const [encima, setEncima] = useState(false)
   const yo = p.no === user.no
@@ -111,13 +145,14 @@ function Nodo({ p, ctx, directos = 0, total = 0, ayudante = false }) {
       </span>
       {ayudante && <span className="chip ayudante-chip">{t('Ayudante')}</span>}
       {directos > 0 && (
-        <span className="chip" title={t('{n} en total', { n: total })}>
-          {t(directos === 1 ? '{n} directo' : '{n} directos', { n: directos })}
-        </span>
+        // Pliega o despliega su rama
+        <button type="button" className="chip chip-rama" aria-expanded={!plegada} title={t('{n} en total', { n: total })} onClick={() => ctx.plegar(p.no)}>
+          {t(directos === 1 ? '{n} directo' : '{n} directos', { n: directos })}<Icono nombre="abajo" />
+        </button>
       )}
       {movible && (
         <button type="button" className="iconbtn mover-a-btn" aria-label={t('Mover a {nombre} a…', { nombre: p.name })} title={t('Mover a…')}
-          onClick={(e) => { e.preventDefault(); ctx.setMoviendo(p) }}>
+          onClick={() => ctx.setMoviendo(p)}>
           <Icono nombre="swap" />
         </button>
       )}

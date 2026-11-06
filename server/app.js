@@ -1002,7 +1002,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       }))
   }))
 
-  // Ayudantes de un líder (Full, Senior o gerente): los elige quien lo tiene a su cargo. Técnicos e Ing. Jr de los
+  // Ayudantes de un líder (Full, Senior o gerente; o un Ing. Jr, desde el árbol): los elige quien lo tiene a su cargo. Técnicos e Ing. Jr de los
   // departamentos del líder; se manda la lista completa. Se avisa a quien entra
   const ayudantesSchema = {
     params: { type: 'object', properties: { lider: noEmpleado } },
@@ -1011,7 +1011,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   app.put('/api/lideres/:lider/ayudantes', { schema: ayudantesSchema }, async (req, reply) => {
     const { por, ayudantes } = req.body
     const lider = empleado(req.params.lider)
-    if (!lider || !esEncargado(lider)) return reply.code(404).send({ error: 'Ese líder no existe.' })
+    if (!lider) return reply.code(404).send({ error: 'Ese líder no existe.' }) // también un Ing. Jr (sus ayudantes del árbol)
     if (!equipo(por).some((e) => e.no === lider.no)) return reply.code(403).send({ error: 'Ese líder no está a tu cargo.' })
     const depts = deptosDe(lider.no)
     if (!ayudantes.every((no) => { const a = empleado(no); return a && RANGO[a.role] === 3 && depts.includes(a.dept) })) {
@@ -1610,12 +1610,21 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     return respaldo(app.estado)
   })
 
-  // Cuentas de prueba para revisar la app (contraseña demo1234, sin código de la app): gerente, técnico e Ing. Jr del
-  // departamento Pruebas. Si ya existen se reactivan con esa contraseña. CUENTAS_PRUEBA=no las apaga todas
+  // Cuentas de prueba para revisar la app (contraseña demo1234, sin código de la app) en el departamento Pruebas:
+  // gerente → Full → técnico e Ing. Jr. Si ya existen se reactivan con esa contraseña. CUENTAS_PRUEBA=no las apaga todas
   const DE_PRUEBA = [
     { no: '80001', name: 'Gerente Prueba', email: 'gerente@prueba.local', role: 'gte', boss: null, area: 'Gerencia' },
-    { no: '80002', name: 'Técnico Prueba', email: 'tecnico@prueba.local', role: 'tec', boss: '80001', area: 'Pruebas' },
-    { no: '80003', name: 'Junior Prueba', email: 'junior@prueba.local', role: 'jr', boss: '80001', area: 'Pruebas' },
+    { no: '80004', name: 'Full Prueba', email: 'full@prueba.local', role: 'full', boss: '80001', area: 'Pruebas' },
+    { no: '80002', name: 'Técnico Prueba', email: 'tecnico@prueba.local', role: 'tec', boss: '80004', area: 'Pruebas' },
+    { no: '80003', name: 'Junior Prueba', email: 'junior@prueba.local', role: 'jr', boss: '80004', area: 'Pruebas' },
+  ]
+  // Actividades de muestra de hoy, para ver el Kanban, Monitoreo y el árbol con datos. Solo a quien aún no tiene
+  const MUESTRA = [
+    ['80004', '80001', 'Revisar indicadores del turno', 'progress', 'normal'],
+    ['80002', '80004', 'Revisar presión del circuito de enfriamiento', 'pending', 'alta'],
+    ['80002', '80004', 'Cambiar filtro de la estación 2', 'progress', 'normal'],
+    ['80003', '80004', 'Actualizar la hoja de WIP', 'pending', 'nueva'],
+    ['80003', '80004', 'Prueba de fuga en la unidad de muestra', 'done', 'critica'],
   ]
   app.post('/api/admin/cuentas-prueba', async (req, reply) => {
     if (!confirmado(req, reply)) return
@@ -1627,6 +1636,11 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     for (const c of DE_PRUEBA) {
       const u = empleado(c.no) ?? usuarios[usuarios.push({}) - 1]
       Object.assign(u, c, { dept: 'pruebas', shift: 'A', prueba: true, activo: true, password: hashSync('demo1234'), pwdChanged: ahora(), porRegistrar: false, debeCambiar: false })
+    }
+    const sinActividades = new Set(DE_PRUEBA.map((c) => c.no).filter((no) => !actividades.some((a) => a.to === no)))
+    const at = ahora()
+    for (const [to, by, text, status, criticidad] of MUESTRA.filter(([to]) => sinActividades.has(to))) {
+      actividades.push({ id: siguienteId(actividades), to, by, date: at.slice(0, 10), shift: 'A', at, text, pct: status === 'done' ? 100 : 0, status, mgr: '', note: '', criticidad, ...(status === 'done' && { doneAt: at }) })
     }
     registrar(req, 'admin-cuentas-prueba', { por: req.sesion.no })
     return DE_PRUEBA.map((c) => vistaUsuario(empleado(c.no)))

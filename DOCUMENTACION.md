@@ -155,8 +155,8 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
   - Una contraseña temporal puesta por un super administrador obliga a cambiarla al entrar (`CambioObligatorio.jsx`).
 
 ### Kanban de actividades (por estado)
-- **Columnas:** los estados, Pendiente, En proceso, Realizada e Incompleta. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
-- **Criticidad:** va como etiqueta de color en cada tarjeta (Por clasificar, Simple, Normal, Alta, Crítica, Urgente) y como filtro arriba del tablero.
+- **Columnas:** **Nuevas actividades** (punteada: ahí se crean y esperan su criticidad; al clasificarlas pasan a Pendiente) y los estados, Pendiente, En proceso, Realizada e Incompleta. Se ve **semana a semana**, con pestañas que se recuerdan en el navegador.
+- **Criticidad:** va como etiqueta de color en cada tarjeta (Por clasificar, Simple, Normal, Alta, Crítica, Urgente) y como filtro desplegable arriba del tablero.
 - **Encargado:**
   - Crea actividades con **+** en Pendiente (una por renglón, hasta 20) para alguien de su gente, o para sí mismo si es gerente, con fecha, turno, comentario y criticidad.
   - **Arrastrar** a otra columna cambia el estado (con animación de View Transitions); al empleado le llega el aviso.
@@ -203,7 +203,8 @@ Lista (estilo SharePoint) o tarjetas de las actividades propias: cambiar el esta
   - **Entrada:** la primera vez del día que la persona abre la app (aviso "Bienvenido…").
   - **Salida:** desde 30 min antes del fin del turno aparecen en la barra de arriba **Tiempo extra** y **Marcar salida**; siguen ahí hasta marcarla. El turno 3 marca su salida a la mañana siguiente sobre la jornada de la noche anterior.
   - **Tiempo extra:** primero se **registra** cuánto se quedará (de 30 min a 6 h; se puede corregir hasta marcar la salida). Al marcar la salida se valida solo: cuenta si salió **más de 15 min** después del fin del turno, y cuenta lo que se quedó de verdad, **hasta lo registrado**. Sin registro o sin salida marcada no cuenta.
-- **Jerarquía:** árbol de quién reporta a quién, con los **ayudantes** de cada líder (borde punteado).
+- **Jerarquía:** organigrama de arriba abajo de quién reporta a quién (en pantallas angostas, lista vertical), con los **ayudantes** de cada líder (punteados). Las ramas se pliegan desde su chip "N directos".
+  - **Revertir:** los movimientos de la visita se deshacen en orden, el último primero.
   - **El gerente lo reorganiza:** arrastra a una persona sobre su nuevo encargado (Full, Senior o gerente que pueda tenerla a su cargo), o usa **Mover a…** (teclado y celular, solo destinos válidos). Mientras arrastra, los destinos válidos se marcan y los demás se atenúan.
   - **Técnico ↔ Ing. Jr:** soltar uno sobre el otro lo deja como **ayudante** (no cambia su encargado).
   - **Ficha** al pasar el cursor o con el foco del teclado: encargado directo, líder si es ayudante, actividades abiertas y realizadas, y cuántos ayudantes tiene.
@@ -379,7 +380,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | GET · PATCH | `/api/admin/usuarios` · `/:empleado` | Super admin | Listar y editar puesto, turno y acceso |
 | POST | `/api/admin/usuarios/:empleado/password` · `/mfa` | Super admin | Contraseña temporal y reinicio del MFA |
 | POST | `/api/admin/respaldo` | Super admin | Respaldo JSON de toda la base (sin sesiones) |
-| POST | `/api/admin/cuentas-prueba` | Super admin | Crea o reactiva las cuentas de prueba 80001 (gerente), 80002 (técnico) y 80003 (Ing. Jr) del departamento Pruebas: `demo1234`, sin código de la app. 409 si `CUENTAS_PRUEBA=no` |
+| POST | `/api/admin/cuentas-prueba` | Super admin | Crea o reactiva las cuentas de prueba 80001 (gerente), 80004 (Full, a cargo de 80002 técnico y 80003 Ing. Jr) del departamento Pruebas, con 5 actividades de muestra a quien no tiene: `demo1234`, sin código de la app. 409 si `CUENTAS_PRUEBA=no` |
 | POST | `/api/admin/gerentes` | Super admin | Dar de alta a un gerente por registrar (nombre, número, correo, turno y departamento, que se crea si no existe; uno con gerente no se le quita). Pide confirmación |
 | GET | `/api/admin/plantillas` | Super admin | Personas de las plantillas (por registrar / registradas) e intentos de registro rechazados |
 | PATCH · DELETE | `/api/admin/plantillas/:empleado` | Super admin | Corregir número o correo, o quitar, una fila por registrar (pide confirmación) |
