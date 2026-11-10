@@ -971,6 +971,7 @@ test('crear departamento: solo un gerente, nombre único; lo dirige quien lo cre
   assert.deepEqual([d.code, d.body.clave, d.body.nombre], [201, 'calidad-de-proce', 'Calidad de Proceso'])
   assert.equal((await crear('10700', 'calidad de proceso')).code, 409)
   assert.ok((await pedir(app, 'GET', '/api/deptos')).body.some((x) => x.clave === 'calidad-de-proce'))
+  assert.equal((await crear('10001', 'Pruebas')).body.clave, 'pruebas-2') // "pruebas" es de las cuentas de prueba
   // Laura dirige el departamento nuevo: carga su plantilla y quien viene en ella se registra
   const nuevo = { no: '20010', name: 'Nuevo Técnico', email: 'nuevo@empresa.com', role: 'tec', shift: 'A', boss: '10001', area: 'Línea 1' }
   assert.equal((await plantilla(app, 'calidad-de-proce', [nuevo])).code, 200)
@@ -1053,6 +1054,9 @@ test('super administrador: solo él entra a /api/admin y los cambios piden confi
     assert.deepEqual((await login({ usuario: SA.email, password: SA.password, tipo }, app)).json(), { error: 'Usuario o contraseña incorrectos.' })
   }
   assert.equal((await login({ usuario: '10001', password: 'demo1234', tipo: 'admin' }, app)).statusCode, 401)
+  // Por otro acceso cuenta como intento fallido (3 arriba + 7 = 10 → bloqueado), igual que una contraseña mala
+  for (let i = 0; i < 7; i++) await login({ usuario: SA.email, password: SA.password, tipo: 'gerencia' }, app)
+  assert.equal((await login({ usuario: SA.email, password: SA.password, tipo: 'admin' }, app)).statusCode, 429)
   // Y solo administra: las funciones de gerencia le responden 403
   for (const [m, url, body] of [['GET', '/api/equipo/90001'], ['GET', '/api/departamentos'], ['GET', '/api/matriz/90001?desde=2026-11-01&hasta=2026-11-02&hoy=2026-11-02'],
     ['POST', '/api/actividades', { por: '90001', para: '10482', fecha: '2026-11-02', turno: 'A', puntos: [{ texto: 'x' }] }]]) {
@@ -1449,6 +1453,10 @@ test('cuentas de prueba: el super administrador las crea o reactiva; entran con 
   const real = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY, turno: 'C', puntos: [{ texto: 'Real' }] }))).body[0].id
   const receptores = (await conCookie(app, 'GET', `/api/actividades/${real}/receptores`, await sesionDe(app, '10230'))).json().map((r) => r.no)
   assert.ok(receptores.length && !receptores.some((no) => no.startsWith('8000')))
+  // ni a una cuenta sin acceso
+  const otro = app.estado.usuarios.find((u) => u.no === receptores.find((no) => no !== '10482'))
+  otro.activo = false
+  assert.ok(!(await conCookie(app, 'GET', `/api/actividades/${real}/receptores`, await sesionDe(app, '10230'))).json().some((r) => r.no === otro.no))
   // Apagadas por el servidor: no se crean
   const off = build({ superadmins: [SA], cuentasPrueba: false })
   const sa = cookieDe(await entrar(SA.email, SA.password, off, 'admin'))

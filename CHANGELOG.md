@@ -26,6 +26,8 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 - **El super administrador solo administra:** las rutas de gerencia (equipo, actividades, Monitoreo, Matriz, herencias…) le responden 403.
 
 ### Corregido
+- **Bloqueo por intentos:** entrar con la contraseña correcta por el acceso equivocado no contaba como intento fallido, y eso permitía deducir la contraseña de un super administrador. Ahora cuenta.
+- **Departamento "Pruebas":** un departamento real con ese nombre tomaba la clave reservada de las cuentas de prueba; ahora queda `pruebas-2`.
 - **Herencias entre cuentas reales y de prueba:** una actividad real podía heredarse a una cuenta de prueba (departamento Pruebas) del turno siguiente, y al revés. Tampoco se ofrecen ya cuentas sin acceso ni super administradores como receptores.
 
 ### Advertencias
@@ -33,7 +35,7 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 - Dependencias nuevas: `three` 0.186.0 y `@react-three/fiber` 9.8.2. Pesan ~240 kB comprimidos, pero solo se descargan en la portada y el login de pantallas anchas.
 
 ### Archivos
-- `server/app.js`, `server/app.test.js`, `src/Login.jsx`, `src/Escena3D.jsx` (nuevo), `src/ui.jsx`, `src/index.css`, `src/en.js`, `package.json`, `package-lock.json`, `.env.ejemplo` (nuevo), `ENTORNO_LOCAL.md` (nuevo), `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
+- `server/app.js`, `server/app.test.js`, `src/Login.jsx`, `src/Escena3D.jsx` (nuevo), `src/Admin.jsx`, `src/i18n.test.js`, `src/ui.jsx`, `src/index.css`, `src/en.js`, `package.json`, `package-lock.json`, `.env.ejemplo` (nuevo), `ENTORNO_LOCAL.md` (nuevo), `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
 
 ---
 

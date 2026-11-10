@@ -558,9 +558,11 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     if (yo.debeCambiar && !SIN_CAMBIO.has(req.routeOptions.url)) {
       return reply.code(403).send({ error: 'Cambia tu contraseña temporal para continuar.', debeCambiar: true })
     }
-    if (req.url.startsWith('/api/admin/') && !esSA(yo)) return reply.code(403).send({ error: 'Solo un super administrador.' })
+    // Por la ruta que atendió la petición, no por la dirección escrita (que puede venir con // o codificada)
+    const ruta = req.routeOptions.url ?? ''
+    if (ruta.startsWith('/api/admin/') && !esSA(yo)) return reply.code(403).send({ error: 'Solo un super administrador.' })
     // Y el super administrador solo administra: nada de las funciones de gerencia ni de los empleados
-    if (esSA(yo) && !req.url.startsWith('/api/admin/') && !RUTAS_SA.has(req.routeOptions.url)) {
+    if (esSA(yo) && !ruta.startsWith('/api/admin/') && !RUTAS_SA.has(ruta)) {
       return reply.code(403).send({ error: 'El super administrador solo usa la administración.' })
     }
   })
@@ -597,6 +599,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const { tipo } = req.body
     if (esSA(u) !== (tipo === 'admin')) {
       registrar(req, 'login-acceso', { no: u.no, tipo, ok: false })
+      fallar(clave) // cuenta igual que una contraseña mala: si no, el bloqueo delataría la contraseña correcta
       return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
     }
     const gerencia = esEncargado(u)
@@ -775,7 +778,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   const claveNueva = (nombre) => {
     const base = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'depto'
     let clave = base
-    for (let i = 2; departamentos.some((d) => d.clave === clave); i++) clave = `${base.slice(0, 16)}-${i}`
+    // "pruebas" queda reservada para las cuentas de prueba: un departamento real llamado así es pruebas-2
+    for (let i = 2; clave === 'pruebas' || departamentos.some((d) => d.clave === clave); i++) clave = `${base.slice(0, 16)}-${i}`
     return clave
   }
   app.post('/api/departamentos', { schema: crearDeptoSchema }, async (req, reply) => {

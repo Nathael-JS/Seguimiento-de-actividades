@@ -13,7 +13,9 @@ const Escena3D = lazy(() => import('./Escena3D.jsx'))
 const con3D = (() => {
   try {
     if (matchMedia('(prefers-reduced-motion: reduce), (max-width: 900px)').matches) return false
-    return !!document.createElement('canvas').getContext('webgl2')
+    const gl = document.createElement('canvas').getContext('webgl2')
+    gl?.getExtension('WEBGL_lose_context')?.loseContext() // solo era la prueba: se libera el contexto
+    return !!gl
   } catch { return false }
 })()
 const Fondo3D = (props) => con3D && <Suspense fallback={null}><Escena3D {...props} /></Suspense>

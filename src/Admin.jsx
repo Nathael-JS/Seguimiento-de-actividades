@@ -270,7 +270,7 @@ const EVENTOS = {
   'admin-confirmacion': 'Confirmó su contraseña', 'admin-confirmacion-fallida': 'Confirmación fallida',
   'admin-usuario': 'Cambio de cuenta', 'admin-password': 'Contraseña restablecida', 'admin-mfa': 'MFA reiniciado', 'admin-respaldo': 'Respaldo descargado',
   'registro-rechazado': 'Registro rechazado', 'admin-plantilla': 'Plantilla corregida', 'admin-gerente': 'Gerente dado de alta', 'error-servidor': 'Error del servidor', 'error-navegador': 'Error en el navegador',
-  'registros-purgados': 'Registros borrados',
+  'registros-purgados': 'Registros borrados', 'login-acceso': 'Entró por otro acceso', 'admin-cuentas-prueba': 'Cuentas de prueba creadas',
 }
 const CAMPOS = { shift: 'Turno', role: 'Puesto', activo: 'Acceso' }
 // "shift=B, activo=false" → "Turno: B · Acceso: no"

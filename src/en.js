@@ -703,6 +703,8 @@ export default {
   'Administración': 'Administration',
   'Cuentas, plantillas, registros y respaldos del sistema. Solo super administradores.': 'System accounts, rosters, logs and backups. Super administrators only.',
   'Iniciar sesión · Administración': 'Sign in · Administration',
+  'Entró por otro acceso': 'Signed in through another access',
+  'Cuentas de prueba creadas': 'Test accounts created',
   'Esa actividad no está por revisar.': 'That activity is not pending review.',
   'Urgente: vale solo dentro de su turno. Si no se completa, pasa a Incompleta y queda por revisar: su encargado la reabre, la deja cerrada o la elimina (queda en el historial).': 'Urgent: valid only within its shift. If not completed, it becomes Incomplete and pending review: the supervisor reopens it, leaves it closed or deletes it (it stays in the history).',
   'Reabierta hasta el fin de su turno; se avisó a {nombre}.': 'Reopened until the end of its shift; {nombre} was notified.',

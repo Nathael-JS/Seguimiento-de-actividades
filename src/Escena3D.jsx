@@ -26,7 +26,9 @@ function Anillo({ x, y, escala }) {
     g.rotation.y += (-0.3 + pointer.x * 0.15 - g.rotation.y) * 0.04
     orbita.forEach((o, i) => {
       const a = o.fase + t * o.vel
-      posiciones.set([Math.cos(a) * o.r, Math.sin(a) * o.r, o.y + Math.sin(t * 0.6 + i) * 0.05], i * 3)
+      posiciones[i * 3] = Math.cos(a) * o.r
+      posiciones[i * 3 + 1] = Math.sin(a) * o.r
+      posiciones[i * 3 + 2] = o.y + Math.sin(t * 0.6 + i) * 0.05
     })
     puntos.current.geometry.attributes.position.needsUpdate = true
   })
