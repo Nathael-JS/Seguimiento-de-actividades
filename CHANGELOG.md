@@ -14,6 +14,29 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · Administración] 2026-11-10: Acceso propio del super administrador, fondo 3D y entorno local
+
+### Agregado
+- **Acceso oculto del super administrador:** tres toques seguidos al número de versión del pie (portada o login) abren "Iniciar sesión · Administración", sin registro ni recuperación de contraseña.
+- **Fondo 3D** en la portada y el login (three.js + React Three Fiber, cargado aparte): el anillo de los turnos orbita el dial y sigue un poco al puntero. No se carga en celular, sin WebGL ni con "reducir movimiento".
+- **`ENTORNO_LOCAL.md`, `.env.ejemplo` y `npm run local`:** guía para crear la base, configurar el `.env`, arrancar, dar de alta a los super administradores, cargar las cuentas de prueba y volver a un entorno limpio.
+
+### Cambiado
+- **El super administrador ya no entra por Gerencia.** Por Gerencia o Jr / Técnico recibe "Usuario o contraseña incorrectos" (no se revela que la cuenta existe) y queda el registro `login-acceso`.
+- **El super administrador solo administra:** las rutas de gerencia (equipo, actividades, Monitoreo, Matriz, herencias…) le responden 403.
+
+### Corregido
+- **Herencias entre cuentas reales y de prueba:** una actividad real podía heredarse a una cuenta de prueba (departamento Pruebas) del turno siguiente, y al revés. Tampoco se ofrecen ya cuentas sin acceso ni super administradores como receptores.
+
+### Advertencias
+- Los super administradores deben entrar por el acceso oculto. Avísales antes de desplegar.
+- Dependencias nuevas: `three` 0.186.0 y `@react-three/fiber` 9.8.2. Pesan ~240 kB comprimidos, pero solo se descargan en la portada y el login de pantallas anchas.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Login.jsx`, `src/Escena3D.jsx` (nuevo), `src/ui.jsx`, `src/index.css`, `src/en.js`, `package.json`, `package-lock.json`, `.env.ejemplo` (nuevo), `ENTORNO_LOCAL.md` (nuevo), `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 ## [v0.0.1 · Ajustes 3] 2026-11-06: Urgentes con revisión, Historial y conversación
 
 ### Agregado

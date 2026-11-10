@@ -33,7 +33,10 @@ export class SiFalla extends Component {
 }
 
 // Logo: el reloj de turnos de la portada (A, B y C) con una palomita al centro. Es el mismo dibujo que public/favicon.svg
-export const Firma = () => <p className="firma">{COPYRIGHT} · v{__VERSION__}</p>
+// alVersion: en el login, el número de versión es además el acceso oculto del super administrador
+export const Firma = ({ alVersion }) => (
+  <p className="firma">{COPYRIGHT} · {alVersion ? <button type="button" className="firma-version" onClick={alVersion}>v{__VERSION__}</button> : `v${__VERSION__}`}</p>
+)
 
 export function Logo() {
   return (

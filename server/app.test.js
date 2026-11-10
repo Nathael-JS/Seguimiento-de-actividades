@@ -10,8 +10,8 @@ const login = (payload, app = build()) => app.inject({ method: 'POST', url: '/ap
 // Clave TOTP de cada cuenta por instancia de la app (el primer login la entrega para darla de alta) y último paso usado
 const mfa = new WeakMap()
 // Login completo: usuario y contraseña, luego el código de la app autenticadora
-async function entrar(usuario, password = 'demo1234', app = build()) {
-  const res = await login({ usuario, password }, app)
+async function entrar(usuario, password = 'demo1234', app = build(), tipo) {
+  const res = await login({ usuario, password, tipo }, app)
   const paso1 = res.json()
   if (paso1.name) return res // cuenta de prueba: entra sin el código de la app
   if (!mfa.has(app)) mfa.set(app, new Map())
@@ -1030,7 +1030,7 @@ test('plantilla: revisa todo junto, no guarda nada si hay un error; crea y actua
 const SA = { name: 'Admin Prueba', email: 'admin@empresa.com', password: 'Admin#Prueba2026' }
 async function conSA() {
   const app = build({ superadmins: [SA] })
-  const sa = cookieDe(await entrar(SA.email, SA.password, app))
+  const sa = cookieDe(await entrar(SA.email, SA.password, app, 'admin'))
   const adm = (method, url, payload) => conCookie(app, method, url, sa, payload).then((r) => ({ code: r.statusCode, body: r.json() }))
   const confirmar = (password = SA.password) => adm('POST', '/api/admin/confirmar', { por: '90001', password })
   return { app, sa, adm, confirmar }
@@ -1048,7 +1048,17 @@ test('contraseñas: se guardan con hash, nunca tal cual', async () => {
 test('super administrador: solo él entra a /api/admin y los cambios piden confirmar su contraseña', async () => {
   const { app, sa, adm, confirmar } = await conSA()
   assert.equal((await conCookie(app, 'GET', '/api/admin/usuarios', await sesionDe(app, '10001'))).statusCode, 403) // ni el gerente
-  assert.equal((await login({ usuario: SA.email, password: SA.password, tipo: 'operativo' }, app)).statusCode, 403) // entra por Gerencia
+  // Acceso propio y oculto: por Gerencia, Jr / Técnico o sin tipo, igual que una contraseña mala; y un gerente no entra por el suyo
+  for (const tipo of ['operativo', 'gerencia', undefined]) {
+    assert.deepEqual((await login({ usuario: SA.email, password: SA.password, tipo }, app)).json(), { error: 'Usuario o contraseña incorrectos.' })
+  }
+  assert.equal((await login({ usuario: '10001', password: 'demo1234', tipo: 'admin' }, app)).statusCode, 401)
+  // Y solo administra: las funciones de gerencia le responden 403
+  for (const [m, url, body] of [['GET', '/api/equipo/90001'], ['GET', '/api/departamentos'], ['GET', '/api/matriz/90001?desde=2026-11-01&hasta=2026-11-02&hoy=2026-11-02'],
+    ['POST', '/api/actividades', { por: '90001', para: '10482', fecha: '2026-11-02', turno: 'A', puntos: [{ texto: 'x' }] }]]) {
+    assert.equal((await adm(m, url, body)).code, 403, url)
+  }
+  assert.equal((await adm('GET', '/api/sesion')).code, 200)
   const lista = (await adm('GET', '/api/admin/usuarios')).body
   assert.deepEqual([lista.length, lista.at(-1).role, lista.find((u) => u.no === '10482').bossName], [16, 'sa', 'Diego Herrera'])
 
@@ -1127,7 +1137,7 @@ test('registros: accesos con IP y navegador, fallidos, cambios del administrador
 test('registros detrás del proxy: la IP que agregó el proxy, no la que inventa quien llama', async () => {
   const app = build({ trustProxy: true, superadmins: [SA] })
   await app.inject({ method: 'POST', url: '/api/login', payload: { usuario: 'x', password: 'y' }, headers: { 'x-forwarded-for': '6.6.6.6, 203.0.113.7' } })
-  const sa = cookieDe(await entrar(SA.email, SA.password, app))
+  const sa = cookieDe(await entrar(SA.email, SA.password, app, 'admin'))
   const [fallido] = (await conCookie(app, 'GET', '/api/admin/registros?evento=login-fallido', sa)).json()
   assert.equal(fallido.ip, '203.0.113.7')
 })
@@ -1434,9 +1444,14 @@ test('cuentas de prueba: el super administrador las crea o reactiva; entran con 
   assert.equal(app.estado.usuarios.filter((u) => u.no.startsWith('8000')).length, 4)
   assert.equal(muestra(), 9)
   for (const no of ['80001', '80004', '80002', '80003']) assert.ok((await login({ usuario: no, password: 'demo1234' }, app)).json().name)
+  // No se cruzan con las reales: una actividad real no se puede heredar a una cuenta de prueba
+  // turno C: quien recibe es del A, el turno de las cuentas de prueba
+  const real = (await pedir(app, 'POST', '/api/actividades', asignar({ fecha: HOY, turno: 'C', puntos: [{ texto: 'Real' }] }))).body[0].id
+  const receptores = (await conCookie(app, 'GET', `/api/actividades/${real}/receptores`, await sesionDe(app, '10230'))).json().map((r) => r.no)
+  assert.ok(receptores.length && !receptores.some((no) => no.startsWith('8000')))
   // Apagadas por el servidor: no se crean
   const off = build({ superadmins: [SA], cuentasPrueba: false })
-  const sa = cookieDe(await entrar(SA.email, SA.password, off))
+  const sa = cookieDe(await entrar(SA.email, SA.password, off, 'admin'))
   await conCookie(off, 'POST', '/api/admin/confirmar', sa, { por: '90001', password: SA.password })
   assert.equal((await conCookie(off, 'POST', '/api/admin/cuentas-prueba', sa, { por: '90001' })).statusCode, 409)
 })

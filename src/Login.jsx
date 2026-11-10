@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { RANGOS, TURNOS, api, horaActual, turnoDe, turnoLargo } from './comun.js'
 import Dial from './Dial.jsx'
 import Icono from './Icono.jsx'
@@ -6,6 +6,27 @@ import Recuperar from './Recuperar.jsx'
 import Registro from './Registro.jsx'
 import { BotonIdioma, BotonTema, Campo, Firma, Logo } from './ui.jsx'
 import { t } from './i18n.js'
+
+// Fondo 3D (three.js): se descarga aparte y solo en pantallas anchas (en celular gasta batería y tapa el texto),
+// con WebGL y sin "reducir movimiento"
+const Escena3D = lazy(() => import('./Escena3D.jsx'))
+const con3D = (() => {
+  try {
+    if (matchMedia('(prefers-reduced-motion: reduce), (max-width: 900px)').matches) return false
+    return !!document.createElement('canvas').getContext('webgl2')
+  } catch { return false }
+})()
+const Fondo3D = (props) => con3D && <Suspense fallback={null}><Escena3D {...props} /></Suspense>
+
+// Acceso oculto del super administrador: tres toques seguidos (en 1.5 s) al número de versión del pie
+function useToquesVersion(abrir) {
+  const toques = useRef([])
+  return () => {
+    const ahora = Date.now()
+    toques.current = [...toques.current.filter((x) => ahora - x < 1500), ahora]
+    if (toques.current.length >= 3) { toques.current = []; abrir() }
+  }
+}
 
 // Portada (slides → elegir acceso) y luego el login de ese acceso: 'login' → 'codigo' (2 pasos), o 'registro' /
 // 'recuperar' que vuelven al login
@@ -20,18 +41,22 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
     setAviso(mensaje)
     setPantalla('login')
   }
+  const elegir = (a) => { setAcceso(a); setPantalla('login') }
+  const alVersion = useToquesVersion(() => elegir('admin'))
 
-  if (!acceso) return <Portada aviso={aviso} saltar={!!aviso} onElegir={(a) => { setAcceso(a); setPantalla('login') }} />
+  if (!acceso) return <Portada aviso={aviso} saltar={!!aviso} onElegir={elegir} alVersion={alVersion} />
   const ahora = horaActual()
+  const admin = acceso === 'admin'
 
   return (
     <div className="auth">
       <aside className="auth-art">
+        <Fondo3D y={0.2} escala={0.85} />
         <div className="brandname"><Logo />{t('Seguimiento de Actividades')}</div>
         <Dial hora={ahora} activo={turnoDe(ahora)} className="dial-lateral" />
         <div className="auth-copy">
-          <h2>{t(acceso === 'gerencia' ? 'Acceso Gerencia' : 'Acceso Jr / Técnico')}</h2>
-          <p>{t(acceso === 'gerencia' ? 'Gerente, Senior e Ing. Full: asignas, validas herencias y sigues a tu equipo.' : 'Ing. Jr y Técnico: actualizas tus tareas y tu encargado se entera al momento.')}</p>
+          <h2>{t(admin ? 'Administración' : acceso === 'gerencia' ? 'Acceso Gerencia' : 'Acceso Jr / Técnico')}</h2>
+          <p>{t(admin ? 'Cuentas, plantillas, registros y respaldos del sistema. Solo super administradores.' : acceso === 'gerencia' ? 'Gerente, Senior e Ing. Full: asignas, validas herencias y sigues a tu equipo.' : 'Ing. Jr y Técnico: actualizas tus tareas y tu encargado se entera al momento.')}</p>
         </div>
       </aside>
       <main className="auth-main">
@@ -47,7 +72,7 @@ export default function Login({ onLogin, aviso: avisoInicial = '' }) {
         {pantalla === 'codigo' && <Codigo verificacion={verificacion} onLogin={onLogin} volver={volver} />}
         {pantalla === 'registro' && <Registro volver={volver} />}
         {pantalla === 'recuperar' && <Recuperar volver={volver} />}
-        <Firma />
+        <Firma alVersion={alVersion} />
       </main>
     </div>
   )
@@ -64,7 +89,7 @@ const VISTA = 'portada-vista'
 const leerVista = () => { try { return localStorage.getItem(VISTA) === '1' } catch { return false } }
 const PAUSA = 5200
 
-function Portada({ aviso, saltar, onElegir }) {
+function Portada({ aviso, saltar, onElegir, alVersion }) {
   const reducido = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
   const [i, setI] = useState(() => (saltar || leerVista() ? SLIDES.length : 0))
   // Sin movimiento reducido avanza solo, salvo pausa; con él, solo con los puntos o "Siguiente"
@@ -84,6 +109,7 @@ function Portada({ aviso, saltar, onElegir }) {
   const activo = final ? turnoDe(ahora) : SLIDES[i][0]
   return (
     <div className={`portada${final ? ' final' : ''}`}>
+      <Fondo3D x={-1.8} escala={0.95} />
       <header className="portada-top">
         <div className="brandname"><Logo />{t('Seguimiento de Actividades')}</div>
         <span className="spacer" />
@@ -142,7 +168,7 @@ function Portada({ aviso, saltar, onElegir }) {
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setI(SLIDES.length)}>{t('Saltar')}</button>
         </footer>
       )}
-      <Firma />
+      <Firma alVersion={alVersion} />
     </div>
   )
 }
@@ -184,19 +210,22 @@ function Credenciales({ aviso, ir, acceso, onPaso1, onLogin }) {
 
   return (
     <form className="auth-form" onSubmit={submit} noValidate>
-      <h1>{t(acceso === 'gerencia' ? 'Iniciar sesión · Gerencia' : 'Iniciar sesión · Jr / Técnico')}</h1>
+      <h1>{t(acceso === 'admin' ? 'Iniciar sesión · Administración' : acceso === 'gerencia' ? 'Iniciar sesión · Gerencia' : 'Iniciar sesión · Jr / Técnico')}</h1>
       <p className="lead">{t('Ingresa con tu usuario, correo o número de empleado.')}</p>
       {aviso && <div className="notice" role="status"><Icono nombre="check" /><span>{aviso}</span></div>}
       <Campo name="usuario" id="usuario" label={t('Usuario o correo electrónico')} error={errors.usuario} autoComplete="username" placeholder="jorge.salinas@empresa.com" />
       <Campo name="password" id="password" label={t('Contraseña')} error={errors.password} type="password" autoComplete="current-password" />
-      <button type="button" className="link" onClick={() => ir('recuperar')}>{t('¿Olvidaste tu contraseña?')}</button>
+      {/* El super administrador no se registra ni recupera aquí: su cuenta vive en el servidor (SUPERADMINS) */}
+      {acceso !== 'admin' && <button type="button" className="link" onClick={() => ir('recuperar')}>{t('¿Olvidaste tu contraseña?')}</button>}
       <p className="error" role="alert">{error}</p>
       <button className="btn btn-primary btn-block" type="submit" disabled={loading}>
         {t(loading ? 'Ingresando…' : 'Ingresar')}
       </button>
-      <p className="muted" style={{ textAlign: 'center' }}>
-        {t('¿No tienes cuenta?')} <button type="button" className="link" onClick={() => ir('registro')}>{t('Registrarse')}</button>
-      </p>
+      {acceso !== 'admin' && (
+        <p className="muted" style={{ textAlign: 'center' }}>
+          {t('¿No tienes cuenta?')} <button type="button" className="link" onClick={() => ir('registro')}>{t('Registrarse')}</button>
+        </p>
+      )}
     </form>
   )
 }

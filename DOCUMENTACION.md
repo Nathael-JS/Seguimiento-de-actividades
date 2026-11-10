@@ -125,7 +125,7 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 | Ing. Full (`full`) | 2 | Gerencia | Encargado |
 | Ing. Jr (`jr`) | 3 | Jr / Técnico | Ejecutor |
 | Técnico (`tec`) | 3 | Jr / Técnico | Ejecutor (mismo nivel que el Ing. Jr) |
-| Super administrador (`sa`) | — | Gerencia | Solo administra: Usuarios, Registros, Perfil |
+| Super administrador (`sa`) | — | Administración (oculto: tres toques a la versión del pie) | Solo administra: Usuarios, Registros, Plantillas, Perfil. Las rutas de gerencia le responden 403 |
 
 - **Encargado** = rango ≤ 2 (`esEncargado`). Quién puede tener a quién a su cargo (`lidera`):
   - **Ing. Full:** técnicos e Ing. Jr.
@@ -144,7 +144,7 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 ## 6. Funcionalidades
 
 ### Acceso
-- **Portada:** presenta la app con un reloj de 24 h de los turnos (`Dial.jsx`) y pide elegir el acceso, **Gerencia** o **Jr / Técnico**.
+- **Portada:** presenta la app con un reloj de 24 h de los turnos (`Dial.jsx`) y pide elegir el acceso, **Gerencia** o **Jr / Técnico**. Detrás, en pantallas anchas, un fondo 3D (`Escena3D.jsx`, three.js con React Three Fiber, cargado aparte): el anillo de los turnos orbitando el dial; no se carga con "reducir movimiento", sin WebGL ni en celular.
 - **Login en 2 pasos:** primero la contraseña y después el código de 6 dígitos de la app autenticadora (TOTP). La primera vez se muestra un QR para vincular la app.
 - **Cuentas de prueba:** las que tienen `prueba: true` entran sin código, para revisiones rápidas.
 - **Registro (validado con la plantilla):** solo se registra quien viene en la plantilla de su departamento, cargada por su gerente. Escribe su número de empleado y su correo; si coinciden con su fila, elige su contraseña y en su primer login vincula la app autenticadora. Puesto, turno, departamento, encargado y área salen de la plantilla. Si no coinciden: *"Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla."*, y el intento queda en **Plantillas** para el super administrador.
@@ -235,6 +235,7 @@ Notificaciones agrupadas por día, con "Cargar más". Se actualizan cada 30 s mi
 | Contraseña | Tu contraseña está por vencer |
 
 ### Super administración
+- **Acceso propio y oculto:** en la portada o el login, tres toques seguidos (1.5 s) al número de versión del pie abren **Iniciar sesión · Administración**, sin registro ni recuperación. Por Gerencia o Jr / Técnico, una cuenta de super administrador recibe "Usuario o contraseña incorrectos" (no se revela) y queda el registro `login-acceso`. Las rutas de gerencia le responden 403: solo usa `/api/admin/*`, su sesión, perfil, avisos y fotos. Guía del entorno local: [ENTORNO_LOCAL.md](ENTORNO_LOCAL.md).
 - **Usuarios:** ficha de cada cuenta. Se puede:
   - cambiar puesto y turno;
   - dar o quitar el acceso (al quitarlo se cierran sus sesiones);

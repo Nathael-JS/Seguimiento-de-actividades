@@ -108,7 +108,7 @@ const loginSchema = {
       usuario: { type: 'string', minLength: 1, maxLength: 100, pattern: '\\S' },
       password: { type: 'string', minLength: 1, maxLength: 100 },
       // Acceso por el que entra: Gerencia (Gerente, Senior, Ing. Full) o Jr / Técnico
-      tipo: { enum: ['gerencia', 'operativo'] },
+      tipo: { enum: ['gerencia', 'operativo', 'admin'] },
     },
   },
 }
@@ -559,7 +559,13 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       return reply.code(403).send({ error: 'Cambia tu contraseña temporal para continuar.', debeCambiar: true })
     }
     if (req.url.startsWith('/api/admin/') && !esSA(yo)) return reply.code(403).send({ error: 'Solo un super administrador.' })
+    // Y el super administrador solo administra: nada de las funciones de gerencia ni de los empleados
+    if (esSA(yo) && !req.url.startsWith('/api/admin/') && !RUTAS_SA.has(req.routeOptions.url)) {
+      return reply.code(403).send({ error: 'El super administrador solo usa la administración.' })
+    }
   })
+  const RUTAS_SA = new Set(['/api/sesion', '/api/inicio/:no', '/api/perfil/:no', '/api/perfil/:no/foto', '/api/perfil/:no/password',
+    '/api/notificaciones/:no', '/api/notificaciones/:no/leidas', '/api/notificaciones/:no/:id/leida', '/api/fotos/:empleado'])
   const SIN_CAMBIO = new Set(['/api/sesion', '/api/perfil/:no/password'])
 
   // Paso 1: usuario y contraseña. Si son correctos se genera el código del paso 2
@@ -586,10 +592,15 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       registrar(req, 'login-bloqueado', { no: u.no, ok: false })
       return reply.code(403).send({ error: 'Tu cuenta no tiene acceso al sistema. Habla con un administrador.' })
     }
-    // El super administrador entra por Gerencia
+    // El super administrador entra solo por su acceso (oculto en el login); por los otros, o un no-SA por el suyo,
+    // la respuesta es la misma que con una contraseña mala: no se revela que existe ni quién lo es
     const { tipo } = req.body
-    const gerencia = esEncargado(u) || esSA(u)
-    if (tipo && (tipo === 'gerencia') !== gerencia) {
+    if (esSA(u) !== (tipo === 'admin')) {
+      registrar(req, 'login-acceso', { no: u.no, tipo, ok: false })
+      return reply.code(401).send({ error: 'Usuario o contraseña incorrectos.' })
+    }
+    const gerencia = esEncargado(u)
+    if (tipo && tipo !== 'admin' && (tipo === 'gerencia') !== gerencia) {
       return reply.code(403).send({ error: gerencia ? 'Esta cuenta es de Gerencia: entra por ese acceso.' : 'Esta cuenta es de Jr / Técnico: entra por ese acceso.' })
     }
     // Las cuentas de prueba (datos de los mockups) entran sin el código de la app para revisiones rápidas;
@@ -1295,6 +1306,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   const condiciones = (a, r) => ({
     puesto: NIVEL[r.role] === NIVEL[empleado(a.to).role], // técnico ↔ Ing. Jr, Ing. Full ↔ Senior
     turno: r.no === a.to || r.shift === SIGUIENTE_TURNO[a.shift], // el mismo empleado (día siguiente) u otro del turno siguiente
+    // cuenta activa y del mismo "mundo": una actividad real nunca pasa al departamento Pruebas (cuentas de prueba), ni al revés
+    cuenta: r.activo !== false && !esSA(r) && (r.dept === 'pruebas') === (empleado(a.to).dept === 'pruebas'),
   })
   const puedeRecibir = (a, r) => Object.values(condiciones(a, r)).every(Boolean)
   const validadorDe = (r) => r.boss ?? r.no
@@ -1429,6 +1442,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const r = empleado(para)
     if (!r) return reply.code(404).send({ error: 'Empleado no encontrado.' })
     const ok = condiciones(a, r)
+    if (!ok.cuenta) return reply.code(404).send({ error: 'Empleado no encontrado.' })
     if (!ok.puesto) return reply.code(400).send({ error: 'Solo se hereda entre puestos del mismo nivel: técnico e Ing. Jr, o Ing. Full y Senior.' })
     if (!ok.turno) return reply.code(400).send({ error: 'Quien recibe debe ser del turno siguiente (o el mismo empleado, al día siguiente).' })
 
