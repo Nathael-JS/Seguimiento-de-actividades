@@ -6,7 +6,7 @@ Lista para probar la app en Render antes de abrirla a usuarios reales. Cómo usa
 3. Pásame solo las ❌.
 
 Inicio desde 0: la base no tiene usuarios ni departamentos, solo tus super administradores (`SUPERADMINS`). El orden para empezar:
-1. **Super administrador:** entra (Gerencia, correo y contraseña, código de la app) → **Plantillas → Nuevo gerente** (nombre, número, correo, turno, departamento).
+1. **Super administrador:** entra (tres toques a la versión del pie → Administración, correo y contraseña, código de la app) → **Plantillas → Nuevo gerente** (nombre, número, correo, turno, departamento).
 2. **Gerente:** Gerencia → **Registrarse** con ese número y correo → elige contraseña → entra y vincula su app.
 3. **Gerente:** Ajustes → carga la plantilla de Excel con su gente.
 4. **Cada persona de la plantilla:** Registrarse con su número y correo.
@@ -98,7 +98,8 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
-| D1 | Entrar | Gerencia → correo y contraseña → código de la app | Menú: Usuarios, Registros, Perfil | | |
+| D1 | Entrar | Tres toques seguidos a `V0.0.1.5` del pie → correo y contraseña → código de la app | "Iniciar sesión · Administración" sin Registrarse ni ¿Olvidaste…?; menú: Usuarios, Registros, Plantillas, Perfil | | |
+| D1b | No entra por Gerencia | Gerencia → correo y contraseña del super administrador | "Usuario o contraseña incorrectos."; en Registros queda `login-acceso` | | |
 | D2 | Confirmación | Cambiar el turno de alguien | Pide tu contraseña (vale 5 min) | | |
 | D3 | Contraseña temporal | Ficha → restablecer contraseña | Se muestra una vez; al entrar, esa persona debe cambiarla | | |
 | D4 | Quitar acceso | Ficha → quitar acceso | Esa persona ya no entra y su sesión se cierra | | |

@@ -156,6 +156,7 @@ Sus números de empleado son 90001, 90002… en ese orden (o `"no"` en cada uno)
 
 - `npm run build` — compila el frontend.
 - `npm start` — levanta Fastify (puerto `PORT`, 3000 por defecto).
+- `npm run local` — igual, leyendo el `.env` (copia `.env.ejemplo`). Guía paso a paso con PostgreSQL local: [ENTORNO_LOCAL.md](ENTORNO_LOCAL.md).
 - `npm test` — pruebas de la API, de la plantilla y de las traducciones (todo texto de interfaz del código y del servidor debe tener su inglés en `src/en.js`). La de PostgreSQL corre solo con `TEST_DATABASE_URL` apuntando a una base de pruebas (borra sus tablas).
 - `npm run lint` — oxlint.
 - `npm run paquete` — arma `seguimiento-AAAAMMDD-commit.tar.gz` para el servidor de planta (app compilada + dependencias de producción).

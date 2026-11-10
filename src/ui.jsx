@@ -1,5 +1,5 @@
 import { Component, useId, useState } from 'react'
-import { COPYRIGHT, CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError, versionFotos } from './comun.js'
+import { CRITICIDADES, api, columnaTablero, criticidad, fechaHora, iniciales, estado as nombreEstado, reglasPassword, reportarError, versionFotos } from './comun.js'
 import Icono from './Icono.jsx'
 import { cambiarIdioma, idiomaActual, t } from './i18n.js'
 
@@ -33,7 +33,10 @@ export class SiFalla extends Component {
 }
 
 // Logo: el reloj de turnos de la portada (A, B y C) con una palomita al centro. Es el mismo dibujo que public/favicon.svg
-export const Firma = () => <p className="firma">{COPYRIGHT} · v{__VERSION__}</p>
+// alVersion: en el login, el número de versión es además el acceso oculto del super administrador
+export const Firma = ({ alVersion }) => (
+  <p className="firma">{alVersion ? <button type="button" className="firma-version" onClick={alVersion}>V{__VERSION__}</button> : `V${__VERSION__}`}</p>
+)
 
 export function Logo() {
   return (

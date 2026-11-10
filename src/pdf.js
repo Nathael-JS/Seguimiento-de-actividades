@@ -2,7 +2,6 @@
 // desde Reportes): no pesa en la carga de la app
 import { jsPDF } from 'jspdf'
 import { autoTable } from 'jspdf-autotable'
-import { COPYRIGHT } from './comun.js'
 
 const MARCA = [11, 110, 110]
 const TINTA = [22, 32, 42]
@@ -80,7 +79,6 @@ export async function reportePdf({ titulo, detalle, resumen, tablas, pie }) {
     doc.setTextColor(...SUAVE).setFont('helvetica', 'normal').setFontSize(8)
     doc.text(pie, margen, alto - 6)
     doc.text(`${i} / ${paginas}`, ancho - margen, alto - 6, { align: 'right' })
-    doc.setFontSize(6.5).text(COPYRIGHT, ancho / 2, alto - 2.5, { align: 'center' })
   }
   return doc.output('blob')
 }

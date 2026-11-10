@@ -6,7 +6,7 @@ import { CRITICIDADES, DEPARTAMENTOS, ESTADOS, MODULOS, ROLES, reglasPassword } 
 
 const leer = (ruta) => readFileSync(new URL(ruta, import.meta.url), 'utf8')
 // Nombres propios, datos de ejemplo y textos que no son de interfaz: iguales en ambos idiomas
-const IGUALES = new Set(['Liquid Cooling', 'SMT', 'Laura Méndez', 'Jorge Salinas', 'Estaciones LC245', 'Escape', 'Enter', 'Revisar los indicadores del departamento', 'Preparar la junta semanal con el equipo', '¿Puedes incluir el yield de ayer?', 'Auditoría de 5S en la línea 2', 'Ya pedí el filtro al almacén.', 'Reparar fuga en la válvula V-3', 'NFD', 'Simple', 'Normal', 'Senior', 'Content-Type',
+const IGUALES = new Set(['Liquid Cooling', 'SMT', 'Laura Méndez', 'Jorge Salinas', 'Estaciones LC245', 'Escape', 'WEBGL_lose_context', 'Enter', 'Revisar los indicadores del departamento', 'Preparar la junta semanal con el equipo', '¿Puedes incluir el yield de ayer?', 'Auditoría de 5S en la línea 2', 'Ya pedí el filtro al almacén.', 'Reparar fuga en la válvula V-3', 'NFD', 'Simple', 'Normal', 'Senior', 'Content-Type',
   // Navegadores y sistemas (registros) y el área de los super administradores (dato, no interfaz)
   'Edge', 'Opera', 'Firefox', 'Chrome', 'Safari', 'Windows', 'Android', 'Linux', 'Administración',
   // Cuentas de prueba (datos)
