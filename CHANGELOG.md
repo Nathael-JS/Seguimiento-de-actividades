@@ -14,6 +14,21 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · MFA] 2026-11-10: Guía del MFA en PostgreSQL
+
+### Agregado
+- **`ENTORNO_LOCAL.md` → MFA en PostgreSQL:**
+  - cómo se registra la app autenticadora y cuándo se guarda la clave;
+  - en qué columnas queda (`usuarios.totp`, `usuarios.totp_paso`) y cómo ver quién tiene MFA sin mostrar las claves;
+  - que el MFA es por base (local, Neon y planta);
+  - cómo reiniciarlo, también para un super administrador con la app detenida;
+  - qué revisar cuando el código no pasa.
+
+### Archivos
+- `ENTORNO_LOCAL.md`, `CHANGELOG.md`
+
+---
+
 ## [v0.0.1 · Administración] 2026-11-10: Acceso propio del super administrador, fondo 3D y entorno local
 
 ### Agregado

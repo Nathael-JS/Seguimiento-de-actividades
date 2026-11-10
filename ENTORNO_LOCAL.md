@@ -135,6 +135,52 @@ Si alguien intenta entrar con una cuenta de super administrador por Gerencia o J
 
 **Para cambiar la contraseña de un super administrador:** edita `SUPERADMINS` y reinicia la app.
 
+### MFA (app autenticadora) en PostgreSQL
+
+**Cómo se registra.**
+
+1. En el primer inicio de sesión de una cuenta sin MFA, el servidor genera una clave secreta y la muestra como QR y como texto. En la app autenticadora aparece como "Seguimiento de Actividades: correo".
+2. La clave **se guarda en la base solo cuando el primer código de 6 dígitos es correcto**. Si cierras la pantalla antes, no queda nada y la próxima vez sale un QR nuevo.
+3. Desde ahí, cada inicio de sesión pide el código. Un código sirve una sola vez y el servidor acepta una diferencia de ±30 s con la hora del teléfono.
+4. Las cuentas de prueba (80001-80004) no usan MFA.
+
+**Dónde queda.** En la tabla `usuarios`, columnas `totp` (la clave) y `totp_paso` (el último código usado, para que no se repita). Para ver quién tiene MFA, sin mostrar las claves:
+
+```bash
+psql "postgresql://…/seguimiento" -c "select no, nombre, puesto, totp is not null as mfa from usuarios order by puesto, no"
+```
+
+> La columna `totp` es tan sensible como una contraseña: con ella se generan códigos válidos. No la copies ni la compartas. Los respaldos cifrados la incluyen; por eso están cifrados.
+
+**Es por base.** El MFA vive en la base, no en el `.env`. Tu base local, la de Neon (Render) y la de planta tienen cada una su propio registro:
+- un super administrador vincula la app **una vez por base**, aunque use el mismo correo;
+- en el teléfono quedan varias entradas con el mismo nombre; conviene renombrarlas (por ejemplo "Seguimiento local" y "Seguimiento Render");
+- si restauras un respaldo en otra base, el MFA viaja con él y sirve la misma entrada del teléfono;
+- `server/vaciar.js` conserva el MFA de los super administradores.
+
+**Reiniciar el MFA (teléfono perdido o cambiado).**
+
+- **Empleados y gerentes:** un super administrador, en **Usuarios → ficha → Reiniciar MFA**. Se cierran sus sesiones y en el siguiente inicio de sesión vuelve a vincular la app.
+- **Super administradores:** la app no los deja reiniciarse entre ellos (sus cuentas se manejan en el servidor). Se hace en la base, **con la app detenida**. Si sigue corriendo, conserva la clave vieja en memoria y la vuelve a escribir.
+
+```bash
+sudo systemctl stop seguimiento   # o Ctrl+C si la arrancaste con npm run local
+```
+```bash
+psql "postgresql://…/seguimiento" -c "update usuarios set totp = null, totp_paso = null where correo = 'correo-del-super-admin@empresa.com'"
+```
+```bash
+sudo systemctl start seguimiento  # o npm run local
+```
+
+El correo va en minúsculas, tal como lo guarda la app. En el siguiente inicio de sesión sale el QR para vincular de nuevo.
+
+**Si el código no pasa:**
+- revisa la hora del servidor con `timedatectl`: debe decir `System clock synchronized: yes`; si no, activa NTP con `sudo timedatectl set-ntp true`;
+- revisa la hora del teléfono, que esté en automático;
+- tras 5 códigos incorrectos, la verificación se cancela y hay que volver a escribir la contraseña;
+- si usas la entrada del teléfono de otra base, el código nunca coincide; usa la de esta base o reinicia el MFA.
+
 ## 7. Cuentas de prueba
 
 No van en el `.env`. Para crearlas:
@@ -222,7 +268,7 @@ TEST_DATABASE_URL='postgresql://seguimiento:CAMBIAR@localhost:5432/seguimiento_p
 | En la base el super administrador tiene otro nombre | La app arrancó con otra `SUPERADMINS` (variable vieja en la terminal o `/etc/seguimiento.env` del servicio) | `unset SUPERADMINS`, revisa qué proceso atiende con `ss -ltnp \| grep 3000` y reinicia |
 | "Usuario o contraseña incorrectos" con el super administrador | Entró por Gerencia o Jr / Técnico | Acceso oculto: tres toques a la versión del pie |
 | La página no carga desde otro equipo | `HOST=127.0.0.1` | `HOST=0.0.0.0` para probar, o NGINX en producción; firewall: `firewall-cmd --add-port=3000/tcp` |
-| El código de 6 dígitos no pasa | La hora del servidor está desfasada | `timedatectl`, activa NTP |
+| El código de 6 dígitos no pasa | Hora desfasada, o la entrada del teléfono es de otra base | [MFA en PostgreSQL](#mfa-app-autenticadora-en-postgresql) |
 | "Demasiados intentos" | 10 contraseñas incorrectas | Espera 15 min o reinicia la app |
 | La página sale en blanco | Falta compilar | `npm run build` |
 | Responde 503 y recarga | Hay otra instancia usando la misma base | Deja una sola |
