@@ -7,6 +7,6 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // La versión de package.json, visible al pie de la app
-  define: { __VERSION__: JSON.stringify(version) },
+  // La versión visible al pie de la app: la de package.json más el número de entrega (npm solo acepta 3 números)
+  define: { __VERSION__: JSON.stringify(`${version}.5`) },
 })

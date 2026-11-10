@@ -124,7 +124,7 @@ No se editan en la base ni desde la app: lo que cambies en la tabla `usuarios` s
 
 **Cómo entran (acceso oculto).** El super administrador ya no entra por Gerencia:
 
-1. En la portada o en el login, **toca tres veces seguidas** (en 1.5 s) el número de versión del pie, `v0.0.1`. Con teclado: Tab hasta la versión y Enter tres veces.
+1. En la portada o en el login, **toca tres veces seguidas** (en 1.5 s) el número de versión del pie, `V0.0.1.5`. Con teclado: Tab hasta la versión y Enter tres veces.
 2. Se abre **Iniciar sesión · Administración**. No tiene "Registrarse" ni "¿Olvidaste tu contraseña?", porque la cuenta vive en el servidor.
 3. Escribe el correo (o el número 90001) y la contraseña.
 4. La primera vez pide vincular la app autenticadora (Google o Microsoft Authenticator) con el QR. Después pide el código de 6 dígitos en cada inicio de sesión.

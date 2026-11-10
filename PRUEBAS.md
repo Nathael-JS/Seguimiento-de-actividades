@@ -98,7 +98,7 @@ Para usar dos cuentas a la vez, abre una en ventana normal y la otra en **incóg
 
 | # | Prueba | Pasos | Esperado | ✅/❌ | Notas |
 |---|---|---|---|---|---|
-| D1 | Entrar | Tres toques seguidos a `v0.0.1` del pie → correo y contraseña → código de la app | "Iniciar sesión · Administración" sin Registrarse ni ¿Olvidaste…?; menú: Usuarios, Registros, Plantillas, Perfil | | |
+| D1 | Entrar | Tres toques seguidos a `V0.0.1.5` del pie → correo y contraseña → código de la app | "Iniciar sesión · Administración" sin Registrarse ni ¿Olvidaste…?; menú: Usuarios, Registros, Plantillas, Perfil | | |
 | D1b | No entra por Gerencia | Gerencia → correo y contraseña del super administrador | "Usuario o contraseña incorrectos."; en Registros queda `login-acceso` | | |
 | D2 | Confirmación | Cambiar el turno de alguien | Pide tu contraseña (vale 5 min) | | |
 | D3 | Contraseña temporal | Ficha → restablecer contraseña | Se muestra una vez; al entrar, esa persona debe cambiarla | | |

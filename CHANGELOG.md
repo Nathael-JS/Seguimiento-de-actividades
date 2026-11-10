@@ -22,6 +22,7 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 - **`ENTORNO_LOCAL.md`, `.env.ejemplo` y `npm run local`:** guía para crear la base, configurar el `.env`, arrancar, dar de alta a los super administradores, cargar las cuentas de prueba y volver a un entorno limpio.
 
 ### Cambiado
+- **Sin marca de agua:** el pie de las pantallas y de los PDF ya no lleva el texto de autoría; queda solo la versión, **V0.0.1.5**, que en la portada y el login es el acceso oculto.
 - **El super administrador ya no entra por Gerencia.** Por Gerencia o Jr / Técnico recibe "Usuario o contraseña incorrectos" (no se revela que la cuenta existe) y queda el registro `login-acceso`.
 - **El super administrador solo administra:** las rutas de gerencia (equipo, actividades, Monitoreo, Matriz, herencias…) le responden 403.
 
@@ -35,7 +36,7 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 - Dependencias nuevas: `three` 0.186.0 y `@react-three/fiber` 9.8.2. Pesan ~240 kB comprimidos, pero solo se descargan en la portada y el login de pantallas anchas.
 
 ### Archivos
-- `server/app.js`, `server/app.test.js`, `src/Login.jsx`, `src/Escena3D.jsx` (nuevo), `src/Admin.jsx`, `src/i18n.test.js`, `src/ui.jsx`, `src/index.css`, `src/en.js`, `package.json`, `package-lock.json`, `.env.ejemplo` (nuevo), `ENTORNO_LOCAL.md` (nuevo), `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
+- `server/app.js`, `server/app.test.js`, `src/Login.jsx`, `src/Escena3D.jsx` (nuevo), `src/Admin.jsx`, `src/i18n.test.js`, `src/ui.jsx`, `src/index.css`, `src/en.js`, `src/comun.js`, `src/pdf.js`, `vite.config.js`, `package.json`, `package-lock.json`, `.env.ejemplo` (nuevo), `ENTORNO_LOCAL.md` (nuevo), `README.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
 
 ---
 
