@@ -125,7 +125,7 @@ No usa framework de CSS, router, gestor de estado ni ORM: CSS propio con tokens,
 | Ing. Full (`full`) | 2 | Gerencia | Encargado |
 | Ing. Jr (`jr`) | 3 | Jr / Técnico | Ejecutor |
 | Técnico (`tec`) | 3 | Jr / Técnico | Ejecutor (mismo nivel que el Ing. Jr) |
-| Super administrador (`sa`) | — | Administración (oculto: tres toques a la versión del pie) | Solo administra: Usuarios, Registros, Plantillas, Perfil. Las rutas de gerencia le responden 403 |
+| Super administrador (`sa`) | — | Administración (oculto: tres toques a la versión del pie) | Solo administra: Usuarios, Registros, Plantillas, Perfil. Las rutas de gerencia le responden 403. Si un gerente lo pone en la plantilla de su departamento (puesto `sr`, primer departamento que lo integra), queda como `sr` con `sa: true`: Senior de ese departamento y además administra |
 
 - **Encargado** = rango ≤ 2 (`esEncargado`). Quién puede tener a quién a su cargo (`lidera`):
   - **Ing. Full:** técnicos e Ing. Jr.

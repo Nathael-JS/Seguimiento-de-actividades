@@ -167,7 +167,7 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
   const [temporal, setTemporal] = useState('')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
-  const esSA = u.role === 'sa'
+  const esSA = u.sa
 
   async function hacer(accion, aviso) {
     setError('')
@@ -215,7 +215,12 @@ function Ficha({ u, user, conConfirmacion, alCambiar, avisar }) {
         <div><dt>{t('Último acceso')}</dt><dd>{u.ultimoAcceso ? fechaHora(u.ultimoAcceso) : t('Sin registros')}</dd></div>
       </dl>
 
-      {esSA ? <p className="meta">{t('Las cuentas de super administrador se manejan en el servidor (variable SUPERADMINS).')}</p> : <>
+      {esSA ? <>
+        <p className="meta">{t('Las cuentas de super administrador se manejan en el servidor (variable SUPERADMINS).')}</p>
+        {u.dept && <div className="row"><button type="button" className="btn btn-secondary btn-sm" disabled={enviando}
+          onClick={() => hacer(() => api(`/api/admin/usuarios/${u.no}/sacar-depto`, { method: 'POST', body: { por: user.no } }), t('Ya no está en el departamento.')).then((r) => r && alCambiar(r))}>
+          {t('Sacar del departamento')}</button></div>}
+      </> : <>
         <div className="ficha-edicion">
           <label className="field">
             <span>{t('Puesto')}</span>

@@ -12,6 +12,9 @@ test('Tablero para todos; Actividades asignadas para todos menos el Gerente; Dep
   assert.ok(rutas('gte', true).includes('ajustes') && !rutas('sr', true).includes('ajustes')) // Ajustes: solo el gerente
   assert.deepEqual(rutas('sa', false), ['usuarios', 'registros', 'plantillas', 'perfil']) // el super administrador solo administra
   assert.ok(!rutas('gte', true).includes('usuarios'))
+  // integrado a un departamento: lo de un Senior más la administración
+  const saSr = modulosDe({ role: 'sr', sa: true, encargado: true }).map((m) => m.ruta)
+  assert.ok(['monitoreo', 'usuarios', 'registros', 'plantillas'].every((r) => saSr.includes(r)) && !saSr.includes('ajustes'))
 })
 
 test('grupoDia: Hoy, Ayer o la fecha, según el día local', async () => {

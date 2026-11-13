@@ -14,6 +14,22 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 # Versión 0.0.1
 
+## [v0.0.1 · SA en departamento] 2026-11-13: Super administrador como Senior de un departamento y menú de las tarjetas al frente
+
+### Agregado
+- **Super administrador en un departamento:** un gerente lo puede poner en la plantilla de su departamento, con su número, su correo y el puesto `sr`. Queda como **Senior** de ese departamento y sigue administrando. Solo el primer departamento que lo integra se lo queda; otro recibe "Ese super administrador ya está en otro departamento.". Su nombre y su correo siguen saliendo de `SUPERADMINS`, y sigue entrando por el acceso oculto. Otro super administrador lo saca con **Usuarios → ficha → Sacar del departamento** (si tiene gente a su cargo, primero hay que moverla).
+
+### Corregido
+- **Menú ⋯ de las tarjetas del Kanban detrás de la tarjeta de abajo:** cada tarjeta es su propia capa (por la animación al moverlas), así que la siguiente lo tapaba. La tarjeta con el menú abierto ahora sube por encima de las demás.
+
+### Advertencias
+- `server/vaciar.js` regresa a los super administradores integrados a solo administración (los departamentos se borran).
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `server/vaciar.js`, `src/comun.js`, `src/comun.test.js`, `src/Admin.jsx`, `src/en.js`, `src/index.css`, `ENTORNO_LOCAL.md`, `DOCUMENTACION.md`
+
+---
+
 ## [v0.0.1 · MFA] 2026-11-10: Guía del MFA en PostgreSQL
 
 ### Agregado

@@ -48,9 +48,11 @@ export const MODULOS = [
   { ruta: 'perfil', titulo: 'Perfil', icono: 'user', desc: 'Tus datos y contraseña.', grupo: 'Organización' },
 ]
 
-// El super administrador solo administra: sus módulos y su perfil
+// El super administrador solo administra: sus módulos y su perfil. Si un gerente lo integró a su departamento
+// (role 'sr' con sa), además tiene lo de un Senior
 const permitido = (m, user) =>
-  user.role === 'sa' ? m.solo === 'sa' || m.ruta === 'perfil'
+  m.solo === 'sa' ? !!user.sa || user.role === 'sa'
+    : user.role === 'sa' ? m.ruta === 'perfil'
     : (!m.solo || (m.solo === 'gte' ? user.role === 'gte' : m.solo === 'encargado' && user.encargado)) && m.excepto !== user.role
 export const modulosDe = (user) => MODULOS.filter((m) => permitido(m, user))
 

@@ -1049,3 +1049,6 @@ dialog.modal.conversacion{max-width:760px;height:min(760px,calc(100dvh - 48px))}
 /* La versión del pie en el login: parece texto (acceso oculto), pero se puede enfocar con el teclado */
 .firma-version{all:unset;cursor:default}
 .firma-version:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}
+/* Cada tarjeta tiene view-transition-name (y transform al pasar el cursor): eso la vuelve su propia capa y las
+   siguientes la tapan. La que tiene su menú abierto sube por encima de las demás */
+.tarjeta:has(.menu-tarjeta[open]){position:relative;z-index:25}
