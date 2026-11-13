@@ -1453,6 +1453,10 @@ test('super administrador en un departamento: el primer gerente que lo pone en s
   // Al reiniciar (SUPERADMINS se vuelve a leer) se queda en su departamento
   const otra = build({ superadmins: [SA], estado: app.estado })
   assert.deepEqual(['role', 'dept', 'sa'].map((k) => otra.estado.usuarios.find((u) => u.no === '90001')[k]), ['sr', 'lc', true])
+  // Un super administrador lo saca del departamento: vuelve a solo administrar
+  await adm('POST', '/api/admin/confirmar', { por: '90001', password: SA.password })
+  assert.equal((await adm('POST', '/api/admin/usuarios/90001/sacar-depto', { por: '90001' })).body.role, 'sa')
+  assert.equal((await adm('GET', '/api/equipo/90001')).code, 403)
 })
 
 test('cuentas de prueba: el super administrador las crea o reactiva; entran con demo1234 sin código; CUENTAS_PRUEBA=no las bloquea', async () => {

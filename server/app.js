@@ -16,7 +16,6 @@ const esEncargado = (u) => RANGO[u.role] <= 2
 // Quién puede tener a quién a su cargo (por puesto): el Full, a técnicos e Ing. Jr; el Senior, además a Full; el
 // gerente, a todos, también a otros gerentes. Entre técnico e Ing. Jr no hay encargado, solo ayudante
 const lidera = (jefe, sub) => RANGO[jefe] <= 2 && (RANGO[jefe] < RANGO[sub] || (jefe === 'gte' && sub === 'gte'))
-// Super administrador: fuera de los departamentos; maneja usuarios y registros
 // Super administrador: role 'sa', o 'sr' con sa = true si un gerente lo integró a la plantilla de su departamento
 const esSA = (u) => !!u && (u.role === 'sa' || u.sa === true)
 const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
@@ -1641,6 +1640,19 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   })
   app.get('/api/admin/usuarios', async () =>
     usuarios.map(vistaUsuario).sort((a, b) => a.sa - b.sa || a.name.localeCompare(b.name)))
+
+  // Sacar a un super administrador del departamento al que lo integró un gerente: vuelve a solo administrar.
+  // Si alguien está a su cargo, primero hay que moverlo (Jerarquía)
+  app.post('/api/admin/usuarios/:empleado/sacar-depto', { schema: accionAdminSchema }, async (req, reply) => {
+    if (!confirmado(req, reply)) return
+    const u = empleado(req.params.empleado)
+    if (!esSA(u) || !u.dept) return reply.code(404).send({ error: 'Ese super administrador no está en un departamento.' })
+    if (usuarios.some((x) => x.boss === u.no)) return reply.code(409).send({ error: 'Tiene gente a su cargo: muévela primero en Jerarquía.' })
+    usuarios.forEach((x) => { if (x.ayudantes?.includes(u.no)) x.ayudantes = x.ayudantes.filter((n) => n !== u.no) })
+    Object.assign(u, { role: 'sa', dept: null, boss: null, ayudantes: [], area: 'Administración' })
+    registrar(req, 'admin-usuario', { no: u.no, por: req.sesion.no, detalle: 'fuera del departamento' })
+    return vistaUsuario(u)
+  })
 
   // Quién recibe el cambio: existe y no es super administrador (esas cuentas se manejan en el servidor)
   const destino = (req, reply) => {

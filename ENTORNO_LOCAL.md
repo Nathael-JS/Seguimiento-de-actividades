@@ -133,7 +133,7 @@ Si alguien intenta entrar con una cuenta de super administrador por Gerencia o J
 
 **Qué puede hacer.** Solo administrar: Usuarios, Registros, Plantillas, respaldos y su Perfil. Las funciones de gerencia (Kanban, Monitoreo, Matriz, Jerarquía, actividades, herencias…) le responden 403, aunque las llame directo a la API.
 
-**En un departamento.** Un gerente puede ponerlo en la plantilla de su departamento (Ajustes → plantilla), con su número (90001…), su correo y el puesto `sr`. Ahí trabaja como **Senior** y sigue administrando. Solo el primer departamento que lo integra se lo queda. `server/vaciar.js` lo regresa a solo administración.
+**En un departamento.** Un gerente puede ponerlo en la plantilla de su departamento (Ajustes → plantilla), con su número (90001…), su correo y el puesto `sr`. Ahí trabaja como **Senior** y sigue administrando. Solo el primer departamento que lo integra se lo queda. `server/vaciar.js` o **Usuarios → ficha → Sacar del departamento** lo regresan a solo administración.
 
 **Para cambiar la contraseña de un super administrador:** edita `SUPERADMINS` y reinicia la app.
 
