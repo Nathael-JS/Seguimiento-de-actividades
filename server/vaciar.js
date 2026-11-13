@@ -14,7 +14,9 @@ process.env.DATOS_SEMILLA = 'inicio'
 const pool = await conectar(process.env.DATABASE_URL)
 try {
   const { datos } = await cargar(pool)
-  const superadmins = datos?.usuarios.filter((u) => u.role === 'sa') ?? []
+  // Sin departamentos: los super administradores integrados a uno vuelven a ser solo super administradores
+  const superadmins = (datos?.usuarios.filter((u) => u.role === 'sa' || u.sa === true) ?? [])
+    .map((u) => ({ ...u, role: 'sa', sa: true, dept: null, boss: null, ayudantes: [] }))
   const app = build()
   app.estado.usuarios.push(...superadmins)
   await restaurar(pool, respaldo(app.estado))

@@ -17,7 +17,8 @@ const esEncargado = (u) => RANGO[u.role] <= 2
 // gerente, a todos, también a otros gerentes. Entre técnico e Ing. Jr no hay encargado, solo ayudante
 const lidera = (jefe, sub) => RANGO[jefe] <= 2 && (RANGO[jefe] < RANGO[sub] || (jefe === 'gte' && sub === 'gte'))
 // Super administrador: fuera de los departamentos; maneja usuarios y registros
-const esSA = (u) => u?.role === 'sa'
+// Super administrador: role 'sa', o 'sr' con sa = true si un gerente lo integró a la plantilla de su departamento
+const esSA = (u) => !!u && (u.role === 'sa' || u.sa === true)
 const ESTADOS = ['done', 'progress', 'pending', 'incomplete']
 
 const noEmpleado = { type: 'string', pattern: '^\\d{1,10}$' }
@@ -362,18 +363,19 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   superadmins.forEach((sa, i) => {
     const u = usuarios.find((x) => x.email === correosSA[i])
     if (u) {
-      Object.assign(u, { name: sa.name, role: 'sa', activo: true })
+      // Integrado a un departamento: sigue como Senior de ese departamento
+      Object.assign(u, { name: sa.name, role: u.dept ? u.role : 'sa', sa: true, activo: true })
       if (!coincideSync(u.password, sa.password)) Object.assign(u, { password: hashSync(sa.password), pwdChanged: ahora() })
       return
     }
     let no = Number(sa.no ?? 90001 + i)
     while (usuarios.some((x) => x.no === String(no))) no++
     usuarios.push({
-      no: String(no), name: sa.name, email: correosSA[i], role: 'sa', dept: null, boss: null,
+      no: String(no), name: sa.name, email: correosSA[i], role: 'sa', sa: true, dept: null, boss: null,
       shift: 'A', area: 'Administración', pwdChanged: ahora(), password: hashSync(sa.password),
     })
   })
-  usuarios.forEach((u) => { if (u.role === 'sa' && !correosSA.includes(u.email)) u.activo = false })
+  usuarios.forEach((u) => { if (esSA(u) && !correosSA.includes(u.email)) u.activo = false })
   // Registro de auditoría: quién entra, desde dónde y qué cambia un super administrador.
   // Se guardan los últimos 5000 (también van al log del servidor, que Render guarda)
   const registros = cargado?.registros ?? []
@@ -516,7 +518,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   }
 
   const sesion = (u) => ({
-    no: u.no, name: u.name, role: u.role, dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u),
+    no: u.no, name: u.name, role: u.role, sa: esSA(u), dept: u.dept, shift: u.shift, area: u.area, encargado: esEncargado(u),
     ...(u.debeCambiar && { debeCambiar: true }),
   })
 
@@ -562,7 +564,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const ruta = req.routeOptions.url ?? ''
     if (ruta.startsWith('/api/admin/') && !esSA(yo)) return reply.code(403).send({ error: 'Solo un super administrador.' })
     // Y el super administrador solo administra: nada de las funciones de gerencia ni de los empleados
-    if (esSA(yo) && !ruta.startsWith('/api/admin/') && !RUTAS_SA.has(ruta)) {
+    // Salvo que un gerente lo haya integrado a su departamento: ahí trabaja como Senior
+    if (esSA(yo) && !yo.dept && !ruta.startsWith('/api/admin/') && !RUTAS_SA.has(ruta)) {
       return reply.code(403).send({ error: 'El super administrador solo usa la administración.' })
     }
   })
@@ -670,7 +673,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     const { no, password } = req.body
     const email = req.body.email.trim().toLowerCase()
     const u = empleado(no)
-    if (!u || u.email !== email || u.role === 'sa') {
+    if (!u || u.email !== email || esSA(u)) {
       fallar(clave)
       registrar(req, 'registro-rechazado', { usuario: no, detalle: email.slice(0, 100), ok: false })
       return reply.code(403).send({ error: 'Tus datos no coinciden con la plantilla de tu departamento. Comunícate con los administradores para verificar la plantilla.' })
@@ -840,10 +843,14 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
       // puesto: así la jerarquía nunca hace ciclos
       const rangoOk = jefe && lidera(jefe.role, f.role) &&
         usuarios.every((u) => u.boss !== f.no || enArchivo.has(u.no) || lidera(f.role, u.role))
+      // Un super administrador puede ir en la plantilla (como Senior) del primer departamento que lo integre
+      const sa = esSA(actual)
       const error =
         filas.findIndex((x) => x.no === f.no) !== i ? 'Número repetido en el archivo.'
           : f.no === por ? 'Tú no vas en la plantilla: ya diriges el departamento.'
-          : actual && actual.dept !== clave ? 'Ese número es de otro departamento.'
+          : sa && actual.dept && actual.dept !== clave ? 'Ese super administrador ya está en otro departamento.'
+          : sa && (f.role !== 'sr' || f.email.trim().toLowerCase() !== actual.email) ? 'Un super administrador entra como Senior (sr) y con su correo.'
+          : actual && !sa && actual.dept !== clave ? 'Ese número es de otro departamento.'
           : usuarios.some((u) => u.email === f.email.trim().toLowerCase() && u.no !== f.no) ||
             filas.findIndex((x) => x.email.trim().toLowerCase() === f.email.trim().toLowerCase()) !== i ? 'Ese correo ya lo usa otra persona.'
           : !jefeDelDepto ? 'El encargado no existe en este departamento.'
@@ -858,7 +865,9 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     for (const f of filas) {
       const datos = { name: f.name.trim(), email: f.email.trim().toLowerCase(), role: f.role, shift: f.shift, boss: f.boss, dept: clave }
       const actual = empleado(f.no)
-      if (actual) Object.assign(actual, datos, f.area?.trim() && { area: f.area.trim() })
+      // Del super administrador no se toca su nombre ni su correo: vienen de SUPERADMINS
+      if (actual && esSA(actual)) Object.assign(actual, { role: 'sr', shift: f.shift, boss: f.boss, dept: clave }, f.area?.trim() && { area: f.area.trim() })
+      else if (actual) Object.assign(actual, datos, f.area?.trim() && { area: f.area.trim() })
       else {
         usuarios.push({ no: f.no, ...datos, area: f.area?.trim() || '', pwdChanged: ahora(), password: null, porRegistrar: true })
         creados++
@@ -952,7 +961,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   app.post('/api/asistencia/:no', { schema: asistenciaSchema }, conEmpleado((u, req, reply) => {
     const { hoy, hora } = req.body
     if (!hoyValido(hoy)) return reply.code(400).send({ error: 'Revisa la fecha de tu equipo.' })
-    if (u.role === 'sa') return { nueva: false }
+    if (esSA(u) && !u.dept) return { nueva: false }
     // Turno 3 (nocturno): al abrir la app en la mañana para marcar su salida sigue en la jornada de ayer
     const abierta = jornadaAbierta(u, hoy)
     if (abierta && abierta.date < hoy && hora < '12:00') return { nueva: false, ...jornada(abierta) }
@@ -1311,7 +1320,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     puesto: NIVEL[r.role] === NIVEL[empleado(a.to).role], // técnico ↔ Ing. Jr, Ing. Full ↔ Senior
     turno: r.no === a.to || r.shift === SIGUIENTE_TURNO[a.shift], // el mismo empleado (día siguiente) u otro del turno siguiente
     // cuenta activa y del mismo "mundo": una actividad real nunca pasa al departamento Pruebas (cuentas de prueba), ni al revés
-    cuenta: r.activo !== false && !esSA(r) && (r.dept === 'pruebas') === (empleado(a.to).dept === 'pruebas'),
+    cuenta: r.activo !== false && (!esSA(r) || !!r.dept) && (r.dept === 'pruebas') === (empleado(a.to).dept === 'pruebas'),
   })
   const puedeRecibir = (a, r) => Object.values(condiciones(a, r)).every(Boolean)
   const validadorDe = (r) => r.boss ?? r.no
@@ -1625,13 +1634,13 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
 
   const ultimoAcceso = (no) => registros.findLast((r) => r.no === no && r.evento === 'login')?.at ?? null
   const vistaUsuario = (u) => ({
-    no: u.no, name: u.name, email: u.email, role: u.role, dept: u.dept, shift: u.shift, area: u.area,
+    no: u.no, name: u.name, email: u.email, role: u.role, sa: esSA(u), dept: u.dept, shift: u.shift, area: u.area,
     boss: u.boss, bossName: empleado(u.boss)?.name, activo: u.activo !== false, prueba: !!u.prueba, mfa: !!u.totp,
     sinPassword: !u.password, porRegistrar: !!u.porRegistrar, debeCambiar: !!u.debeCambiar, pwdChanged: u.pwdChanged, diasPassword: diasPassword(u),
     ultimoAcceso: ultimoAcceso(u.no),
   })
   app.get('/api/admin/usuarios', async () =>
-    usuarios.map(vistaUsuario).sort((a, b) => (a.role === 'sa') - (b.role === 'sa') || a.name.localeCompare(b.name)))
+    usuarios.map(vistaUsuario).sort((a, b) => a.sa - b.sa || a.name.localeCompare(b.name)))
 
   // Quién recibe el cambio: existe y no es super administrador (esas cuentas se manejan en el servidor)
   const destino = (req, reply) => {
@@ -1780,7 +1789,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
   // use aún (actividades, avisos); sus subordinados en la plantilla pasan al número nuevo
   const porRegistrar = (req, reply) => {
     const u = empleado(req.params.empleado)
-    if (!u || u.role === 'sa') { reply.code(404).send({ error: 'Empleado no encontrado.' }); return null }
+    if (!u || esSA(u)) { reply.code(404).send({ error: 'Empleado no encontrado.' }); return null }
     if (!u.porRegistrar) { reply.code(409).send({ error: 'Ya se registró: sus datos se cambian en Usuarios.' }); return null }
     return u
   }

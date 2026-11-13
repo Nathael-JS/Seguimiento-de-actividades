@@ -1436,6 +1436,25 @@ test('desde 0: el super administrador da de alta al gerente, el gerente se regis
   assert.equal((await conCookie(app, 'POST', `/api/departamentos/${d.clave}/plantilla`, nora, { por: '50001', filas: [fila] })).json().creados, 1)
 })
 
+test('super administrador en un departamento: el primer gerente que lo pone en su plantilla lo tiene como Senior', async () => {
+  const { app, adm } = await conSA()
+  const fila = (cambios = {}) => ({ no: '90001', name: 'Otro Nombre', email: SA.email, role: 'sr', shift: 'A', boss: '10001', ...cambios })
+  const subir = (clave, por, f) => pedir(app, 'POST', `/api/departamentos/${clave}/plantilla`, { por, filas: [f] })
+  assert.equal((await adm('GET', '/api/equipo/90001')).code, 403) // antes, solo administra
+  assert.equal((await subir('lc', '10001', fila({ role: 'full' }))).body.filas[0].error, 'Un super administrador entra como Senior (sr) y con su correo.')
+  assert.equal((await subir('lc', '10001', fila())).code, 200)
+  const sa = app.estado.usuarios.find((u) => u.no === '90001')
+  assert.deepEqual([sa.role, sa.dept, sa.boss, sa.name, sa.porRegistrar], ['sr', 'lc', '10001', SA.name, undefined]) // nombre y correo no cambian
+  assert.equal((await subir('pf', '10700', fila({ boss: '10700' }))).body.filas[0].error, 'Ese super administrador ya está en otro departamento.')
+  // Trabaja como Senior y sigue administrando, con la misma sesión
+  assert.equal((await adm('GET', '/api/equipo/90001')).code, 200)
+  assert.equal((await adm('GET', '/api/admin/usuarios')).code, 200)
+  assert.deepEqual([(await adm('GET', '/api/sesion')).body.role, (await adm('GET', '/api/sesion')).body.sa], ['sr', true])
+  // Al reiniciar (SUPERADMINS se vuelve a leer) se queda en su departamento
+  const otra = build({ superadmins: [SA], estado: app.estado })
+  assert.deepEqual(['role', 'dept', 'sa'].map((k) => otra.estado.usuarios.find((u) => u.no === '90001')[k]), ['sr', 'lc', true])
+})
+
 test('cuentas de prueba: el super administrador las crea o reactiva; entran con demo1234 sin código; CUENTAS_PRUEBA=no las bloquea', async () => {
   const { app, adm, confirmar } = await conSA()
   const crear = () => adm('POST', '/api/admin/cuentas-prueba', { por: '90001' })
