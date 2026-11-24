@@ -531,7 +531,7 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     `sesion=${valor}; HttpOnly; SameSite=Strict; Path=/${req.protocol === 'https' ? '; Secure' : ''}${extra}`
   const apagada = (u) => u.prueba && !cuentasPrueba
   const PUBLICAS = new Set([
-    '/api/login', '/api/login/verificar', '/api/logout',
+    '/api/login', '/api/login/verificar', '/api/login/nuevo-qr', '/api/logout',
     '/api/registro', '/api/recuperar', '/api/recuperar/cambiar', '/api/deptos', '/api/salud', '/api/errores',
   ])
   const abrirSesion = (req, reply, u) => {
@@ -622,9 +622,31 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     // shortcut: el alta va con la contraseña como único respaldo; agregar códigos de respaldo
     const alta = !u.totp && aBase32(randomBytes(20))
     verificaciones.set(id, { no: u.no, intentos: 0, vence: Date.now() + 5 * 60_000, ...(alta && { alta }) })
-    if (!alta) return { token: id }
+    if (!alta) return { token: id, qrRestantes: QR_NUEVOS - (u.qrNuevos ?? 0) }
+    return { token: id, ...qrDe(u, alta) }
+  })
+
+  const qrDe = (u, secreto) => {
     const cuenta = encodeURIComponent(`${APP_MFA}:${u.email}`)
-    return { token: id, secreto: alta, uri: `otpauth://totp/${cuenta}?secret=${alta}&issuer=${encodeURIComponent(APP_MFA)}` }
+    return { secreto, uri: `otpauth://totp/${cuenta}?secret=${secreto}&issuer=${encodeURIComponent(APP_MFA)}` }
+  }
+  // Nuevo QR (cambió de celular o borró la cuenta de la app): ya con la contraseña correcta (paso 1), genera otra
+  // clave para volver a vincular. Solo se guarda al verificar su primer código, y cada cuenta tiene 3; después, un
+  // super administrador le reinicia el MFA. Queda en Registros
+  const QR_NUEVOS = 3
+  app.post('/api/login/nuevo-qr', { schema: { body: objeto(['token'], { token }) } }, async (req, reply) => {
+    const v = verificaciones.get(req.body.token)
+    if (!v || v.vence < Date.now()) return reply.code(401).send({ error: 'El código expiró. Vuelve a iniciar sesión.' })
+    const u = empleado(v.no)
+    if (!u.totp) return reply.code(409).send({ error: 'Tu cuenta aún no tiene la app vinculada: escanea el QR que se muestra.' })
+    if ((u.qrNuevos ?? 0) >= QR_NUEVOS) {
+      return reply.code(409).send({ error: 'Ya usaste tus 3 QR nuevos: pide a un super administrador que reinicie tu verificación en dos pasos.' })
+    }
+    // Por verificación, a lo más 3 pedidos (sin vincular no cuentan para el límite de la cuenta, pero no se abusa)
+    if ((v.pedidos ?? 0) >= QR_NUEVOS) return reply.code(429).send({ error: 'Demasiados intentos. Vuelve a iniciar sesión.' })
+    Object.assign(v, { alta: aBase32(randomBytes(20)), nuevoQr: true, pedidos: (v.pedidos ?? 0) + 1 })
+    registrar(req, 'mfa-nuevo-qr', { no: u.no, detalle: 'pidió un QR nuevo' })
+    return { ...qrDe(u, v.alta), qrRestantes: QR_NUEVOS - (u.qrNuevos ?? 0) - 1 }
   })
 
   // Paso 2: el código de 6 dígitos. Expira a los 5 minutos y admite 5 intentos
@@ -648,8 +670,8 @@ export function build({ superadmins = [], estado: cargado, guardar, salud, cuent
     }
     verificaciones.delete(req.body.token)
     fallosLogin.delete(claveFallos(req, u.no)) // el contador vuelve a cero solo al entrar de verdad
-    Object.assign(u, { totpPaso: paso }, v.alta && { totp: v.alta })
-    registrar(req, 'login', { no: u.no, detalle: v.alta ? 'vinculó su app autenticadora' : 'con código de la app' })
+    Object.assign(u, { totpPaso: paso }, v.alta && { totp: v.alta }, v.nuevoQr && { qrNuevos: (u.qrNuevos ?? 0) + 1 })
+    registrar(req, 'login', { no: u.no, detalle: v.nuevoQr ? 'volvió a vincular su app con un QR nuevo' : v.alta ? 'vinculó su app autenticadora' : 'con código de la app' })
     return abrirSesion(req, reply, u)
   })
 

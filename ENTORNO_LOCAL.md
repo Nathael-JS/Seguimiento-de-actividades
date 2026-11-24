@@ -124,7 +124,7 @@ No se editan en la base ni desde la app: lo que cambies en la tabla `usuarios` s
 
 **Cómo entran (acceso oculto).** El super administrador ya no entra por Gerencia:
 
-1. En la portada o en el login, **toca tres veces seguidas** (en 1.5 s) el número de versión del pie, `V0.0.1.5`. Con teclado: Tab hasta la versión y Enter tres veces.
+1. En la portada o en el login, **toca tres veces seguidas** (en 1.5 s) el número de versión del pie, `V1.5.1`. Con teclado: Tab hasta la versión y Enter tres veces.
 2. Se abre **Iniciar sesión · Administración**. No tiene "Registrarse" ni "¿Olvidaste tu contraseña?", porque la cuenta vive en el servidor.
 3. Escribe el correo (o el número 90001) y la contraseña.
 4. La primera vez pide vincular la app autenticadora (Google o Microsoft Authenticator) con el QR. Después pide el código de 6 dígitos en cada inicio de sesión.
@@ -159,6 +159,12 @@ psql "postgresql://…/seguimiento" -c "select no, nombre, puesto, totp is not n
 - en el teléfono quedan varias entradas con el mismo nombre; conviene renombrarlas (por ejemplo "Seguimiento local" y "Seguimiento Render");
 - si restauras un respaldo en otra base, el MFA viaja con él y sirve la misma entrada del teléfono;
 - `server/vaciar.js` conserva el MFA de los super administradores.
+
+**Generar un QR nuevo (cambio de celular o de cuenta en la app).** En la pantalla del código de 6 dígitos, después de escribir la contraseña, el botón **"¿Cambiaste de celular? Generar nuevo QR (n)"** muestra un QR nuevo para volver a vincular la app.
+- La clave nueva **solo reemplaza a la anterior cuando su primer código es correcto**.
+- Cada cuenta tiene **3** QR nuevos; el contador queda en `extra->>'qrNuevos'` de `usuarios`.
+- Cada QR que se pide queda en **Registros** como "Pidió un QR nuevo".
+- Gastados los 3, el botón desaparece y hace falta el reinicio de abajo.
 
 **Reiniciar el MFA (teléfono perdido o cambiado).**
 

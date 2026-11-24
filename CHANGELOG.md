@@ -12,6 +12,28 @@ Los incidentes (síntoma, causa, solución y prevención) se detallan en la [bit
 
 ---
 
+# Versión 1.5.1
+
+## [v1.5.1] 2026-11-24: QR nuevo para la app autenticadora
+
+### Agregado
+- **"¿Cambiaste de celular? Generar nuevo QR"** en la pantalla del código de 6 dígitos. Sirve cuando el QR que se escaneó antes ya no da códigos válidos (cambio de celular, de cuenta o de acceso en la app).
+  - Se pide con la contraseña ya validada.
+  - La clave nueva solo reemplaza a la anterior al verificar su primer código.
+  - **Límite: 3 por cuenta.** Después, un super administrador reinicia el MFA.
+  - Cada QR pedido queda en Registros ("Pidió un QR nuevo").
+
+### Cambiado
+- **Versión 1.5.1:** en `package.json` y en el pie (`V1.5.1`, que sigue siendo el acceso oculto del super administrador).
+
+### Advertencias
+- Con un QR nuevo, la contraseña basta para volver a vincular la app, hasta 3 veces. Si alguien tiene la contraseña de otra persona, podría vincular su propio celular. Cada intento queda en Registros.
+
+### Archivos
+- `server/app.js`, `server/app.test.js`, `src/Login.jsx`, `src/Admin.jsx`, `src/en.js`, `package.json`, `package-lock.json`, `vite.config.js`, `ENTORNO_LOCAL.md`, `DOCUMENTACION.md`, `PRUEBAS.md`
+
+---
+
 # Versión 0.0.1
 
 ## [v0.0.1 · SA en departamento] 2026-11-13: Super administrador como Senior de un departamento y menú de las tarjetas al frente
