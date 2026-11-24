@@ -74,6 +74,35 @@ test('TOTP: vector de prueba del RFC 6238', () => {
   assert.equal(totp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 1), '287082')
 })
 
+test('MFA: nuevo QR al cambiar de celular, con la contraseña; 3 por cuenta y queda en Registros', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-24T15:00:00Z') })
+  const SA = { name: 'Admin Prueba', email: 'admin@empresa.com', password: 'Admin#Prueba2026' }
+  const app = build({ superadmins: [SA] })
+  const paso1 = () => login({ usuario: SA.email, password: SA.password, tipo: 'admin' }, app).then((r) => r.json())
+  const verificar = (token, secreto) => app.inject({ method: 'POST', url: '/api/login/verificar', payload: { token, codigo: totp(secreto) } })
+  const nuevo = (token) => app.inject({ method: 'POST', url: '/api/login/nuevo-qr', payload: { token } })
+  const alta = await paso1()
+  assert.equal((await nuevo(alta.token)).statusCode, 409) // sin app vinculada todavía: ya ve su QR
+  assert.equal((await verificar(alta.token, alta.secreto)).statusCode, 200)
+  let anterior = alta.secreto
+  for (const quedan of [2, 1, 0]) {
+    t.mock.timers.setTime(Date.now() + 60_000)
+    const p = await paso1()
+    const q = (await nuevo(p.token)).json()
+    assert.equal(q.qrRestantes, quedan)
+    assert.notEqual(q.secreto, anterior)
+    assert.equal((await verificar(p.token, anterior)).statusCode, 401) // la clave vieja ya no sirve en esta verificación
+    assert.equal((await verificar(p.token, q.secreto)).statusCode, 200)
+    anterior = q.secreto
+  }
+  t.mock.timers.setTime(Date.now() + 60_000)
+  const p = await paso1()
+  assert.equal(p.qrRestantes, 0)
+  assert.equal((await nuevo(p.token)).json().error, 'Ya usaste tus 3 QR nuevos: pide a un super administrador que reinicie tu verificación en dos pasos.')
+  assert.equal((await verificar(p.token, anterior)).statusCode, 200) // la última vinculada sigue sirviendo
+  assert.equal(app.estado.registros.filter((r) => r.evento === 'mfa-nuevo-qr').length, 3)
+})
+
 test('MFA: alta en el primer login, luego solo el código de la app; incorrecto, reutilizado, 5 intentos', async () => {
   // Una cuenta real (registrada), no de prueba
   const app = build()

@@ -378,6 +378,7 @@ Todas responden JSON. Sin sesión: **401** `{ sesion: false }`. Con el número d
 | POST | `/api/actividades/:id/comentarios` | Involucrados | Agregar un comentario (1 a 1000 caracteres; avisa a la persona y a su encargado) |
 | POST | `/api/actividades/:id/revision` | Encargado | Urgente vencida: `reabrir`, `cerrar` o `eliminar`, con motivo |
 | GET | `/api/historial/:no?desde&hasta` | Encargado | Terminadas, cerradas, heredadas y eliminadas de su gente (máximo 500) |
+| POST | `/api/login/nuevo-qr` | Paso 1 hecho (token) | QR nuevo para volver a vincular la app (cambio de celular); se guarda al verificar su primer código; 3 por cuenta |
 | POST | `/api/actividades/:id/heredar` | Encargado | Proponer una herencia |
 | GET | `/api/herencias/:no?hoy` | Propio | Por validar, enviadas, cupos del día |
 | POST | `/api/herencias/:id/responder` | Validador | Aceptar, rechazar o redirigir |

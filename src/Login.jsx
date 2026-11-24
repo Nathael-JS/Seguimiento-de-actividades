@@ -234,7 +234,9 @@ function Credenciales({ aviso, ir, acceso, onPaso1, onLogin }) {
 
 // Paso 2: código de la app autenticadora. La primera vez (alta) se muestra el QR y la clave para vincularla
 function Codigo({ verificacion, onLogin, volver }) {
-  const { token, secreto, uri } = verificacion
+  const { token } = verificacion
+  // Con "Generar nuevo QR" la vinculación cambia a la clave nueva (misma verificación, mismo token)
+  const [{ secreto, uri, qrRestantes }, setVinculo] = useState(verificacion)
   const [codigo, setCodigo] = useState('')
   const [error, setError] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -253,6 +255,19 @@ function Codigo({ verificacion, onLogin, volver }) {
     }
   }
 
+  async function nuevoQr() {
+    setError('')
+    setEnviando(true)
+    try {
+      setVinculo(await api('/api/login/nuevo-qr', { method: 'POST', body: { token } }))
+      setCodigo('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
   return (
     <form className="auth-form" onSubmit={verificar} noValidate>
       <span className="avatar" style={{ width: 48, height: 48 }}><Icono nombre="shield" /></span>
@@ -266,9 +281,17 @@ function Codigo({ verificacion, onLogin, volver }) {
       <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>
         {t(enviando ? 'Verificando…' : secreto ? 'Vincular y entrar' : 'Verificar')}
       </button>
-      <div className="row">
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => volver()}>← {t('Volver')}</button>
+        <span className="spacer" />
+        {/* Cambio de celular o de cuenta en la app: el QR anterior ya no da códigos válidos */}
+        {!secreto && qrRestantes > 0 && (
+          <button type="button" className="btn btn-ghost btn-sm" disabled={enviando} onClick={nuevoQr}>
+            {t('¿Cambiaste de celular? Generar nuevo QR ({n})', { n: qrRestantes })}
+          </button>
+        )}
       </div>
+      {!secreto && qrRestantes === 0 && <p className="meta">{t('Ya usaste tus 3 QR nuevos: pide a un super administrador que reinicie tu verificación en dos pasos.')}</p>}
     </form>
   )
 }
